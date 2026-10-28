@@ -1,0 +1,23 @@
+{
+  "name": "ztask",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "test:gates": "node --test scripts/gates.spec.mjs",
+    "lint:docs": "node scripts/run-gates.mjs --mode doc-quick",
+    "verify:docs": "node scripts/run-gates.mjs --mode doc-sync",
+    "verify:flow": "node scripts/verify-flow.mjs",
+    "verify:flow-online": "node scripts/verify-flow-online.mjs",
+    "flow:sync": "node scripts/flow-sync.mjs",
+    "flow:new-issue": "node scripts/flow-new-issue.mjs",
+    "record:i18n": "node scripts/verify-translation-pairing.mjs --write",
+    "archive:note": "node scripts/archive-agent-note.mjs",
+    "install:hooks": "node scripts/install-git-hooks.mjs",
+    "install-merge-driver": "node scripts/install-merge-driver.mjs"
+  },
+  "devDependencies": {
+    "@redocly/ajv": "8.11.2",
+    "typescript": "^5.9.3"
+  }
+}
