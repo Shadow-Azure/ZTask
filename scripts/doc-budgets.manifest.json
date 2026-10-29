@@ -14,5 +14,7 @@
   "docs/i18n/terminology.md": 300,
   "docs/i18n/translation-prompt.md": 320,
   ".agents/notes/README.md": 1000,
-  ".agents/flow/README.md": 980
+  ".agents/flow/README.md": 980,
+  ".agents/flow/roadmap.md": 240,
+  ".agents/flow/milestones/m1-design.md": 240
 }
