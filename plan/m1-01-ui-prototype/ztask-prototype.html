@@ -87,6 +87,9 @@
   .prog { display: flex; align-items: center; gap: 7px; }
   .prog .track { display: block; flex: 1; height: 6px; border-radius: 3px; background: #e8ebf0; overflow: hidden; min-width: 40px; }
   .prog .fill { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #6f9bff, var(--blue)); }
+  .prog.clickable { cursor: pointer; padding: 4px 0; }
+  .prog.clickable:hover .track { background: #dde3ec; }
+  .prog input[type="range"] { flex: 1; min-width: 0; accent-color: var(--blue); height: 14px; cursor: pointer; }
   .prog .fill.done { background: linear-gradient(90deg, #43c58d, var(--green)); }
   .prog .pct { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); width: 34px; text-align: right; }
   .due { font-family: var(--mono); font-size: 11.5px; color: var(--text-dim); white-space: nowrap; }
@@ -186,7 +189,7 @@
   .task-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
   .tt-head, .tt-row {
     display: grid; align-items: center; gap: 10px;
-    grid-template-columns: minmax(220px, 1.7fr) 116px 96px 170px 62px 112px 74px;
+    grid-template-columns: minmax(220px, 1.7fr) 116px 96px 150px 62px 112px 74px;
     padding: 8px 14px;
   }
   .tt-head { font-size: 11px; color: var(--text-faint); background: var(--bg-panel); border-bottom: 1px solid var(--border); font-weight: 600; }
@@ -565,7 +568,7 @@
             </div>
             <div id="task-rows"></div>
           </div>
-          <p class="hint-line">提示：<kbd>双击</kbd> 任务行打开编辑浮窗；悬停行尾可快速编辑 / 添加小任务 / 删除。小任务不可再嵌套。</p>
+          <p class="hint-line">提示：<kbd>双击</kbd> 任务行打开编辑浮窗；<b>点击进度条</b>可原地拖动修改进度；悬停行尾可快速编辑 / 添加小任务 / 删除。小任务不可再嵌套。</p>
         </div>
         <!-- tab 2：情况看板 -->
         <div id="tab-dash" style="display:none">
@@ -819,6 +822,26 @@ function avaGroup(ids, sm) {
 function progBar(p, w) {
   return `<span class="prog"${w ? ` style="width:${w}px"` : ''}><span class="track"><span class="fill${p >= 100 ? ' done' : ''}" style="width:${p}%"></span></span><span class="pct">${p}%</span></span>`;
 }
+/* 行内快捷改进度：点击进度条 → 原地变滑块，拖动松开即提交，Esc 取消 */
+let progressEditing = null;
+function progCell(t, key) {
+  if (progressEditing === key) {
+    return `<span class="prog" data-prog-editor="${key}"><input type="range" min="0" max="100" step="5" value="${t.progress}"><span class="pct">${t.progress}%</span></span>`;
+  }
+  return `<span class="prog clickable" data-prog="${key}" title="点击直接修改进度"><span class="track"><span class="fill${t.progress >= 100 ? ' done' : ''}" style="width:${t.progress}%"></span></span><span class="pct">${t.progress}%</span></span>`;
+}
+function commitProgress(key, value) {
+  let t = TASKS[key];
+  if (!t) for (const p of Object.values(TASKS)) {
+    const s = p.subs.find(x => x.id === key);
+    if (s) { t = s; break; }
+  }
+  if (!t) return;
+  t.progress = value;
+  progressEditing = null;
+  toast('进度已更新为 ' + value + '%（原型模拟）');
+  renderTasks(); renderStats();
+}
 function dueHtml(t) {
   const od = isOverdue(t);
   return `<span class="due${od ? ' overdue' : ''}">${fmtD(t.due)}</span>${od ? '<span class="overdue-tag">已逾期</span>' : ''}`;
@@ -1048,7 +1071,7 @@ function taskRow(t, isSub, fromFolder) {
     </span>
     <span>${avaGroup(t.owners, true)}</span>
     <span>${avaGroup(t.collabs, true)}</span>
-    <span>${progBar(t.progress)}</span>
+    <span>${progCell(t, t.id)}</span>
     <span><span class="imp ${t.imp}">${impName[t.imp]}</span></span>
     <span>${dueHtml(t)}</span>
     <span class="tt-ops">
@@ -1065,7 +1088,7 @@ function taskRow(t, isSub, fromFolder) {
       </span>
       <span>${avaGroup([st.owner], true)}</span>
       <span></span>
-      <span>${progBar(st.progress)}</span>
+      <span>${progCell(st, st.id)}</span>
       <span><span class="imp ${st.imp}">${impName[st.imp]}</span></span>
       <span>${dueHtml(st)}</span>
       <span class="tt-ops"><button class="icon-btn danger" data-op="delsub" title="删除小任务">🗑</button></span>
@@ -1074,6 +1097,27 @@ function taskRow(t, isSub, fromFolder) {
   return html;
 }
 function bindTaskRows(root) {
+  /* 行内快捷改进度 */
+  root.querySelectorAll('[data-prog]').forEach(el => el.addEventListener('click', e => {
+    e.stopPropagation();
+    progressEditing = el.dataset.prog;
+    renderTasks();
+    const inp = document.querySelector('[data-prog-editor] input[type="range"]');
+    if (inp) inp.focus();
+  }));
+  const editor = root.querySelector('[data-prog-editor]');
+  if (editor) {
+    const key = editor.dataset.progEditor;
+    const range = editor.querySelector('input[type="range"]');
+    range.addEventListener('click', e => e.stopPropagation());
+    range.addEventListener('input', () => { editor.querySelector('.pct').textContent = range.value + '%'; });
+    range.addEventListener('change', () => commitProgress(key, +range.value));
+    range.addEventListener('blur', () => { if (progressEditing === key) commitProgress(key, +range.value); });
+    range.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { progressEditing = null; renderTasks(); }
+      e.stopPropagation();
+    });
+  }
   root.querySelectorAll('.tt-row[data-tid]').forEach(r => {
     r.addEventListener('dblclick', () => openModal(r.dataset.tid));
     r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === r) openModal(r.dataset.tid); });
@@ -1713,6 +1757,7 @@ renderStats();
   if (h.get('modal')) openModal(h.get('modal') === 'new' ? null : h.get('modal'));
   if (h.get('owners')) { mOwners = new Set(h.get('owners').split(',')); [...mOwners].forEach(id => mCollabs.delete(id)); renderModalChips(); }
   if (h.get('msel')) { mselUI[h.get('msel')].open = true; renderModalChips(); }
+  if (h.get('progedit')) { progressEditing = h.get('progedit'); renderTasks(); }
 })();
 </script>
 </body>
