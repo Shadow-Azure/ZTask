@@ -361,6 +361,28 @@
   .m-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; margin: 16px 0; }
   .m-field label { display: block; font-size: 11px; font-weight: 650; color: var(--text-faint); text-transform: uppercase; letter-spacing: .4px; margin-bottom: 6px; }
   .m-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  /* 多选下拉（Ant Design Select multiple 模式） */
+  .msel { position: relative; }
+  .msel-box { min-height: 34px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 4px 6px; border: 1px solid var(--border-strong); border-radius: 8px; background: var(--bg-card); cursor: pointer; }
+  .msel-box:hover { border-color: var(--text-faint); }
+  .msel.open .msel-box { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 14%, transparent); }
+  .msel-ph { color: var(--text-faint); font-size: 12px; padding: 0 4px; }
+  .msel-tag { display: inline-flex; align-items: center; gap: 4px; background: var(--bg-inset); border: 1px solid var(--border); border-radius: 6px; padding: 1.5px 5px 1.5px 2px; font-size: 11.5px; }
+  .msel-tag .x { color: var(--text-faint); cursor: pointer; font-size: 10px; border-radius: 4px; width: 15px; height: 15px; display: grid; place-items: center; }
+  .msel-tag .x:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+  .msel-tag.more { color: var(--text-dim); background: var(--bg-card); cursor: default; font-family: var(--mono); font-size: 10.5px; }
+  .msel-caret { margin-left: auto; color: var(--text-faint); font-size: 10px; padding: 0 4px; }
+  .msel-panel { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 10px 30px rgba(20,26,38,.16); overflow: hidden; }
+  .msel-search { width: 100%; font: inherit; font-size: 12px; padding: 8px 12px; border: none; border-bottom: 1px solid var(--border); outline: none; }
+  .msel-list { max-height: 208px; overflow-y: auto; padding: 4px; }
+  .msel-opt { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; cursor: pointer; font-size: 12.5px; }
+  .msel-opt:hover { background: var(--bg-inset); }
+  .msel-opt .role { color: var(--text-faint); font-size: 10.5px; }
+  .msel-opt .tick { margin-left: auto; color: var(--blue); font-weight: 700; font-size: 12px; }
+  .msel-opt.sel { background: color-mix(in srgb, var(--blue) 7%, transparent); }
+  .msel-opt.disabled { opacity: .45; cursor: not-allowed; }
+  .msel-opt.disabled:hover { background: transparent; }
+  .msel-empty { padding: 14px; text-align: center; color: var(--text-faint); font-size: 11.5px; }
   .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden; }
   .seg button { font-size: 12px; padding: 5px 16px; background: var(--bg-card); border: none; cursor: pointer; color: var(--text-dim); }
   .seg button + button { border-left: 1px solid var(--border); }
@@ -620,11 +642,11 @@
       <div class="m-grid">
         <div class="m-field">
           <label>负责人（可多选）</label>
-          <div class="m-chips" id="m-owners"></div>
+          <div class="msel" id="m-owners"></div>
         </div>
         <div class="m-field">
           <label>协作人员（可多选）</label>
-          <div class="m-chips" id="m-collabs"></div>
+          <div class="msel" id="m-collabs"></div>
         </div>
         <div class="m-field">
           <label>重要度</label>
@@ -1318,6 +1340,7 @@ function openModal(tid) {
   $('#m-progress-v').textContent = (t ? t.progress : 0) + '%';
   $('#m-detail').value = t ? t.detail : '';
   $('#m-delete').style.display = tid ? '' : 'none';
+  closeMsels(); mselUI.owners.q = ''; mselUI.collabs.q = '';
   renderModalChips(); renderModalImp(); renderModalSubs();
   $('#task-modal-overlay').classList.add('open');
 }
@@ -1333,25 +1356,84 @@ function folderPathOfTask(tid) {
   })(TREE, []);
   return res;
 }
+/* 多选下拉：框内 tag + 溢出 +N，面板带搜索与勾选（Ant Select multiple / GitHub assignee 模式） */
+const mselUI = {owners: {open: false, q: ''}, collabs: {open: false, q: ''}};
+
 function renderModalChips() {
-  $('#m-owners').innerHTML = MEMBERS.map(m =>
-    `<span class="mchip${mOwners.has(m.id) ? ' active' : ''}" data-id="${m.id}">${ava(m.id, true)}${esc(m.name)}</span>`).join('') ||
-    '<span style="font-size:11px;color:var(--text-faint)">点击选择</span>';
-  $('#m-collabs').innerHTML = MEMBERS.map(m =>
-    `<span class="mchip${mCollabs.has(m.id) ? ' active' : ''}${mOwners.has(m.id) ? ' disabled' : ''}" data-id="${m.id}"${mOwners.has(m.id) ? ' title="已是负责人"' : ''}>${ava(m.id, true)}${esc(m.name)}</span>`).join('');
-  $('#m-owners').querySelectorAll('.mchip').forEach(c => c.addEventListener('click', () => {
-    const id = c.dataset.id;
-    mOwners.has(id) ? mOwners.delete(id) : mOwners.add(id);
-    mCollabs.delete(id);           /* 负责人不再重复列为协作 */
+  renderMsel('owners', $('#m-owners'), mOwners, '选择负责人…', () => null);
+  renderMsel('collabs', $('#m-collabs'), mCollabs, '选择协作人员…', id => mOwners.has(id) ? '已是负责人' : null);
+}
+function renderMsel(key, el, selSet, ph, disabledReason) {
+  const st = mselUI[key];
+  const ids = MEMBERS.map(m => m.id).filter(id => selSet.has(id));
+  const shown = ids.slice(0, 2), rest = ids.length - shown.length;
+  const list = MEMBERS.filter(m => !st.q || m.name.includes(st.q) || m.role.includes(st.q));
+  el.classList.toggle('open', st.open);
+  el.innerHTML = `<div class="msel-box">
+      ${ids.length
+        ? shown.map(id => `<span class="msel-tag">${ava(id, true)}${esc(member(id).name)}<span class="x" data-unsel="${id}" title="移除">✕</span></span>`).join('')
+            + (rest > 0 ? `<span class="msel-tag more" title="${ids.slice(2).map(id => esc(member(id).name)).join('、')}">+${rest}</span>` : '')
+        : `<span class="msel-ph">${ph}</span>`}
+      <span class="msel-caret">▾</span>
+    </div>
+    ${st.open ? `<div class="msel-panel">
+      <input class="msel-search" placeholder="搜索成员姓名 / 角色…" value="${esc(st.q)}">
+      <div class="msel-list">
+        ${list.map(m => {
+          const dis = disabledReason(m.id);
+          const sel = selSet.has(m.id);
+          return `<div class="msel-opt${sel ? ' sel' : ''}${dis ? ' disabled' : ''}" data-opt="${m.id}">
+            ${ava(m.id, true)}<span>${esc(m.name)}</span><span class="role">${esc(m.role)}</span>
+            ${dis ? `<span class="tick" style="color:var(--text-faint);font-weight:400;font-size:10.5px">${dis}</span>` : `<span class="tick">${sel ? '✓' : ''}</span>`}
+          </div>`;
+        }).join('') || '<div class="msel-empty">没有匹配的成员</div>'}
+      </div>
+    </div>` : ''}`;
+  el.querySelector('.msel-box').addEventListener('click', e => {
+    const unsel = e.target.closest('[data-unsel]');
+    if (unsel) {                       /* 点 tag 的 ×：移除，不开面板 */
+      e.stopPropagation();
+      selSet.delete(unsel.dataset.unsel);
+      renderModalChips();
+      return;
+    }
+    const wasOpen = st.open;
+    closeMsels();
+    st.open = !wasOpen;
     renderModalChips();
-  }));
-  $('#m-collabs').querySelectorAll('.mchip').forEach(c => c.addEventListener('click', () => {
-    const id = c.dataset.id;
-    if (mOwners.has(id)) return;   /* 已是负责人 */
-    mCollabs.has(id) ? mCollabs.delete(id) : mCollabs.add(id);
+    if (st.open) {
+      const s = el.querySelector('.msel-search');
+      if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+    }
+  });
+  const search = el.querySelector('.msel-search');
+  if (search) search.addEventListener('input', () => {
+    st.q = search.value;
     renderModalChips();
+    const s = el.querySelector('.msel-search');
+    if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  });
+  el.querySelectorAll('.msel-opt').forEach(o => o.addEventListener('click', () => {
+    if (o.classList.contains('disabled')) return;
+    const id = o.dataset.opt;
+    selSet.has(id) ? selSet.delete(id) : selSet.add(id);
+    if (key === 'owners') mCollabs.delete(id);   /* 负责人不再重复列为协作 */
+    renderModalChips();
+    const s = el.querySelector('.msel-search');
+    if (s) s.focus();
   }));
 }
+function closeMsels() { mselUI.owners.open = false; mselUI.collabs.open = false; }
+document.addEventListener('click', e => {
+  if (!e.target.closest('.msel') && (mselUI.owners.open || mselUI.collabs.open)) {
+    closeMsels(); renderModalChips();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && (mselUI.owners.open || mselUI.collabs.open)) {
+    closeMsels(); renderModalChips();
+  }
+});
 function renderModalImp() {
   $('#m-imp').querySelectorAll('button').forEach(b => {
     b.classList.toggle('on', b.dataset.v === mImp);
@@ -1629,6 +1711,8 @@ renderStats();
   if (h.get('expand') !== null && h.get('expand') !== undefined && h.get('expand') !== '')
     setTimeout(() => { const r = document.querySelector(`.chg-row[data-i="${h.get('expand')}"]`); if (r) r.click(); }, 30);
   if (h.get('modal')) openModal(h.get('modal') === 'new' ? null : h.get('modal'));
+  if (h.get('owners')) { mOwners = new Set(h.get('owners').split(',')); [...mOwners].forEach(id => mCollabs.delete(id)); renderModalChips(); }
+  if (h.get('msel')) { mselUI[h.get('msel')].open = true; renderModalChips(); }
 })();
 </script>
 </body>
