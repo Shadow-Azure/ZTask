@@ -8,9 +8,9 @@ id: m1-01
 milestone: m1
 depends: []
 priority: P0
-status: ready
+status: in-progress
 scope:
-  - design/prototype/**
+  - plan/m1-01-ui-prototype/**
   - .agents/flow/issues/m1-html-prototype*
 adr: []
 github:
@@ -35,7 +35,7 @@ ZTask's final shape follows the overall architecture of DeepSeek Harness: a loca
 
 ## Implementation
 
-- A static prototype under `design/prototype/`: an `index.html` prototype navigation page plus one static HTML page per screen in the inventory (inline CSS/JS is fine; no front-end framework).
+- A static prototype under `plan/m1-01-ui-prototype/`: an `index.html` prototype navigation page plus one static HTML page per screen in the inventory (inline CSS/JS is fine; no front-end framework).
 - A local static file server serves the prototype for browser review.
 
 ## Implementation steps
@@ -53,7 +53,7 @@ ZTask's final shape follows the overall architecture of DeepSeek Harness: a loca
 ## Verification
 
 ```sh
-python3 -m http.server 8123 --directory design/prototype
+python3 -m http.server 8123 --directory plan/m1-01-ui-prototype
 ```
 
 - Opening `http://127.0.0.1:8123/` in a browser reaches every screen in the inventory from the navigation page and demonstrates the key interactions.
