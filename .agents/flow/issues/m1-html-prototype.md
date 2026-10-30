@@ -8,7 +8,7 @@ id: m1-01
 milestone: m1
 depends: []
 priority: P0
-status: in-progress
+status: done
 scope:
   - plan/m1-01-ui-prototype/**
   - .agents/flow/issues/m1-html-prototype*
