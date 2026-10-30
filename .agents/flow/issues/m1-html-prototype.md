@@ -8,9 +8,9 @@ id: m1-01
 milestone: m1
 depends: []
 priority: P0
-status: ready
+status: in-progress
 scope:
-  - design/prototype/**
+  - plan/m1-01-ui-prototype/**
   - .agents/flow/issues/m1-html-prototype*
 adr: []
 github:
@@ -35,7 +35,7 @@ ZTask 的最终形态是参考 DeepSeek Harness 的大体架构：本地起 CLI 
 
 ## 实现内容
 
-- `design/prototype/` 目录下的静态原型：`index.html` 原型导航页，加界面清单中每个界面一个静态 HTML 页（内联 CSS/JS 即可，不引前端框架）。
+- `plan/m1-01-ui-prototype/` 目录下的静态原型：`index.html` 原型导航页，加界面清单中每个界面一个静态 HTML 页（内联 CSS/JS 即可，不引前端框架）。
 - 本地以静态文件服务器起原型站点，供浏览器评审。
 
 ## 实施步骤
@@ -53,7 +53,7 @@ ZTask 的最终形态是参考 DeepSeek Harness 的大体架构：本地起 CLI 
 ## 独立验证
 
 ```sh
-python3 -m http.server 8123 --directory design/prototype
+python3 -m http.server 8123 --directory plan/m1-01-ui-prototype
 ```
 
 - 浏览器打开 `http://127.0.0.1:8123/`，可从导航页到达清单中的每个界面并完成关键交互演示。
