@@ -500,7 +500,7 @@
       <h2>关键交互清单（评审用）</h2>
       <ul>
         <li>任务夹树：点击任务夹切换右侧内容；点击树中任务直接打开编辑浮窗；文件夹可折叠。</li>
-        <li>任务行：<b>双击</b>打开编辑浮窗；悬停行尾出现「编辑 / 添加小任务 / 删除」。</li>
+        <li>任务行：<b>单击</b>打开编辑浮窗；点击进度条原地修改进度；悬停行尾出现「编辑 / 添加小任务 / 删除」。</li>
         <li>情况看板：成员 chips 多选（不选 = 整体）；点击统计卡片在下方展开该集合的预计完成时间分布柱状图，再点一次收起。</li>
         <li>时间段查询：选择起止日期点击「查询」，列出有变化的任务（进度 <code>55% → 70%</code>），点击任务行展开左右并排的进展详情 diff（红 = 删除，绿 = 新增）。</li>
         <li>成员管理：行内生成 / 复制 / 重置 / 吊销分享链接（危险操作有确认弹窗）；「添加成员」弹窗。</li>
@@ -568,7 +568,7 @@
             </div>
             <div id="task-rows"></div>
           </div>
-          <p class="hint-line">提示：<kbd>双击</kbd> 任务行打开编辑浮窗；<b>点击进度条</b>可原地拖动修改进度；悬停行尾可快速编辑 / 添加小任务 / 删除。小任务不可再嵌套。</p>
+          <p class="hint-line">提示：<kbd>单击</kbd> 任务行打开编辑浮窗；<b>点击进度条</b>可原地拖动修改进度；悬停行尾可快速编辑 / 添加小任务 / 删除。小任务不可再嵌套。</p>
         </div>
         <!-- tab 2：情况看板 -->
         <div id="tab-dash" style="display:none">
@@ -1059,7 +1059,7 @@ function renderTasks() {
 }
 function taskRow(t, isSub, fromFolder) {
   const peek = (t.detail || '').split('\n')[0];
-  let html = `<div class="tt-row${isSub ? ' sub' : ''}${isOverdue(t) ? ' overdue' : ''}" data-tid="${t.id}" tabindex="0" title="双击或 Enter 打开编辑浮窗">
+  let html = `<div class="tt-row${isSub ? ' sub' : ''}${isOverdue(t) ? ' overdue' : ''}" data-tid="${t.id}" tabindex="0" title="单击或 Enter 打开编辑浮窗">
     <span class="tt-desc">
       <span class="imp-dot ${t.imp}"></span>
       <span style="min-width:0">
@@ -1081,7 +1081,7 @@ function taskRow(t, isSub, fromFolder) {
     </span>
   </div>`;
   if (!isSub && t.subs) t.subs.forEach(st => {
-    html += `<div class="tt-row sub${isOverdue(st) ? ' overdue' : ''}" data-sid="${st.id}" data-pid="${t.id}" tabindex="0" title="双击或 Enter 打开所属任务">
+    html += `<div class="tt-row sub${isOverdue(st) ? ' overdue' : ''}" data-sid="${st.id}" data-pid="${t.id}" tabindex="0" title="单击或 Enter 打开所属任务">
       <span class="tt-desc">
         <span class="imp-dot ${st.imp}"></span>
         <span class="txt">${esc(st.desc)}</span>
@@ -1119,11 +1119,11 @@ function bindTaskRows(root) {
     });
   }
   root.querySelectorAll('.tt-row[data-tid]').forEach(r => {
-    r.addEventListener('dblclick', () => openModal(r.dataset.tid));
+    r.addEventListener('click', () => openModal(r.dataset.tid));
     r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === r) openModal(r.dataset.tid); });
   });
   root.querySelectorAll('.tt-row.sub[data-pid]').forEach(r => {
-    r.addEventListener('dblclick', () => openModal(r.dataset.pid));
+    r.addEventListener('click', () => openModal(r.dataset.pid));
     r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === r) openModal(r.dataset.pid); });
   });
   root.querySelectorAll('[data-op]').forEach(b => {
