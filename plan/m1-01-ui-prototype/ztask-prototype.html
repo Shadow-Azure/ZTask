@@ -1434,9 +1434,9 @@ function renderMsel(key, el, selSet, ph, disabledReason) {
       </div>
     </div>` : ''}`;
   el.querySelector('.msel-box').addEventListener('click', e => {
+    e.stopPropagation();               /* 阻止冒泡到 document 的“点外部关闭”监听 */
     const unsel = e.target.closest('[data-unsel]');
     if (unsel) {                       /* 点 tag 的 ×：移除，不开面板 */
-      e.stopPropagation();
       selSet.delete(unsel.dataset.unsel);
       renderModalChips();
       return;
@@ -1457,7 +1457,8 @@ function renderMsel(key, el, selSet, ph, disabledReason) {
     const s = el.querySelector('.msel-search');
     if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
   });
-  el.querySelectorAll('.msel-opt').forEach(o => o.addEventListener('click', () => {
+  el.querySelectorAll('.msel-opt').forEach(o => o.addEventListener('click', e => {
+    e.stopPropagation();
     if (o.classList.contains('disabled')) return;
     const id = o.dataset.opt;
     selSet.has(id) ? selSet.delete(id) : selSet.add(id);
@@ -1469,6 +1470,7 @@ function renderMsel(key, el, selSet, ph, disabledReason) {
 }
 function closeMsels() { mselUI.owners.open = false; mselUI.collabs.open = false; }
 document.addEventListener('click', e => {
+  if (!e.target.isConnected) return;   /* 重渲染后脱离文档树的旧节点不算“外部” */
   if (!e.target.closest('.msel') && (mselUI.owners.open || mselUI.collabs.open)) {
     closeMsels(); renderModalChips();
   }
