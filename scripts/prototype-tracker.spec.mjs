@@ -47,22 +47,6 @@ test('tree width always leaves room for the task board on narrow screens', () =>
   assert.equal(clampTreeWidth(700, 900), 420);
 });
 
-test('quick progress updates refresh the read-only tree and folder counts', () => {
-  const TASKS = { t2: { progress: 30, subs: [] } };
-  const renders = { tasks: 0, stats: 0, tree: 0 };
-  const commitProgress = loadFunction('commitProgress', {
-    TASKS,
-    progressEditing: 't2',
-    toast: () => {},
-    renderTasks: () => { renders.tasks++; },
-    renderStats: () => { renders.stats++; },
-    renderTree: () => { renders.tree++; },
-  });
-  commitProgress('t2', 100);
-  assert.equal(TASKS.t2.progress, 100);
-  assert.deepEqual(renders, { tasks: 1, stats: 1, tree: 1 });
-});
-
 test('task tree progress renders a compact accessible determinate ring', () => {
   const treeProgressHtml = loadFunction('treeProgressHtml', {
     treeProgressOffset: loadFunction('treeProgressOffset'),
@@ -87,4 +71,99 @@ test('task tree ring maps and clamps determinate progress to a stroke offset', (
   assert.ok(Math.abs(treeProgressOffset(25) - 32.986723) < 0.000001);
   assert.equal(treeProgressOffset(100), 0);
   assert.equal(treeProgressOffset(110), 0);
+});
+
+test('subtask summary counts completed and total work items', () => {
+  const subtaskSummary = loadFunction('subtaskSummary');
+  assert.deepEqual(subtaskSummary([{ progress: 100 }, { progress: 40 }, { progress: 99 }]), { done: 1, total: 3 });
+  assert.deepEqual(subtaskSummary([]), { done: 0, total: 0 });
+  assert.deepEqual(subtaskSummary(null), { done: 0, total: 0 });
+});
+
+test('task card presents a unified read-only subtask and progress view', () => {
+  const taskRow = loadFunction('taskRow', {
+    subtaskSummary: loadFunction('subtaskSummary'),
+    esc: value => String(value),
+    subtaskProgressHtml: loadFunction('subtaskProgressHtml'),
+    ava: () => '<span class="ava"></span>',
+    isOverdue: () => false,
+    avaGroup: () => '',
+    member: id => ({ name: id }),
+    impName: { high: '高', mid: '中' },
+    fmtD: () => '11-06',
+  });
+  const rendered = taskRow({
+    id: 't1', desc: '任务树组件重构', progress: 70, owners: [], imp: 'high', due: '2026-11-06',
+    detail: '第一行进展\n第二行进展',
+    subs: [{ id: 'st1', desc: '小任务', owner: 'chen', progress: 100, due: '2026-11-01' }],
+  }, false, null);
+
+  assert.match(rendered, /class="task-card"/);
+  assert.match(rendered, /class="task-card-head"/);
+  assert.match(rendered, /class="task-card-body"/);
+  assert.match(rendered, /第一行进展\n第二行进展/);
+  assert.match(rendered, /1\/1/);
+  assert.match(rendered, /subtask-progress-ring/);
+  assert.match(rendered, /subtask-owner/);
+  assert.match(rendered, /chen/);
+  assert.doesNotMatch(rendered, /subtask-line[\s\S]*class="track"/);
+  assert.doesNotMatch(rendered, /data-op|data-prog|aria-expanded|overview-toggle|<button/);
+});
+
+test('read-only task card handles empty subtasks and details without controls', () => {
+  const taskRow = loadFunction('taskRow', {
+    subtaskSummary: loadFunction('subtaskSummary'),
+    esc: value => String(value),
+    subtaskProgressHtml: loadFunction('subtaskProgressHtml'),
+    ava: () => '<span class="ava"></span>',
+    isOverdue: () => false,
+    avaGroup: () => '',
+    member: id => ({ name: id }),
+    impName: { high: '高', mid: '中' },
+    fmtD: () => '11-06',
+  });
+  const rendered = taskRow({ id: 't2', desc: '看板优化', progress: 30, owners: [], imp: 'mid', due: '2026-11-20', detail: '', subs: [] }, false, null);
+  assert.match(rendered, /暂无小任务/);
+  assert.match(rendered, /暂无进展详情/);
+  assert.doesNotMatch(rendered, /data-op|data-prog|<button/);
+});
+
+test('subtask pane width clamps to preserve readable subtasks and detail', () => {
+  const clampSubtaskPanePercent = loadFunction('clampSubtaskPanePercent');
+  assert.equal(clampSubtaskPanePercent(10), 26);
+  assert.equal(clampSubtaskPanePercent(36), 36);
+  assert.equal(clampSubtaskPanePercent(80), 55);
+});
+
+test('task card includes an accessible resizer between subtasks and detail', () => {
+  const taskRow = loadFunction('taskRow', {
+    subtaskSummary: loadFunction('subtaskSummary'),
+    esc: value => String(value),
+    isOverdue: () => false,
+    avaGroup: () => '',
+    member: id => ({ name: id }),
+    impName: { mid: '中' },
+    fmtD: () => '11-20',
+  });
+  const rendered = taskRow({ id: 't2', desc: '看板优化', progress: 30, owners: [], imp: 'mid', due: '2026-11-20', detail: '详情', subs: [] }, false, null);
+  assert.match(rendered, /class="task-pane-resizer"/);
+  assert.match(rendered, /role="separator"/);
+  assert.match(rendered, /aria-orientation="vertical"/);
+  assert.match(rendered, /aria-valuemin="26"/);
+  assert.match(rendered, /aria-valuemax="55"/);
+  assert.match(rendered, /aria-valuenow="36"/);
+  assert.match(rendered, /tabindex="0"/);
+});
+
+
+test('subtask progress ring exposes progress and prints percentage inside', () => {
+  const subtaskProgressHtml = loadFunction('subtaskProgressHtml');
+  const rendered = subtaskProgressHtml(40, '大数据量虚拟滚动');
+  assert.match(rendered, /role="progressbar"/);
+  assert.match(rendered, /aria-valuenow="40"/);
+  assert.match(rendered, /aria-label="大数据量虚拟滚动，进度 40%"/);
+  assert.match(rendered, /subtask-progress-ring-value/);
+  assert.match(rendered, />40%<\/text>/);
+  const complete = subtaskProgressHtml(100, '树节点拖拽交互');
+  assert.match(complete, /subtask-progress-ring-value done/);
 });

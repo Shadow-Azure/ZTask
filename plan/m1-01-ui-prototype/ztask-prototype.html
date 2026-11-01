@@ -202,33 +202,58 @@
   .search-box { font: inherit; font-size: 12px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; outline: none; width: 170px; }
   .search-box:focus { border-color: var(--blue); }
 
-  .task-table { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
-  .tt-head, .tt-row {
-    display: grid; align-items: center; gap: 10px;
-    grid-template-columns: minmax(220px, 1.7fr) 116px 96px 150px 62px 112px 74px;
-    padding: 8px 14px;
+  .task-list { display: grid; gap: 14px; }
+  .task-card { overflow: hidden; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(30,40,60,.035); }
+  .task-card-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); align-items: center; gap: 24px; padding: 16px 20px 15px; cursor: pointer; outline: none; }
+  .task-card-head:hover { background: #fafbfc; }
+  .task-card-head:focus-visible { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--blue) 50%, transparent); }
+  .task-identity { min-width: 0; }
+  .task-title-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .task-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 650; letter-spacing: -.1px; }
+  .task-folder { flex-shrink: 0; color: var(--text-faint); font-size: 10.5px; font-weight: 400; }
+  .task-facts { display: flex; align-items: center; gap: 12px; margin-top: 6px; color: var(--text-faint); font-size: 11px; }
+  .task-facts > span { display: inline-flex; align-items: center; gap: 4px; }
+  .task-facts .ava { width: 17px; height: 17px; font-size: 9px; }
+  .task-facts .due.overdue, .task-facts .overdue-label { color: var(--red); }
+  .task-total { min-width: 0; }
+  .task-total-label { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 7px; color: var(--text-dim); font-size: 10.5px; }
+  .task-total-label strong { color: var(--text); font-family: var(--mono); font-size: 15px; font-variant-numeric: tabular-nums; }
+  .task-total .track { display: block; width: 100%; height: 5px; border-radius: 3px; background: #e8ebf0; overflow: hidden; }
+  .task-total .fill { display: block; height: 100%; border-radius: 3px; background: var(--blue); }
+  .task-total .fill.done { background: var(--green); }
+  .task-card-body { display: grid; grid-template-columns: minmax(0, var(--subtask-pane-width, 36%)) 13px minmax(0, 1fr); border-top: 1px solid #edf0f4; }
+  .task-pane-resizer { position: relative; cursor: col-resize; outline: none; touch-action: none; }
+  .task-pane-resizer::before { content: ''; position: absolute; top: 0; bottom: 0; left: 6px; width: 1px; background: #edf0f4; transition: background .15s, width .15s, left .15s; }
+  .task-pane-resizer::after { content: ''; position: absolute; top: 50%; left: 4px; width: 5px; height: 28px; border-radius: 4px; background: var(--border-strong); opacity: 0; transform: translateY(-50%); transition: opacity .15s, background .15s; }
+  .task-pane-resizer:hover::before, .task-pane-resizer:focus-visible::before, .task-pane-resizer.dragging::before { left: 5px; width: 3px; background: color-mix(in srgb, var(--blue) 45%, transparent); }
+  .task-pane-resizer:hover::after, .task-pane-resizer:focus-visible::after, .task-pane-resizer.dragging::after { opacity: 1; background: var(--blue); }
+  body.task-pane-resizing { cursor: col-resize; user-select: none; }
+  .task-pane { min-width: 0; padding: 15px 20px 17px; }
+  .task-pane-title { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; color: var(--text-dim); font-size: 11px; font-weight: 650; }
+  .task-pane-title .count { margin-left: auto; color: var(--text-faint); font-family: var(--mono); font-size: 10px; font-weight: 500; }
+  .subtask-lines { display: grid; gap: 12px; }
+  .subtask-line { display: grid; grid-template-columns: 38px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 38px; }
+  .subtask-progress-ring { position: relative; width: 38px; height: 38px; flex-shrink: 0; }
+  .subtask-progress-ring svg { display: block; width: 38px; height: 38px; }
+  .subtask-progress-ring-track { fill: none; stroke: #e4e9ef; stroke-width: 3; }
+  .subtask-progress-ring-value { fill: none; stroke: var(--blue); stroke-width: 3; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 19px 19px; }
+  .subtask-progress-ring-value.done { stroke: var(--green); }
+  .subtask-progress-ring-text { fill: var(--text-dim); font-family: var(--mono); font-size: 8.5px; font-weight: 650; text-anchor: middle; dominant-baseline: central; }
+  .subtask-line.done .subtask-progress-ring-text { fill: var(--green); }
+  .subtask-copy { min-width: 0; }
+  .subtask-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-dim); font-size: 11.5px; line-height: 1.45; }
+  .subtask-line.done .subtask-name { color: var(--text-faint); }
+  .subtask-owner { display: flex; align-items: center; gap: 5px; margin-top: 3px; color: var(--text-faint); font-size: 10px; line-height: 1.2; }
+  .subtask-owner .ava { width: 16px; height: 16px; font-size: 8.5px; }
+  .progress-detail { color: var(--text-dim); font-size: 11.5px; line-height: 1.8; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .task-empty { color: var(--text-faint); font-size: 11px; line-height: 1.8; }
+  @media (max-width: 1100px) {
+    .task-card-head { grid-template-columns: minmax(0, 1fr) 170px; gap: 16px; padding-left: 16px; padding-right: 16px; }
+    .task-card-body { grid-template-columns: 1fr; }
+    .task-pane-resizer { display: none; }
+    .task-pane { padding-left: 16px; padding-right: 16px; }
+    .task-pane + .task-pane { border-top: 1px solid #edf0f4; }
   }
-  .tt-head { font-size: 11px; color: var(--text-faint); background: var(--bg-panel); border-bottom: 1px solid var(--border); font-weight: 600; }
-  .tt-row { border-bottom: 1px solid #eef1f5; cursor: pointer; transition: background .1s; }
-  .tt-row:last-child { border-bottom: none; }
-  .tt-row:hover { background: #f7f9fc; }
-  .tt-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent); outline-offset: -2px; }
-  .tt-row.overdue { box-shadow: inset 3px 0 0 var(--red); }
-  .tt-row.sub { background: #fbfcfe; }
-  .tt-row.sub:hover { background: #f4f7fb; }
-  .tt-desc { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .tt-desc .txt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
-  .tt-row.sub .tt-desc { padding-left: 22px; position: relative; }
-  .tt-row.sub .tt-desc::before { content: "└"; position: absolute; left: 6px; color: var(--text-faint); font-size: 11px; }
-  .tt-row.sub .txt { font-weight: 450; color: var(--text-dim); }
-  .sub-badge { font-size: 10px; color: var(--text-faint); font-family: var(--mono); background: var(--bg-inset); border-radius: 4px; padding: 0 5px; flex-shrink: 0; }
-  .detail-peek { display: block; font-size: 10.5px; color: var(--text-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 400; margin-top: 1px; }
-  .tt-ops { display: flex; gap: 2px; opacity: .45; transition: opacity .12s; }
-  .tt-row:hover .tt-ops, .tt-row:focus-visible .tt-ops { opacity: 1; }
-  .icon-btn { width: 26px; height: 26px; display: grid; place-items: center; border: none; background: transparent; border-radius: 6px; cursor: pointer; color: var(--text-dim); font-size: 13px; }
-  .icon-btn:hover { background: var(--bg-inset); color: var(--text); }
-  .icon-btn.danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); color: var(--red); }
-  .empty-tip { padding: 34px; text-align: center; color: var(--text-faint); font-size: 12.5px; }
   .hint-line { font-size: 11px; color: var(--text-faint); margin: 10px 2px 0; }
   .hint-line kbd { font-family: var(--mono); font-size: 10px; background: var(--bg-card); border: 1px solid var(--border-strong); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
 
@@ -579,13 +604,8 @@
             <button class="fchip" data-imp="low">低</button>
             <input class="search-box" id="task-search" placeholder="搜索任务描述…">
           </div>
-          <div class="task-table">
-            <div class="tt-head">
-              <span>任务描述</span><span>负责人</span><span>协作</span><span>任务进度</span><span>重要度</span><span>预计完成</span><span></span>
-            </div>
-            <div id="task-rows"></div>
-          </div>
-          <p class="hint-line">提示：<kbd>单击</kbd> 任务行打开编辑浮窗；<b>点击进度条</b>可原地拖动修改进度；悬停行尾可快速编辑 / 添加小任务 / 删除。小任务不可再嵌套。</p>
+          <div class="task-list" id="task-rows"></div>
+          <p class="hint-line">任务进展为只读视图；点击任务标题区可在浮窗中查看或编辑完整任务。</p>
         </div>
         <!-- tab 2：情况看板 -->
         <div id="tab-dash" style="display:none">
@@ -838,26 +858,6 @@ function avaGroup(ids, sm) {
 }
 function progBar(p, w) {
   return `<span class="prog"${w ? ` style="width:${w}px"` : ''}><span class="track"><span class="fill${p >= 100 ? ' done' : ''}" style="width:${p}%"></span></span><span class="pct">${p}%</span></span>`;
-}
-/* 行内快捷改进度：点击进度条 → 原地变滑块，拖动松开即提交，Esc 取消 */
-let progressEditing = null;
-function progCell(t, key) {
-  if (progressEditing === key) {
-    return `<span class="prog" data-prog-editor="${key}"><input type="range" min="0" max="100" step="5" value="${t.progress}"><span class="pct">${t.progress}%</span></span>`;
-  }
-  return `<span class="prog clickable" data-prog="${key}" title="点击直接修改进度"><span class="track"><span class="fill${t.progress >= 100 ? ' done' : ''}" style="width:${t.progress}%"></span></span><span class="pct">${t.progress}%</span></span>`;
-}
-function commitProgress(key, value) {
-  let t = TASKS[key];
-  if (!t) for (const p of Object.values(TASKS)) {
-    const s = p.subs.find(x => x.id === key);
-    if (s) { t = s; break; }
-  }
-  if (!t) return;
-  t.progress = value;
-  progressEditing = null;
-  toast('进度已更新为 ' + value + '%（原型模拟）');
-  renderTree(); renderTasks(); renderStats();
 }
 function dueHtml(t) {
   const od = isOverdue(t);
@@ -1136,93 +1136,115 @@ function renderTasks() {
   }).join('');
   bindTaskRows(rows);
 }
+function subtaskProgressHtml(progress, label) {
+  const value = Math.max(0, Math.min(100, progress));
+  const radius = 14;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - value / 100);
+  return `<span class="subtask-progress-ring" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${value}" aria-label="${label}，进度 ${value}%">
+    <svg viewBox="0 0 38 38" aria-hidden="true">
+      <circle class="subtask-progress-ring-track" cx="19" cy="19" r="${radius}"></circle>
+      <circle class="subtask-progress-ring-value${value === 100 ? ' done' : ''}" cx="19" cy="19" r="${radius}" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"></circle>
+      <text class="subtask-progress-ring-text" x="19" y="19">${value}%</text>
+    </svg>
+  </span>`;
+}
+function subtaskSummary(subs) {
+  const list = subs || [];
+  return { done: list.filter(s => s.progress === 100).length, total: list.length };
+}
+let subtaskPanePercent = 36;
+function clampSubtaskPanePercent(value) {
+  return Math.min(55, Math.max(26, Math.round(value)));
+}
+function setSubtaskPanePercent(value) {
+  subtaskPanePercent = clampSubtaskPanePercent(value);
+  const list = $('#task-rows');
+  list.style.setProperty('--subtask-pane-width', subtaskPanePercent + '%');
+  list.querySelectorAll('.task-pane-resizer').forEach(r => r.setAttribute('aria-valuenow', subtaskPanePercent));
+}
 function taskRow(t, isSub, fromFolder) {
-  const peek = (t.detail || '').split('\n')[0];
-  let html = `<div class="tt-row${isSub ? ' sub' : ''}${isOverdue(t) ? ' overdue' : ''}" data-tid="${t.id}" tabindex="0" title="单击或 Enter 打开编辑浮窗">
-    <span class="tt-desc">
-      <span class="imp-dot ${t.imp}"></span>
-      <span style="min-width:0">
-        <span class="txt">${esc(t.desc)}</span>
-        ${fromFolder ? `<span class="sub-badge">📁 ${esc(fromFolder)}</span>` : ''}
-        ${!isSub && t.subs && t.subs.length ? `<span class="sub-badge">${t.subs.length} 小任务</span>` : ''}
-        ${!isSub && peek ? `<span class="detail-peek">${esc(peek)}</span>` : ''}
-      </span>
-    </span>
-    <span>${avaGroup(t.owners, true)}</span>
-    <span>${avaGroup(t.collabs, true)}</span>
-    <span>${progCell(t, t.id)}</span>
-    <span><span class="imp ${t.imp}">${impName[t.imp]}</span></span>
-    <span>${dueHtml(t)}</span>
-    <span class="tt-ops">
-      <button class="icon-btn" data-op="edit" title="编辑">✎</button>
-      ${!isSub ? '<button class="icon-btn" data-op="addsub" title="添加小任务">⊕</button>' : ''}
-      <button class="icon-btn danger" data-op="del" title="删除">🗑</button>
-    </span>
-  </div>`;
-  if (!isSub && t.subs) t.subs.forEach(st => {
-    html += `<div class="tt-row sub${isOverdue(st) ? ' overdue' : ''}" data-sid="${st.id}" data-pid="${t.id}" tabindex="0" title="单击或 Enter 打开所属任务">
-      <span class="tt-desc">
-        <span class="imp-dot ${st.imp}"></span>
-        <span class="txt">${esc(st.desc)}</span>
-      </span>
-      <span>${avaGroup([st.owner], true)}</span>
-      <span></span>
-      <span>${progCell(st, st.id)}</span>
-      <span><span class="imp ${st.imp}">${impName[st.imp]}</span></span>
-      <span>${dueHtml(st)}</span>
-      <span class="tt-ops"><button class="icon-btn danger" data-op="delsub" title="删除小任务">🗑</button></span>
-    </div>`;
-  });
-  return html;
+  const summary = subtaskSummary(t.subs);
+  const overdue = isOverdue(t);
+  return `<article class="task-card" data-task-card="${t.id}">
+    <header class="task-card-head" data-tid="${t.id}" tabindex="0" title="打开任务详情浮窗" aria-label="打开任务详情：${esc(t.desc)}">
+      <div class="task-identity">
+        <div class="task-title-line">
+          <span class="imp-dot ${t.imp}"></span>
+          <span class="task-title">${esc(t.desc)}</span>
+          ${fromFolder ? `<span class="task-folder">${esc(fromFolder)}</span>` : ''}
+        </div>
+        <div class="task-facts">
+          <span>${avaGroup(t.owners, true)}${t.owners.map(id => esc(member(id).name)).join('、')}</span>
+          <span class="imp ${t.imp}">${impName[t.imp]}重要</span>
+          <span class="due${overdue ? ' overdue' : ''}">预计 ${fmtD(t.due)}${overdue ? ' · 已逾期' : ''}</span>
+        </div>
+      </div>
+      <div class="task-total">
+        <div class="task-total-label"><span>任务总进度</span><strong>${t.progress}%</strong></div>
+        <span class="track"><span class="fill${t.progress >= 100 ? ' done' : ''}" style="width:${t.progress}%"></span></span>
+      </div>
+    </header>
+    <div class="task-card-body">
+      <section class="task-pane" aria-label="子任务进展">
+        <div class="task-pane-title"><span>子任务进展</span><span class="count">${summary.done}/${summary.total} 已完成</span></div>
+        ${summary.total ? `<div class="subtask-lines">${t.subs.map(st => `<div class="subtask-line${st.progress === 100 ? ' done' : ''}">
+          ${subtaskProgressHtml(st.progress, esc(st.desc))}
+          <span class="subtask-copy">
+            <span class="subtask-name" title="${esc(st.desc)}">${esc(st.desc)}</span>
+            <span class="subtask-owner">${ava(st.owner, true)}<span>负责人 · ${esc(member(st.owner).name)}</span></span>
+          </span>
+        </div>`).join('')}</div>` : '<div class="task-empty">暂无小任务</div>'}
+      </section>
+      <div class="task-pane-resizer" role="separator" aria-label="调整子任务与任务详情宽度" aria-orientation="vertical" aria-valuemin="26" aria-valuemax="55" aria-valuenow="36" tabindex="0" title="拖拽调整宽度；也可使用左右方向键"></div>
+      <section class="task-pane" aria-label="任务进展详情">
+        <div class="task-pane-title"><span>进展详情</span><span class="count">${(t.detail || '').split('\n').filter(Boolean).length} 条记录</span></div>
+        ${t.detail ? `<div class="progress-detail">${esc(t.detail)}</div>` : '<div class="task-empty">暂无进展详情</div>'}
+      </section>
+    </div>
+  </article>`;
 }
 function bindTaskRows(root) {
-  /* 行内快捷改进度 */
-  root.querySelectorAll('[data-prog]').forEach(el => el.addEventListener('click', e => {
-    e.stopPropagation();
-    progressEditing = el.dataset.prog;
-    renderTasks();
-    const inp = document.querySelector('[data-prog-editor] input[type="range"]');
-    if (inp) inp.focus();
-  }));
-  const editor = root.querySelector('[data-prog-editor]');
-  if (editor) {
-    const key = editor.dataset.progEditor;
-    const range = editor.querySelector('input[type="range"]');
-    range.addEventListener('click', e => e.stopPropagation());
-    range.addEventListener('input', () => { editor.querySelector('.pct').textContent = range.value + '%'; });
-    range.addEventListener('change', () => commitProgress(key, +range.value));
-    range.addEventListener('blur', () => { if (progressEditing === key) commitProgress(key, +range.value); });
-    range.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { progressEditing = null; renderTasks(); }
-      e.stopPropagation();
+  root.style.setProperty('--subtask-pane-width', subtaskPanePercent + '%');
+  root.querySelectorAll('.task-pane-resizer').forEach(resizer => {
+    resizer.setAttribute('aria-valuenow', subtaskPanePercent);
+    resizer.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      const body = resizer.closest('.task-card-body');
+      resizer.setPointerCapture(e.pointerId);
+      resizer.classList.add('dragging');
+      document.body.classList.add('task-pane-resizing');
+      const resize = event => {
+        const rect = body.getBoundingClientRect();
+        setSubtaskPanePercent((event.clientX - rect.left) / rect.width * 100);
+      };
+      const stop = () => {
+        resizer.classList.remove('dragging');
+        document.body.classList.remove('task-pane-resizing');
+        resizer.removeEventListener('pointermove', resize);
+        resizer.removeEventListener('pointerup', stop);
+        resizer.removeEventListener('pointercancel', stop);
+      };
+      resizer.addEventListener('pointermove', resize);
+      resizer.addEventListener('pointerup', stop);
+      resizer.addEventListener('pointercancel', stop);
+      resize(e);
     });
-  }
-  root.querySelectorAll('.tt-row[data-tid]').forEach(r => {
-    r.addEventListener('click', () => openModal(r.dataset.tid));
-    r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === r) openModal(r.dataset.tid); });
+    resizer.addEventListener('keydown', e => {
+      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+      e.preventDefault();
+      if (e.key === 'Home') setSubtaskPanePercent(26);
+      else if (e.key === 'End') setSubtaskPanePercent(55);
+      else setSubtaskPanePercent(subtaskPanePercent + (e.key === 'ArrowRight' ? 2 : -2));
+    });
   });
-  root.querySelectorAll('.tt-row.sub[data-pid]').forEach(r => {
-    r.addEventListener('click', () => openModal(r.dataset.pid));
-    r.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === r) openModal(r.dataset.pid); });
-  });
-  root.querySelectorAll('[data-op]').forEach(b => {
-    b.addEventListener('click', e => {
-      e.stopPropagation();
-      const row = b.closest('.tt-row');
-      const op = b.dataset.op;
-      if (op === 'edit') openModal(row.dataset.tid);
-      if (op === 'del') delTask(row.dataset.tid);
-      if (op === 'addsub') {
-        openModal(row.dataset.tid);
-        setTimeout(() => $('#m-sub-input').focus(), 60);
-      }
-      if (op === 'delsub') {
-        const p = TASKS[row.dataset.pid];
-        const st = p.subs.find(s => s.id === row.dataset.sid);
-        askConfirm('删除小任务', '删除小任务「' + st.desc + '」？此操作不可撤销。', '删除', () => {
-          p.subs = p.subs.filter(s => s.id !== row.dataset.sid);
-          toast('已删除小任务（原型模拟）'); renderTasks();
-        });
+  root.querySelectorAll('.task-card-head[data-tid]').forEach(head => {
+    head.addEventListener('click', () => openModal(head.dataset.tid));
+    head.addEventListener('keydown', e => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target === head) {
+        e.preventDefault();
+        openModal(head.dataset.tid);
       }
     });
   });
@@ -1838,7 +1860,6 @@ renderStats();
   if (h.get('modal')) openModal(h.get('modal') === 'new' ? null : h.get('modal'));
   if (h.get('owners')) { mOwners = new Set(h.get('owners').split(',')); [...mOwners].forEach(id => mCollabs.delete(id)); renderModalChips(); }
   if (h.get('msel')) { mselUI[h.get('msel')].open = true; renderModalChips(); }
-  if (h.get('progedit')) { progressEditing = h.get('progedit'); renderTasks(); }
 })();
 </script>
 </body>
