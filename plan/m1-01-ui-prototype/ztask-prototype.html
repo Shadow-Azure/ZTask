@@ -297,16 +297,36 @@
   .chart-x span { text-align: center; font-size: 11.5px; color: var(--text-dim); }
   .chart-x b { display: block; font-size: 10px; color: var(--text-faint); font-weight: 400; font-family: var(--mono); }
 
-  .range-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; margin-top: 16px; box-shadow: var(--shadow); }
-  .range-panel h3 { font-size: 13px; font-weight: 650; margin-bottom: 10px; }
-  .range-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .range-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; margin-top: 16px; box-shadow: var(--shadow); overflow: hidden; }
+  .range-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px 13px; }
+  .range-head h3 { font-size: 13px; font-weight: 650; }
+  .range-head p { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+  .range-preset { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; font-size: 11.5px; font-weight: 600; color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; cursor: pointer; }
+  .range-preset::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--text-faint); }
+  .range-preset.active { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 35%, transparent); background: color-mix(in srgb, var(--blue) 7%, transparent); }
+  .range-preset.active::before { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 12%, transparent); }
+  .range-controls { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; padding: 13px 18px 11px; background: #fafbfc; border-top: 1px solid #eef1f5; border-bottom: 1px solid #eef1f5; }
+  .range-field { display: flex; flex-direction: column; gap: 4px; }
+  .range-field > span { font-size: 10.5px; color: var(--text-faint); font-weight: 600; }
   .range-controls input[type="date"] { font: inherit; font-size: 12px; font-family: var(--mono); color: var(--text); background: var(--bg-card); border: 1px solid var(--border-strong); border-radius: 8px; padding: 5px 9px; outline: none; }
-  .range-controls input[type="date"]:focus { border-color: var(--blue); }
-  .range-controls .arrow { color: var(--text-faint); }
-  .range-result { margin-top: 12px; }
+  .range-controls input[type="date"]:focus { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 10%, transparent); }
+  .range-controls .arrow { color: var(--text-faint); padding-bottom: 7px; }
+  .range-controls .btn { min-height: 31px; }
+  .range-now { white-space: nowrap; }
+  .range-boundary { width: 100%; display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-faint); padding-top: 1px; }
+  .range-boundary::before { content: 'i'; display: inline-grid; place-items: center; width: 13px; height: 13px; border: 1px solid var(--border-strong); border-radius: 50%; font-family: var(--mono); font-size: 9px; flex-shrink: 0; }
+  .range-result { padding: 13px 18px 16px; }
+  .range-status { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; margin-bottom: 10px; font-size: 11px; color: var(--text-dim); }
+  .range-status .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 10%, transparent); }
+  .range-status .status-label { font-weight: 600; color: var(--text); }
+  .range-status time { margin-left: auto; font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .range-result .range-empty { padding: 10px 0 2px; }
   .range-empty { font-size: 12px; color: var(--text-faint); padding: 16px 4px; }
-  .chg-summary { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
+  .chg-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+  .chg-summary { font-size: 12px; color: var(--text-dim); }
   .chg-summary b { color: var(--text); font-family: var(--mono); }
+  .chg-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .chg-action { min-height: 0; padding: 3px 9px; font-size: 11px; white-space: nowrap; }
   .chg-list { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
   .chg-row { display: flex; align-items: center; gap: 10px; padding: 9px 14px; background: var(--bg-card); cursor: pointer; border-bottom: 1px solid #eef1f5; }
   .chg-row:hover { background: #f7f9fc; }
@@ -481,7 +501,7 @@
   <button data-page="share-a">成员链接 · 陈晨 A</button>
   <button data-page="share-b">成员链接 · 林悦 B</button>
   <button data-page="share-dead">失效链接</button>
-  <span class="right">静态原型 · 数据为模拟 · today = 2026-10-29</span>
+  <span class="right">静态原型 · 数据为模拟 · today = <span id="proto-today"></span></span>
 </nav>
 
 <!-- ═══ 屏 0：总览 ═══ -->
@@ -499,7 +519,7 @@
           <li>左侧任务夹文件树（文件夹可嵌套）</li>
           <li>右侧「任务管理」：任务增删改查、小任务（仅一层）、双击打开编辑浮窗</li>
           <li>右侧「情况看板」：成员筛选、完成度统计卡片、点击卡片展开预计完成时间柱状图</li>
-          <li>时间段查询：进度变化 + 进展详情 code-diff 对比</li>
+          <li>默认查询昨天至今：进度变化 + 进展详情 code-diff 对比，可自定义日期重新查询</li>
         </ul>
         <button data-goto="tracker">打开界面 →</button>
       </div>
@@ -543,7 +563,7 @@
         <li>任务夹树：点击任务夹切换右侧内容；点击树中任务直接打开编辑浮窗；文件夹可折叠。</li>
         <li>任务行：<b>单击</b>打开编辑浮窗；点击进度条原地修改进度；悬停行尾出现「编辑 / 添加小任务 / 删除」。</li>
         <li>情况看板：成员 chips 多选（不选 = 整体）；点击统计卡片在下方展开该集合的预计完成时间分布柱状图，再点一次收起。</li>
-        <li>时间段查询：选择起止日期点击「查询」，列出有变化的任务（进度 <code>55% → 70%</code>），点击任务行展开左右并排的进展详情 diff（红 = 删除，绿 = 新增）。</li>
+        <li>时间段查询：默认自动查询昨天 00:00:00 至当前时刻并列出变化任务；可修改起止日期重新查询（自定义结束日期包含至 23:59:59），查询结果默认全部展开，支持单个或批量展开 / 折叠左右并排的进展详情 diff（红 = 删除，绿 = 新增）。</li>
         <li>成员管理：行内生成 / 复制 / 重置 / 吊销分享链接（危险操作有确认弹窗）；「添加成员」弹窗。</li>
         <li>成员视图：进展详情为追加式（历史保留，供时间段 diff 对比）；被重置/吊销的链接进入「链接已失效」页（见顶部导航「失效链接」）。</li>
       </ul>
@@ -617,15 +637,22 @@
           <div class="stat-cards" id="stat-cards"></div>
           <div id="chart-slot"></div>
           <div class="range-panel">
-            <h3>时间段查询 · 任务进展变化</h3>
-            <div class="range-controls">
-              <input type="date" id="range-start" value="2026-10-20">
-              <span class="arrow">→</span>
-              <input type="date" id="range-end" value="2026-10-29">
-              <button class="btn primary" id="btn-range-query">查询</button>
-              <span style="font-size:11px;color:var(--text-faint)">按所选成员（不选为整体）统计其负责任务在该时段的变化</span>
+            <div class="range-head">
+              <div>
+                <h3>任务进展变化</h3>
+                <p>对比起止时刻的任务进度与进展详情</p>
+              </div>
+              <button class="range-preset active" id="btn-range-preset" type="button">昨天至今</button>
             </div>
-            <div class="range-result" id="range-result"></div>
+            <div class="range-controls">
+              <label class="range-field"><span>开始日期</span><input type="date" id="range-start"></label>
+              <span class="arrow">→</span>
+              <label class="range-field"><span>结束日期</span><input type="date" id="range-end"></label>
+              <button class="btn primary" id="btn-range-query">查询</button>
+              <button class="btn ghost range-now" id="btn-range-now" type="button">↻ 更新至现在</button>
+              <div class="range-boundary" id="range-boundary">默认查询昨天 00:00:00 至当前时刻；自定义日期包含起止两天</div>
+            </div>
+            <div class="range-result" id="range-result" aria-live="polite"></div>
           </div>
         </div>
       </div>
@@ -809,32 +836,32 @@ const TREE = [
   {id:'f3', name:'质量体系', tasks:['t7','t8']},
 ];
 
-/* 历史快照：用于时间段查询的进度与详情对比 */
+/* 历史快照：相对当前时间生成，保证默认“昨天至今”有可见变化 */
 const HISTORY = {
   t1: [
-    {d:'2026-10-20', p:55, detail:'完成树组件基础结构搭建\n节点展开/收起联调中\n样式还是旧版'},
-    {d:'2026-10-24', p:62, detail:'完成树组件基础结构搭建\n节点展开/收起完成\n接入新设计稿样式\n拖拽排序开发中'},
-    {d:'2026-10-29', p:70, detail:'完成树组件基础结构搭建\n节点展开/收起完成\n接入新设计稿样式\n拖拽排序已完成，待自测\n虚拟滚动方案调研中'},
+    {d:historyHoursAgo(49), p:55, detail:'完成树组件基础结构搭建\n节点展开/收起联调中\n样式还是旧版'},
+    {d:historyHoursAgo(20), p:62, detail:'完成树组件基础结构搭建\n节点展开/收起完成\n接入新设计稿样式\n拖拽排序开发中'},
+    {d:historyHoursAgo(1), p:70, detail:'完成树组件基础结构搭建\n节点展开/收起完成\n接入新设计稿样式\n拖拽排序已完成，待自测\n虚拟滚动方案调研中'},
   ],
   t4: [
-    {d:'2026-10-21', p:40, detail:'token 生成/吊销接口联调中\n权限过滤方案待定'},
-    {d:'2026-10-29', p:55, detail:'token 生成/吊销接口完成\n成员视图权限过滤开发中\n链接有效期策略待评审'},
+    {d:historyHoursAgo(49), p:40, detail:'token 生成/吊销接口联调中\n权限过滤方案待定'},
+    {d:historyHoursAgo(3), p:55, detail:'token 生成/吊销接口完成\n成员视图权限过滤开发中\n链接有效期策略待评审'},
   ],
   t2: [
-    {d:'2026-10-23', p:20, detail:'完成性能剖析，定位在长列表重渲染'},
-    {d:'2026-10-29', p:30, detail:'完成性能剖析，定位在长列表重渲染\n虚拟列表方案对比中'},
+    {d:historyHoursAgo(49), p:20, detail:'完成性能剖析，定位在长列表重渲染'},
+    {d:historyHoursAgo(2), p:30, detail:'完成性能剖析，定位在长列表重渲染\n虚拟列表方案对比中'},
   ],
   t7: [
-    {d:'2026-10-19', p:30, detail:'核心链路用例 8/26'},
-    {d:'2026-10-26', p:45, detail:'核心链路用例 12/26\n任务编辑浮窗用例编写中'},
+    {d:historyHoursAgo(72), p:30, detail:'核心链路用例 8/26'},
+    {d:historyHoursAgo(26), p:45, detail:'核心链路用例 12/26\n任务编辑浮窗用例编写中'},
   ],
   t6: [
-    {d:'2026-10-22', p:10, detail:'完成数据源梳理'},
-    {d:'2026-10-28', p:20, detail:'完成数据源梳理\n报表口径待与管理员对齐'},
+    {d:historyHoursAgo(49), p:10, detail:'完成数据源梳理'},
+    {d:historyHoursAgo(5), p:20, detail:'完成数据源梳理\n报表口径待与管理员对齐'},
   ],
   t3: [
-    {d:'2026-10-18', p:85, detail:'快照表结构设计完成\n双策略待评审'},
-    {d:'2026-10-25', p:100, detail:'快照表结构设计完成\n按天聚合 + 按变更触发双策略\n评审通过，已合入主干'},
+    {d:historyHoursAgo(72), p:85, detail:'快照表结构设计完成\n双策略待评审'},
+    {d:historyHoursAgo(60), p:100, detail:'快照表结构设计完成\n按天聚合 + 按变更触发双策略\n评审通过，已合入主干'},
   ],
 };
 
@@ -843,6 +870,33 @@ const $ = s => document.querySelector(s);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const member = id => MEMBERS.find(m => m.id === id);
 const impName = {high:'高', mid:'中', low:'低'};
+function pad2(n) { return String(n).padStart(2, '0'); }
+function formatLocalDate(date) {
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+}
+function formatTimestamp(date) {
+  return `${formatLocalDate(date)} ${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+function historyHoursAgo(hours) {
+  return formatTimestamp(new Date(Date.now() - hours * 3600000)).replace(' ', 'T');
+}
+function createDefaultRange(now) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 1);
+  return {start, end: new Date(now)};
+}
+function resolveQueryRange(startValue, endValue, isDefault, now) {
+  if (!startValue || !endValue) return null;
+  const start = new Date(startValue + 'T00:00:00.000');
+  const end = isDefault ? new Date(now) : new Date(endValue + 'T23:59:59.999');
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return null;
+  return {start, end};
+}
+function snapshotAt(history, at) {
+  const time = at.getTime();
+  return history.filter(h => new Date(h.d).getTime() <= time).pop();
+}
 const parseD = s => new Date(s + 'T00:00:00');
 const fmtD = s => { const d = parseD(s); return (d.getMonth()+1) + '-' + String(d.getDate()).padStart(2,'0'); };
 const isOverdue = t => parseD(t.due) < TODAY && t.progress < 100;
@@ -915,7 +969,7 @@ function showPage(name) {
   else {
     $('#page-' + name).classList.add('active');
     if (name === 'members') renderMembers();
-    if (name === 'tracker') { renderTree(); renderTasks(); renderDashChips(); renderStats(); }
+    if (name === 'tracker') { renderTree(); renderTasks(); renderDashChips(); renderStats(); renderRangeQuery(); }
   }
 }
 document.querySelectorAll('.proto-nav button[data-page]').forEach(b =>
@@ -1280,7 +1334,7 @@ document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click
   const tab = b.dataset.tab;
   $('#tab-tasks').style.display = tab === 'tasks' ? '' : 'none';
   $('#tab-dash').style.display = tab === 'dash' ? '' : 'none';
-  if (tab === 'dash') { renderDashChips(); renderStats(); }
+  if (tab === 'dash') { renderDashChips(); renderStats(); renderRangeQuery(); }
 }));
 
 /* ════════════════ 事项跟踪 · 情况看板 tab ════════════════ */
@@ -1299,7 +1353,7 @@ function renderDashChips() {
   $('#dash-chips').querySelectorAll('.mchip').forEach(c => c.addEventListener('click', () => {
     const id = c.dataset.mid;
     dashSel.has(id) ? dashSel.delete(id) : dashSel.add(id);
-    renderDashChips(); renderStats(); renderChart();
+    renderDashChips(); renderStats(); renderChart(); renderRangeQuery();
   }));
 }
 function bucketOf(t) { /* done: p==100; gt50: 50<p<100; lt50: p<=50 */
@@ -1396,19 +1450,49 @@ function renderChart() {
   </div>`;
 }
 
-/* 时间段查询 */
-$('#btn-range-query').addEventListener('click', () => {
+/* 时间段查询：默认昨天 00:00:00 至当前时刻，自定义结束日期包含至 23:59:59.999 */
+let rangeMode = 'default';
+function syncRangeControls() {
+  const isDefault = rangeMode === 'default';
+  $('#btn-range-preset').classList.toggle('active', isDefault);
+  $('#btn-range-now').style.visibility = isDefault ? 'visible' : 'hidden';
+  $('#range-boundary').textContent = isDefault
+    ? '默认查询昨天 00:00:00 至当前时刻；结束时间不会延伸到今天 23:59:59'
+    : '自定义日期：开始于 00:00:00，结束于 23:59:59，包含起止两天';
+}
+function setDefaultRange() {
+  const range = createDefaultRange(new Date());
+  $('#range-start').value = formatLocalDate(range.start);
+  $('#range-end').value = formatLocalDate(range.end);
+  rangeMode = 'default';
+  syncRangeControls();
+}
+function setAllChanges(box, expanded) {
+  box.querySelectorAll('.chg-row, .diff-wrap').forEach(el => el.classList.toggle('open', expanded));
+}
+function renderRangeQuery() {
   const s = $('#range-start').value, e = $('#range-end').value;
+  const isDefault = rangeMode === 'default';
+  const range = resolveQueryRange(s, e, isDefault, new Date());
   const box = $('#range-result');
-  if (!s || !e || s > e) { box.innerHTML = '<div class="range-empty">请选择有效的起止日期。</div>'; return; }
+  if (!range) {
+    box.innerHTML = '<div class="range-empty">请选择有效的起止日期，开始日期不能晚于结束日期。</div>';
+    return;
+  }
+  const startLabel = formatTimestamp(range.start);
+  const endLabel = formatTimestamp(range.end);
+  const statusHtml = `<div class="range-status">
+    <span class="status-dot"></span><span class="status-label">${isDefault ? '已自动查询 · 昨天至今' : '已查询 · 自定义日期'}</span>
+    <time>${startLabel} → ${endLabel}</time>
+  </div>`;
   const tasks = dashTasks();
   const changes = [];
   tasks.forEach(t => {
     const hist = HISTORY[t.id];
     if (!hist) return;
-    const before = hist.filter(h => h.d <= s).pop() || hist[0];
-    const after = hist.filter(h => h.d <= e).pop();
-    if (!after || after.d <= s) return;
+    const before = snapshotAt(hist, range.start) || hist[0];
+    const after = snapshotAt(hist, range.end);
+    if (!after || new Date(after.d).getTime() <= range.start.getTime()) return;
     if (before.p === after.p && before.detail === after.detail) return;
     const ops = diffLines(before.detail, after.detail);
     changes.push({t, before, after,
@@ -1417,10 +1501,13 @@ $('#btn-range-query').addEventListener('click', () => {
       ops});
   });
   if (!changes.length) {
-    box.innerHTML = '<div class="range-empty">该时间段内所选范围的任务没有进展变化。</div>';
+    box.innerHTML = statusHtml + '<div class="range-empty">该时间段内所选范围的任务没有进展变化。</div>';
     return;
   }
-  box.innerHTML = `<div class="chg-summary">共 <b>${changes.length}</b> 个任务在 ${s} → ${e} 期间有进展变化，点击任务行展开详情对比：</div>
+  box.innerHTML = `${statusHtml}<div class="chg-toolbar">
+    <div class="chg-summary">共 <b>${changes.length}</b> 个任务有进展变化，点击任务行可单独展开 / 折叠：</div>
+    <div class="chg-actions"><button class="btn ghost chg-action" id="btn-expand-all" type="button">全部展开</button><button class="btn ghost chg-action" id="btn-collapse-all" type="button">全部折叠</button></div>
+  </div>
     <div class="chg-list">${changes.map((c, i) => {
       const delta = c.after.p - c.before.p;
       const cls = delta >= 0 ? 'up' : 'down';
@@ -1432,7 +1519,9 @@ $('#btn-range-query').addEventListener('click', () => {
         else if (o.t === '-') { L.push(`<span class="dl del">− ${esc(o.x)}</span>`); R.push('<span class="dl blank">&nbsp;</span>'); }
         else { L.push('<span class="dl blank">&nbsp;</span>'); R.push(`<span class="dl add">+ ${esc(o.x)}</span>`); }
       });
-      return `<div class="chg-row" data-i="${i}">
+      const beforeTime = formatTimestamp(new Date(c.before.d)).slice(0, 16);
+      const afterTime = formatTimestamp(new Date(c.after.d)).slice(0, 16);
+      return `<div class="chg-row open" data-i="${i}">
         <span class="imp-dot ${c.t.imp}"></span>
         <span class="desc">${esc(c.t.desc)}</span>
         <span>${avaGroup(c.t.owners, true)}</span>
@@ -1440,9 +1529,9 @@ $('#btn-range-query').addEventListener('click', () => {
         <span class="dstat"><span class="a">+${c.add}</span> <span class="d">−${c.del}</span></span>
         <span class="chev">▶</span>
       </div>
-      <div class="diff-wrap" data-i="${i}">
-        <div class="diff-col"><h4>${s} 的进展详情（进度 ${c.before.p}%）</h4><pre>${L.join('')}</pre></div>
-        <div class="diff-col"><h4>${e} 的进展详情（进度 ${c.after.p}%）</h4><pre>${R.join('')}</pre></div>
+      <div class="diff-wrap open" data-i="${i}">
+        <div class="diff-col"><h4>起始快照 · ${beforeTime}（进度 ${c.before.p}%）</h4><pre>${L.join('')}</pre></div>
+        <div class="diff-col"><h4>结束快照 · ${afterTime}（进度 ${c.after.p}%）</h4><pre>${R.join('')}</pre></div>
       </div>`;
     }).join('')}</div>`;
   box.querySelectorAll('.chg-row').forEach(r => r.addEventListener('click', () => {
@@ -1450,7 +1539,16 @@ $('#btn-range-query').addEventListener('click', () => {
     r.classList.toggle('open');
     box.querySelector(`.diff-wrap[data-i="${i}"]`).classList.toggle('open');
   }));
-});
+  box.querySelector('#btn-expand-all').addEventListener('click', () => setAllChanges(box, true));
+  box.querySelector('#btn-collapse-all').addEventListener('click', () => setAllChanges(box, false));
+}
+$('#btn-range-query').addEventListener('click', renderRangeQuery);
+$('#btn-range-preset').addEventListener('click', () => { setDefaultRange(); renderRangeQuery(); });
+$('#btn-range-now').addEventListener('click', () => { setDefaultRange(); renderRangeQuery(); });
+['#range-start', '#range-end'].forEach(id => $(id).addEventListener('input', () => {
+  rangeMode = 'custom';
+  syncRangeControls();
+}));
 
 /* ════════════════ 任务编辑浮窗 ════════════════ */
 let editing = null;  /* null = 新建 */
@@ -1844,6 +1942,9 @@ renderTree();
 renderTasks();
 renderDashChips();
 renderStats();
+setDefaultRange();
+renderRangeQuery();
+$('#proto-today').textContent = formatLocalDate(new Date());
 
 /* 深链：#page=tracker&tab=dash&card=done&query=1&modal=t1&folder=f2&members=chen,lin */
 (function initHash() {

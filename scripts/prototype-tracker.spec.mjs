@@ -167,3 +167,119 @@ test('subtask progress ring exposes progress and prints percentage inside', () =
   const complete = subtaskProgressHtml(100, '树节点拖拽交互');
   assert.match(complete, /subtask-progress-ring-value done/);
 });
+
+test('default dashboard range starts at yesterday local midnight and ends at the exact current time', () => {
+  const createDefaultRange = loadFunction('createDefaultRange');
+  const now = new Date(2026, 10, 1, 12, 34, 56, 789);
+  const range = createDefaultRange(now);
+
+  assert.equal(range.start.getTime(), new Date(2026, 9, 31, 0, 0, 0, 0).getTime());
+  assert.equal(range.end.getTime(), now.getTime());
+});
+
+test('custom dashboard dates include the whole start and end days in local time', () => {
+  const resolveQueryRange = loadFunction('resolveQueryRange');
+  const range = resolveQueryRange('2026-10-20', '2026-10-29', false, new Date(2026, 10, 1, 12, 0, 0));
+
+  assert.equal(range.start.getTime(), new Date(2026, 9, 20, 0, 0, 0, 0).getTime());
+  assert.equal(range.end.getTime(), new Date(2026, 9, 29, 23, 59, 59, 999).getTime());
+});
+
+test('default dashboard query never extends the end time to future end-of-day', () => {
+  const resolveQueryRange = loadFunction('resolveQueryRange');
+  const now = new Date(2026, 10, 1, 8, 15, 30, 250);
+  const range = resolveQueryRange('2026-10-31', '2026-11-01', true, now);
+
+  assert.equal(range.end.getTime(), now.getTime());
+  assert.notEqual(range.end.getTime(), new Date(2026, 10, 1, 23, 59, 59, 999).getTime());
+});
+
+test('dashboard query rejects missing, invalid, or reversed date ranges', () => {
+  const resolveQueryRange = loadFunction('resolveQueryRange');
+  const now = new Date(2026, 10, 1, 12, 0, 0);
+
+  assert.equal(resolveQueryRange('', '2026-11-01', false, now), null);
+  assert.equal(resolveQueryRange('2026-11-02', '2026-11-01', false, now), null);
+  assert.equal(resolveQueryRange('not-a-date', '2026-11-01', false, now), null);
+});
+
+test('history snapshot lookup includes the exact boundary and excludes later snapshots', () => {
+  const snapshotAt = loadFunction('snapshotAt');
+  const history = [
+    { d: '2026-10-31T00:00:00.000', p: 40 },
+    { d: '2026-10-31T12:00:00.000', p: 55 },
+    { d: '2026-11-01T00:00:00.000', p: 70 },
+  ];
+
+  assert.equal(snapshotAt(history, new Date(2026, 9, 31, 12, 0, 0, 0)).p, 55);
+  assert.equal(snapshotAt(history, new Date(2026, 9, 31, 23, 59, 59, 999)).p, 55);
+  assert.equal(snapshotAt(history, new Date(2026, 9, 30, 23, 59, 59, 999)), undefined);
+});
+
+test('relative history timestamps are available during prototype data initialization', () => {
+  const pad2 = loadFunction('pad2');
+  const formatLocalDate = loadFunction('formatLocalDate', { pad2 });
+  const formatTimestamp = loadFunction('formatTimestamp', { formatLocalDate, pad2 });
+  const historyHoursAgo = loadFunction('historyHoursAgo', { formatTimestamp });
+  const originalNow = Date.now;
+  Date.now = () => new Date(2026, 10, 1, 12, 34, 56).getTime();
+  try {
+    assert.equal(historyHoursAgo(1), '2026-11-01T11:34:56');
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('query results render every diff expanded and provide bulk disclosure controls', () => {
+  const box = { innerHTML: '', querySelectorAll: () => [], querySelector: () => ({ addEventListener() {} }) };
+  const fields = {
+    '#range-start': { value: '2026-10-20' },
+    '#range-end': { value: '2026-10-29' },
+    '#range-result': box,
+  };
+  const pad2 = loadFunction('pad2');
+  const formatLocalDate = loadFunction('formatLocalDate', { pad2 });
+  const formatTimestamp = loadFunction('formatTimestamp', { formatLocalDate, pad2 });
+  const renderRangeQuery = loadFunction('renderRangeQuery', {
+    $: selector => fields[selector],
+    rangeMode: 'custom',
+    resolveQueryRange: loadFunction('resolveQueryRange'),
+    formatTimestamp,
+    dashTasks: () => [{ id: 't1', desc: '任务树组件重构', owners: [], imp: 'high' }],
+    HISTORY: { t1: [
+      { d: '2026-10-20T09:00:00', p: 55, detail: '旧进展' },
+      { d: '2026-10-21T09:00:00', p: 70, detail: '新进展' },
+    ] },
+    snapshotAt: loadFunction('snapshotAt'),
+    diffLines: loadFunction('diffLines'),
+    esc: value => String(value),
+    avaGroup: () => '',
+  });
+
+  renderRangeQuery();
+
+  assert.match(box.innerHTML, /class="chg-toolbar"/);
+  assert.match(box.innerHTML, /id="btn-expand-all"/);
+  assert.match(box.innerHTML, /id="btn-collapse-all"/);
+  assert.match(box.innerHTML, /class="chg-row open"/);
+  assert.match(box.innerHTML, /class="diff-wrap open"/);
+});
+
+test('bulk disclosure controls expand and collapse both task rows and diff panels', () => {
+  const setAllChanges = loadFunction('setAllChanges');
+  const makeElement = () => ({
+    open: false,
+    classList: {
+      toggle(name, force) { this.owner.open = force === undefined ? !this.owner.open : force; },
+    },
+  });
+  const rows = [makeElement(), makeElement()];
+  const diffs = [makeElement(), makeElement()];
+  rows.concat(diffs).forEach(el => { el.classList.owner = el; });
+  const box = { querySelectorAll: () => [...rows, ...diffs] };
+
+  setAllChanges(box, true);
+  assert.ok(rows.concat(diffs).every(el => el.open));
+  setAllChanges(box, false);
+  assert.ok(rows.concat(diffs).every(el => !el.open));
+});
