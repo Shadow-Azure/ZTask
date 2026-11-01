@@ -14,7 +14,8 @@
     "record:i18n": "node scripts/verify-translation-pairing.mjs --write",
     "archive:note": "node scripts/archive-agent-note.mjs",
     "install:hooks": "node scripts/install-git-hooks.mjs",
-    "install-merge-driver": "node scripts/install-merge-driver.mjs"
+    "install-merge-driver": "node scripts/install-merge-driver.mjs",
+    "test:prototype": "node --test scripts/prototype-tracker.spec.mjs"
   },
   "devDependencies": {
     "@redocly/ajv": "8.11.2",

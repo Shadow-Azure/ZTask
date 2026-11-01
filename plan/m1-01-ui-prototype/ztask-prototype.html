@@ -133,8 +133,14 @@
 
   /* ═══ 事项跟踪：左树右板 ═══ */
   #page-tracker { overflow: hidden; }
-  .tracker { display: grid; grid-template-columns: 264px 1fr; height: calc(100% - 52px); }
-  .tree-side { border-right: 1px solid var(--border); background: var(--bg-panel); display: flex; flex-direction: column; min-height: 0; }
+  .tracker { display: grid; grid-template-columns: minmax(0, var(--tree-width, 340px)) 10px minmax(0, 1fr); height: calc(100% - 52px); }
+  .tree-side { background: var(--bg-panel); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .tree-resizer { position: relative; cursor: col-resize; background: var(--bg-card); outline: none; touch-action: none; }
+  .tree-resizer::before { content: ''; position: absolute; inset: 0 4px; background: var(--border); transition: background .15s, inset .15s; }
+  .tree-resizer span { position: absolute; top: 50%; left: 50%; width: 3px; height: 30px; border-radius: 3px; background: var(--border-strong); transform: translate(-50%, -50%); opacity: 0; transition: opacity .15s, background .15s; }
+  .tree-resizer:hover::before, .tree-resizer:focus-visible::before, .tree-resizer.dragging::before { inset: 0 3px; background: color-mix(in srgb, var(--blue) 45%, transparent); }
+  .tree-resizer:hover span, .tree-resizer:focus-visible span, .tree-resizer.dragging span { opacity: 1; background: var(--blue); }
+  body.tree-resizing { cursor: col-resize; user-select: none; }
   .tree-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 8px; }
   .tree-head h2 { font-size: 13px; font-weight: 700; }
   .tree-head button { font-size: 11.5px; color: var(--blue); background: transparent; border: none; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
@@ -149,9 +155,19 @@
   .trow.sel { background: color-mix(in srgb, var(--blue) 11%, transparent); color: var(--blue); font-weight: 600; }
   .trow .chev { width: 14px; text-align: center; color: var(--text-faint); font-size: 10px; flex-shrink: 0; transition: transform .12s; }
   .trow .fname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .trow .cnt { font-family: var(--mono); font-size: 10px; color: var(--text-faint); background: var(--bg-inset); border-radius: 999px; padding: 0 6px; }
-  .trow.task { color: var(--text-dim); }
-  .trow.task .tname { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  .folder-counts { display: inline-flex; align-items: center; gap: 7px; margin-left: auto; font-family: var(--mono); font-size: 10.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .folder-counts .done { color: var(--green); }
+  .folder-counts .todo { color: var(--red); }
+  .folder-counts .status-ic { margin-right: 2px; font-size: 9px; }
+  .trow.task { color: var(--text-dim); gap: 5px; }
+  .trow.task .tname { flex: 1; min-width: 64px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+  .tree-progress { display: inline-flex; align-items: center; gap: 3px; width: 49px; flex-shrink: 0; }
+  .tree-progress svg { width: 18px; height: 18px; flex-shrink: 0; }
+  .tree-progress-ring-track { fill: none; stroke: #e0e5ec; stroke-width: 2.2; }
+  .tree-progress-ring-value { fill: none; stroke: var(--blue); stroke-width: 2.2; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 9px 9px; transition: stroke-dashoffset .18s ease, stroke .15s; }
+  .tree-progress-ring-value.done { stroke: var(--green); }
+  .tree-progress-value { width: 28px; color: var(--text-faint); font-family: var(--mono); font-size: 9.5px; font-variant-numeric: tabular-nums; text-align: right; }
+  .trow.task:hover .tree-progress-value { color: var(--text-dim); }
   .trow.task .imp-dot.mid, .trow.task .imp-dot.low { background: #c6ccd6; }
   .tree-input { display: flex; align-items: center; gap: 6px; padding: 3px 8px; }
   .tree-input input { flex: 1; font: inherit; font-size: 12.5px; border: 1px solid var(--blue); border-radius: 6px; padding: 3px 8px; outline: none; }
@@ -537,6 +553,7 @@
       </div>
       <div class="tree-body" id="tree-body"></div>
     </aside>
+    <div class="tree-resizer" id="tree-resizer" role="separator" aria-label="调整任务树宽度" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="480" aria-valuenow="340" tabindex="0" title="拖拽调整任务树宽度；也可使用左右方向键"><span></span></div>
     <main class="board">
       <div class="board-head">
         <div class="crumb">
@@ -840,7 +857,7 @@ function commitProgress(key, value) {
   t.progress = value;
   progressEditing = null;
   toast('进度已更新为 ' + value + '%（原型模拟）');
-  renderTasks(); renderStats();
+  renderTree(); renderTasks(); renderStats();
 }
 function dueHtml(t) {
   const od = isOverdue(t);
@@ -943,6 +960,31 @@ function taskIdsOf(fid) {
   return ids.filter(id => TASKS[id]);
 }
 
+function summarizeTaskCounts(ids, tasks) {
+  let done = 0;
+  ids.forEach(id => { if (tasks[id] && tasks[id].progress === 100) done++; });
+  return { done, todo: ids.length - done };
+}
+function clampTreeWidth(width, viewportWidth) {
+  const max = Math.min(480, viewportWidth - 480);
+  return Math.max(220, Math.min(max, width));
+}
+function treeProgressOffset(progress) {
+  const clamped = Math.max(0, Math.min(100, progress));
+  return 2 * Math.PI * 7 * (1 - clamped / 100);
+}
+function treeProgressHtml(progress, label) {
+  const radius = 7;
+  const circumference = 2 * Math.PI * radius;
+  const offset = treeProgressOffset(progress);
+  return `<span class="tree-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${progress}" aria-label="${label}，进度 ${progress}%" title="任务进度 ${progress}%（只读）">
+    <svg viewBox="0 0 18 18" aria-hidden="true">
+      <circle class="tree-progress-ring-track" cx="9" cy="9" r="${radius}"></circle>
+      <circle class="tree-progress-ring-value${progress === 100 ? ' done' : ''}" cx="9" cy="9" r="${radius}" stroke-dasharray="${circumference.toFixed(2)}" stroke-dashoffset="${offset.toFixed(2)}"></circle>
+    </svg>
+    <span class="tree-progress-value">${progress}%</span>
+  </span>`;
+}
 function renderTree() {
   const body = $('#tree-body');
   if (!TREE.length) {
@@ -985,15 +1027,17 @@ function renderTree() {
 }
 function treeNode(n, depth) {
   const kids = n.children || [];
-  const isFolder = true;
-  const cnt = taskIdsOf(n.id).length;
+  const counts = summarizeTaskCounts(taskIdsOf(n.id), TASKS);
   const isOpen = !collapsed.has(n.id);
   let html = `<div class="tnode">
     <div class="trow folder${selFolder === n.id ? ' sel' : ''}" data-fid="${n.id}">
       <span class="chev" style="transform:rotate(${isOpen ? 0 : -90}deg)">▾</span>
       <span>${isOpen ? '📂' : '📁'}</span>
       <span class="fname">${esc(n.name)}</span>
-      <span class="cnt">${cnt}</span>
+      <span class="folder-counts" title="已完成 ${counts.done} 个，未完成 ${counts.todo} 个">
+        <span class="done"><span class="status-ic">✓</span>${counts.done}</span>
+        <span class="todo"><span class="status-ic">○</span>${counts.todo}</span>
+      </span>
     </div>`;
   if (isOpen) {
     html += '<div class="tchildren">';
@@ -1004,6 +1048,7 @@ function treeNode(n, depth) {
         <span class="chev"></span>
         <span class="imp-dot ${t.imp}"></span>
         <span class="tname">${esc(t.desc)}</span>
+        ${treeProgressHtml(t.progress, esc(t.desc))}
       </div>`;
     });
     if (folderInputParent === n.id)
@@ -1018,6 +1063,40 @@ $('#btn-new-folder').addEventListener('click', () => {
   collapsed.delete(selFolder);
   renderTree();
 });
+
+/* 左树右板分栏：指针拖拽 + 键盘方向键；保留足够任务板空间 */
+const trackerEl = document.querySelector('.tracker');
+const treeResizer = $('#tree-resizer');
+let treeWidth = 340;
+function setTreeWidth(width) {
+  treeWidth = clampTreeWidth(width, window.innerWidth);
+  trackerEl.style.setProperty('--tree-width', treeWidth + 'px');
+  treeResizer.setAttribute('aria-valuenow', treeWidth);
+}
+treeResizer.addEventListener('pointerdown', e => {
+  e.preventDefault();
+  treeResizer.setPointerCapture(e.pointerId);
+  treeResizer.classList.add('dragging');
+  document.body.classList.add('tree-resizing');
+});
+treeResizer.addEventListener('pointermove', e => {
+  if (!treeResizer.hasPointerCapture(e.pointerId)) return;
+  setTreeWidth(e.clientX - trackerEl.getBoundingClientRect().left);
+});
+function stopTreeResize(e) {
+  if (treeResizer.hasPointerCapture(e.pointerId)) treeResizer.releasePointerCapture(e.pointerId);
+  treeResizer.classList.remove('dragging');
+  document.body.classList.remove('tree-resizing');
+}
+treeResizer.addEventListener('pointerup', stopTreeResize);
+treeResizer.addEventListener('pointercancel', stopTreeResize);
+treeResizer.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  setTreeWidth(treeWidth + (e.key === 'ArrowRight' ? 16 : -16));
+});
+window.addEventListener('resize', () => setTreeWidth(treeWidth));
+setTreeWidth(treeWidth);
 
 /* ════════════════ 事项跟踪 · 任务管理 tab ════════════════ */
 let impFilter = 'all', searchKw = '';
