@@ -8,8 +8,8 @@ id: m2
 title: 阶段 2：可运行全栈基座
 status: planned
 github:
-  number: null
-  url: null
+  number: 2
+  url: https://github.com/Shadow-Azure/ZTask/milestone/2
 ```
 
 建立可由一条命令启动的本地全栈工程，先固定 API、文件存储和前端壳的公共边界。此阶段只交付可运行的基础设施，不提前实现任务业务闭环。

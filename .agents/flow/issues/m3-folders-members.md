@@ -17,8 +17,8 @@ scope:
   - .agents/flow/issues/m3-folders-members*
 adr: []
 github:
-  number: null
-  url: null
+  number: 15
+  url: https://github.com/Shadow-Azure/ZTask/issues/15
 ```
 
 ## 背景

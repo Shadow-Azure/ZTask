@@ -8,8 +8,8 @@ id: m3
 title: 阶段 3：管理端任务闭环
 status: planned
 github:
-  number: null
-  url: null
+  number: 3
+  url: https://github.com/Shadow-Azure/ZTask/milestone/3
 ```
 
 把原型中的任务夹、成员档案和事项跟踪转化为真实管理能力，贯通任务树、统一只读卡、编辑浮窗与版本冲突反馈。

@@ -15,8 +15,8 @@ scope:
   - .agents/flow/issues/m3-tracker-experience*
 adr: []
 github:
-  number: null
-  url: null
+  number: 17
+  url: https://github.com/Shadow-Azure/ZTask/issues/17
 ```
 
 ## 背景

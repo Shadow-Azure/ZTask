@@ -8,8 +8,8 @@ id: m3
 title: 阶段 3：管理端任务闭环
 status: planned
 github:
-  number: null
-  url: null
+  number: 3
+  url: https://github.com/Shadow-Azure/ZTask/milestone/3
 ```
 
 Turn folders, member records, and the tracker prototype into real admin capabilities across the task tree, unified read-only cards, the editor dialog, and version-conflict feedback.

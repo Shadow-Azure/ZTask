@@ -15,8 +15,8 @@ scope:
   - .agents/flow/issues/m2-file-storage*
 adr: []
 github:
-  number: null
-  url: null
+  number: 13
+  url: https://github.com/Shadow-Azure/ZTask/issues/13
 ```
 
 ## Background

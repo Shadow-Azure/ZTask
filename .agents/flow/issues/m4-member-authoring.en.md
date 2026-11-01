@@ -16,8 +16,8 @@ scope:
   - .agents/flow/issues/m4-member-authoring*
 adr: []
 github:
-  number: null
-  url: null
+  number: 19
+  url: https://github.com/Shadow-Azure/ZTask/issues/19
 ```
 
 ## Background

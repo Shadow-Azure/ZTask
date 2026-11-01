@@ -19,8 +19,8 @@ scope:
   - .agents/flow/issues/m2-app-bootstrap*
 adr: []
 github:
-  number: null
-  url: null
+  number: 12
+  url: https://github.com/Shadow-Azure/ZTask/issues/12
 ```
 
 ## Background

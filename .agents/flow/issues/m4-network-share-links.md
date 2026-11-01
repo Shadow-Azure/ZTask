@@ -17,8 +17,8 @@ scope:
   - .agents/flow/issues/m4-network-share-links*
 adr: []
 github:
-  number: null
-  url: null
+  number: 20
+  url: https://github.com/Shadow-Azure/ZTask/issues/20
 ```
 
 ## 背景

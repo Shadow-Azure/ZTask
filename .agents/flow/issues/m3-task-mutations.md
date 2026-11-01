@@ -16,8 +16,8 @@ scope:
   - .agents/flow/issues/m3-task-mutations*
 adr: []
 github:
-  number: null
-  url: null
+  number: 16
+  url: https://github.com/Shadow-Azure/ZTask/issues/16
 ```
 
 ## 背景
