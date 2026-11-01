@@ -9,8 +9,6 @@
 // 则视为开工激活；diff 触及的文件须落在所挂 issue 的 scope 并集内。无豁免通道。
 
 import { execFileSync } from "node:child_process";
-import { existsSync } from "node:fs";
-import path from "node:path";
 import {
   collectRefs,
   loadFlowTree,
@@ -26,7 +24,7 @@ function deriveRepo() {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    const m = /github\.com(?::\d+)?[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url);
+    const m = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url);
     return m?.[1];
   } catch {
     return undefined;
@@ -40,19 +38,18 @@ function git(args) {
 /**
  * PR 内引用 issue 的有效状态：优先按 base 评估，避免引用已在 main 上 done
  * 的 issue。base 为 backlog 且 HEAD 已推进为 ready/in-progress/done 时视为
- * 本 PR 完成开工激活。base 无该文件（新 issue 首次提交）视为 base backlog，
- * 因此同一 PR 内新建并推进到 ready/in-progress/done 属于合法激活。
+ * 本 PR 完成开工激活。base 无该文件（新 issue 首次提交）返回 undefined，
+ * 调用方回落到 HEAD 状态。
  */
 function baseIssueStatus(base, file) {
   try {
-    execFileSync("git", ["cat-file", "-e", `${base}:${file}`], { stdio: "ignore" });
+    const text = execFileSync("git", ["show", `${base}:${file}`], {
+      encoding: "utf8",
+    });
+    return parseFlowDocument(text, file).data.status;
   } catch {
-    return "backlog";
+    return undefined;
   }
-  const text = execFileSync("git", ["show", `${base}:${file}`], {
-    encoding: "utf8",
-  });
-  return parseFlowDocument(text, file).data.status;
 }
 
 /** base 树是否已启用流程（无 roadmap 则本 PR 是流程自身的自举，跳过 diff 校验）。 */
@@ -69,9 +66,6 @@ function baseHasRoadmap(base) {
 
 /** 离线模式：流程树状态机。run-gates 叶子的入口。 */
 export default async function verifyFlow() {
-  const roadmapFile = path.join(".agents", "flow", "roadmap.md");
-  if (!existsSync(roadmapFile))
-    return { ok: true, errors: [], summary: "流程树未初始化（缺 .agents/flow/roadmap.md），状态机校验跳过" };
   const { tree, errors } = await loadFlowTree();
   if (errors.length > 0) return { ok: false, errors };
   const structural = validateTree(tree, { repo: deriveRepo() });

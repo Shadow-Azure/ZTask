@@ -35,9 +35,10 @@ export const LEAVES = {
     const { execFileSync } = await import("node:child_process");
     try {
       execFileSync(process.execPath, ["--test", "scripts/gates.spec.mjs"], { stdio: "inherit" });
+      execFileSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "scripts/flow-new-issue.spec.mjs", "scripts/flow-sync.spec.mjs", "scripts/verify-flow.spec.mjs", "scripts/verify-flow-online.spec.mjs"], { stdio: "inherit" });
       return { ok: true, errors: [] };
     } catch {
-      return { ok: false, errors: ["node --test scripts/gates.spec.mjs 退出非零（门禁自测试失败）"] };
+      return { ok: false, errors: ["门禁自测试退出非零"] };
     }
   },
 };

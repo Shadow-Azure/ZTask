@@ -4,16 +4,26 @@ English | [中文](m1-design-docs.md)
 
 ```yaml flow
 kind: issue
-id: m1-02
 milestone: m1
-depends:
-  - m1-01
 priority: P0
 status: in-progress
 scope:
   - plan/fullstack-design/**
+  - .agents/flow/**
+  - .agents/skills/**
+  - .agents/notes/implemented/process/2026-11-01-engineering-flow-tree*
+  - scripts/flow-*
+  - scripts/verify-flow*
+  - scripts/run-gates.mjs
+  - scripts/gates.spec.mjs
+  - scripts/spec-fixture.mjs
+  - scripts/doc-budgets.manifest.json
+  - pnpm-lock.yaml
+  - AGENTS.md
+  - package.json
   - .agents/flow/issues/m1-design-docs*
-adr: []
+adr:
+  - ../../notes/implemented/process/2026-11-01-engineering-flow-tree.md
 github:
   number: 2
   url: https://github.com/Shadow-Azure/ZTask/issues/2
@@ -27,7 +37,7 @@ Once the prototype is signed off, the interface shape must be consolidated into 
 
 - Produce a complete design suite under `plan/fullstack-design/` covering architecture, features, front end, back end, API, and data design.
 - Review each document with the user one by one and obtain confirmation.
-- Make the suite the direct input for planning the later engineering milestones.
+- Split the engineering roadmap, milestones, and issues from the suite, and synchronize flow gates and project skills.
 
 ## Design authority
 
@@ -37,6 +47,7 @@ Once the prototype is signed off, the interface shape must be consolidated into 
 ## Implementation
 
 - Design document volumes under `plan/fullstack-design/` (Chinese base), organized by that structure, with an overview README; English sides follow the per-volume review.
+- The M2–M5 engineering flow tree under `.agents/flow/`, plus StudyWiki-compatible flow gates, gate tests, and `.agents/skills/`.
 
 ## Implementation steps
 
@@ -44,11 +55,12 @@ Once the prototype is signed off, the interface shape must be consolidated into 
 2. Write the Chinese side volume by volume against the signed-off prototype.
 3. Review, revise, and finalize each volume with the user.
 4. Complete the English sides.
+5. Split the engineering flow tree, copy flow tooling and skills, and run gate verification.
 
 ## Dependencies and boundary
 
 - Dependencies: m1-01 (prototype sign-off).
-- Delivery boundary: the design documents themselves; no implementation code, no concrete planning text for later milestones.
+- Delivery boundary: design documents, the engineering flow tree, and flow tooling; no product frontend or backend implementation.
 
 ## Verification
 
@@ -72,4 +84,4 @@ pnpm verify:docs && pnpm verify:flow
 ## Non-goals
 
 - No implementation code.
-- No planning of later milestones and issues (that happens separately once the design documents are confirmed).
+- Do not implement the product features planned for M2–M5 or synchronize remote GitHub objects in this delivery.

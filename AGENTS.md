@@ -16,4 +16,4 @@
 ## 非平凡决策
 
 - 非平凡的实现决策写 Agent Note（路径与格式见 .agents/notes/README.md），放对 lifecycle/class 目录。
-- 开发流程尚未初始化：流程树相关内容等待单独规划，不要擅自创建 roadmap/milestone/issue。
+- 开发流程树已初始化：roadmap → milestone → issue 规则见 `.agents/flow/README.md`；新 issue 先为 backlog，经 `pnpm flow:sync` 回填编号后再流转。

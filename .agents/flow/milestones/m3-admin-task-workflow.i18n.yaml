@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/flow/milestones/m3-admin-task-workflow.md
+m3-admin-task-workflow.md: 3b5cf4b1bd2d94a6f665bb717a80fa28cecbfcb5
+m3-admin-task-workflow.en.md: 7691504e06773e3ac8f26373b9aeb83e3b269b01
