@@ -6,7 +6,7 @@ English | [中文](m1-html-prototype-refinement.md)
 kind: issue
 milestone: m1
 priority: P0
-status: in-progress
+status: done
 scope:
   - plan/m1-01-ui-prototype/**
   - .gitignore
