@@ -8,8 +8,8 @@ id: m5
 title: 阶段 5：看板历史与交付加固
 status: planned
 github:
-  number: null
-  url: null
+  number: 5
+  url: https://github.com/Shadow-Azure/ZTask/milestone/5
 ```
 
 Complete dashboard metrics and historical diffs, then prove first-release readiness through recovery, backup, access-isolation, and end-to-end acceptance.

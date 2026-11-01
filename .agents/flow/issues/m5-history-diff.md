@@ -18,8 +18,8 @@ scope:
   - .agents/flow/issues/m5-history-diff*
 adr: []
 github:
-  number: null
-  url: null
+  number: 22
+  url: https://github.com/Shadow-Azure/ZTask/issues/22
 ```
 
 ## 背景

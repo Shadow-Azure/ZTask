@@ -8,8 +8,8 @@ id: m5
 title: 阶段 5：看板历史与交付加固
 status: planned
 github:
-  number: null
-  url: null
+  number: 5
+  url: https://github.com/Shadow-Azure/ZTask/milestone/5
 ```
 
 完成看板统计与历史差异闭环，并用故障恢复、备份、权限隔离和端到端验收证明首版可交付。

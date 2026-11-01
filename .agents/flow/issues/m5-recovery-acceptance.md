@@ -18,8 +18,8 @@ scope:
   - .agents/flow/issues/m5-recovery-acceptance*
 adr: []
 github:
-  number: null
-  url: null
+  number: 23
+  url: https://github.com/Shadow-Azure/ZTask/issues/23
 ```
 
 ## 背景

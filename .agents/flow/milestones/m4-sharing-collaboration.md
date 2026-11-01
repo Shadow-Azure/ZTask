@@ -8,8 +8,8 @@ id: m4
 title: 阶段 4：分享与成员协作
 status: planned
 github:
-  number: null
-  url: null
+  number: 4
+  url: https://github.com/Shadow-Azure/ZTask/milestone/4
 ```
 
 实现受控的局域网只读分享、成员身份会话和最小成员写入能力，同时确保管理端永不暴露到 LAN。

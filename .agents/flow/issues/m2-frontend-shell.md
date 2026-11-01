@@ -14,8 +14,8 @@ scope:
   - .agents/flow/issues/m2-frontend-shell*
 adr: []
 github:
-  number: null
-  url: null
+  number: 14
+  url: https://github.com/Shadow-Azure/ZTask/issues/14
 ```
 
 ## 背景

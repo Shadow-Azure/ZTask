@@ -16,8 +16,8 @@ scope:
   - .agents/flow/issues/m5-dashboard-analytics*
 adr: []
 github:
-  number: null
-  url: null
+  number: 21
+  url: https://github.com/Shadow-Azure/ZTask/issues/21
 ```
 
 ## 背景

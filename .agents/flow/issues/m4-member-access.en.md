@@ -17,8 +17,8 @@ scope:
   - .agents/flow/issues/m4-member-access*
 adr: []
 github:
-  number: null
-  url: null
+  number: 18
+  url: https://github.com/Shadow-Azure/ZTask/issues/18
 ```
 
 ## Background

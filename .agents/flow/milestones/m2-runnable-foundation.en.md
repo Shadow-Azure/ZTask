@@ -8,8 +8,8 @@ id: m2
 title: 阶段 2：可运行全栈基座
 status: planned
 github:
-  number: null
-  url: null
+  number: 2
+  url: https://github.com/Shadow-Azure/ZTask/milestone/2
 ```
 
 Establish a local full-stack workspace that starts with one command and fixes the shared API, file-storage, and frontend-shell boundaries. This stage delivers infrastructure only and does not implement the task workflow early.
