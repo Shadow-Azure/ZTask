@@ -1,2 +1,6 @@
 node_modules/
 .pnpm-store/
+
+# Local prototype walkthrough report (generated; not versioned)
+/plan/m1-01-ui-prototype/review/product-guide/
+/output/pdf/
