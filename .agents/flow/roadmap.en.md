@@ -6,10 +6,23 @@ English | [中文](roadmap.md)
 kind: roadmap
 milestones:
   - m1
+  - m2
+  - m3
+  - m4
+  - m5
 ```
 
-ZTask targets the same shape as DeepSeek Harness: a local CLI service accessed through a web client. The flow tree is organized in three layers — roadmap → milestone → issue; the rules live in [README](README.en.md).
+ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; `plan/fullstack-design/` and the approved prototype are the baseline.
 
-Milestones advance in sequence; the sequence is the single authority — register a new milestone in the `milestones` list before creating its file.
+## Delivery sequence
 
-- m1: prototype and full-stack design alignment — align the HTML prototype in the web client first, then consolidate the full-stack design documents as planning input for later engineering milestones.
+- m1: Prototype, full-stack design, and engineering flow tree.
+- m2: Same-origin CLI service, reliable file writes, and shared Vue shells.
+- m3: Folder, member, and task management with a real tracker.
+- m4: LAN sharing, secure sessions, and minimal owner writes.
+- m5: Dashboard, two-column diffs, backup recovery, and end-to-end acceptance.
+
+## Progression principles
+
+- Advance milestones in order and serialize equal-priority work across them; deliver permissions, recovery, and version conflicts with their owning capabilities.
+- Issues start in backlog and move after `pnpm flow:sync` backfills their numbers; M1 retains its actual state.

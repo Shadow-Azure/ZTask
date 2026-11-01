@@ -4,10 +4,7 @@
 
 ```yaml flow
 kind: issue
-id: m1-03
 milestone: m1
-depends:
-  - m1-01
 priority: P0
 status: in-progress
 scope:

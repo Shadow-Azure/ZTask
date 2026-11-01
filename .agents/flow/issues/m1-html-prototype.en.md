@@ -4,7 +4,6 @@ English | [中文](m1-html-prototype.md)
 
 ```yaml flow
 kind: issue
-id: m1-01
 milestone: m1
 depends: []
 priority: P0

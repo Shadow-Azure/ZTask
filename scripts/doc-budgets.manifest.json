@@ -16,5 +16,9 @@
   ".agents/notes/README.md": 1000,
   ".agents/flow/README.md": 980,
   ".agents/flow/roadmap.md": 240,
-  ".agents/flow/milestones/m1-design.md": 240
+  ".agents/flow/milestones/m1-design.md": 240,
+  ".agents/flow/milestones/m2-runnable-foundation.md": 480,
+  ".agents/flow/milestones/m3-admin-task-workflow.md": 480,
+  ".agents/flow/milestones/m4-sharing-collaboration.md": 480,
+  ".agents/flow/milestones/m5-insights-recovery-release.md": 480
 }

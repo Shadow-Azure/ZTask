@@ -58,7 +58,7 @@ export function checkPrRemote(pr, { projectCheck = true } = {}) {
 
 function deriveRepo() {
   const url = execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" }).trim();
-  const m = /github\.com(?::\d+)?[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url);
+  const m = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url);
   if (!m) throw new Error(`无法从 origin 推导 GitHub 仓库：${url}`);
   return m[1];
 }
@@ -96,16 +96,12 @@ async function main() {
       all.push(`${issue.file}: github.url 与远端不符（本地 ${issue.data.github.url}，远端 ${remote.url}）`);
   }
   const prNumber = process.env.PR_NUMBER;
-  const synced = tree.milestones.some((m) => Number.isInteger(m.data.github?.number)) ||
-    tree.issues.some((i) => Number.isInteger(i.data.github?.number));
-  if (prNumber && synced) {
+  if (prNumber) {
     const pr = gh(["pr", "view", prNumber, "--repo", repo, "--json", "milestone,projectItems"]);
     const projectCheck = process.env.FLOW_PROJECT_CHECK === "1";
     if (!projectCheck)
       console.log("verify-flow-online: 未配 FLOW_TOKEN，project 关联降级为提醒（本地跑本命令用 PAT 强校验）");
     all.push(...checkPrRemote(pr, { projectCheck }));
-  } else if (prNumber) {
-    console.log("verify-flow-online: 流程树尚未同步到 GitHub（无编号对象），跳过 PR milestone/project 关联校验");
   }
   if (all.length > 0) {
     console.error(`verify-flow-online: FAIL\n  ${all.join("\n  ")}`);
