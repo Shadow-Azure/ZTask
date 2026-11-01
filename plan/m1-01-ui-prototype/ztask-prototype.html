@@ -337,6 +337,10 @@
   .chg-row .dstat .a { color: var(--green); } .chg-row .dstat .d { color: var(--red); }
   .chg-row .chev { color: var(--text-faint); font-size: 10px; transition: transform .12s; }
   .chg-row.open .chev { transform: rotate(90deg); }
+  .chg-row.deleted { background: #fafbfc; }
+  .chg-row.deleted .desc { color: var(--text-dim); text-decoration: line-through; text-decoration-color: var(--text-faint); }
+  .deleted-badge { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 600; color: #6e7787; background: #eef1f5; border: 1px solid #dce1e8; text-decoration: none; }
+  .created-badge { flex-shrink: 0; padding: 1px 6px; border-radius: 5px; font-size: 10px; font-weight: 600; color: var(--blue); background: color-mix(in srgb, var(--blue) 8%, transparent); }
   .diff-wrap { display: none; grid-template-columns: 1fr 1fr; gap: 0; border-bottom: 1px solid #eef1f5; background: #fbfcfe; }
   .diff-wrap.open { display: grid; }
   .diff-col { padding: 10px 14px; min-width: 0; }
@@ -825,6 +829,8 @@ const TASKS = {
     detail:'核心链路用例 12/26\n任务编辑浮窗用例编写中', subs:[]},
   t8: {id:'t8', desc:'回归测试自动化', owners:['zhou'], collabs:[], progress:100, imp:'high', due:'2026-10-20',
     detail:'流水线接入完成\n nightly 回归全绿', subs:[]},
+  t9: {id:'t9', desc:'历史遗留报表迁移', owners:['zhao'], collabs:['zhou'], progress:60, imp:'mid', due:'2026-10-30',
+    detail:'旧报表字段已映射\n迁移脚本已完成\n后续由新报表替代', subs:[], deletedAt:historyHoursAgo(2)},
 };
 
 const TREE = [
@@ -832,7 +838,7 @@ const TREE = [
     {id:'f1-1', name:'客户端重构', tasks:['t1','t2']},
     {id:'f1-2', name:'数据平台', tasks:['t3','t4']},
   ]},
-  {id:'f2', name:'运营支持', tasks:['t5','t6']},
+  {id:'f2', name:'运营支持', tasks:['t5','t6','t9']},
   {id:'f3', name:'质量体系', tasks:['t7','t8']},
 ];
 
@@ -858,6 +864,11 @@ const HISTORY = {
   t6: [
     {d:historyHoursAgo(49), p:10, detail:'完成数据源梳理'},
     {d:historyHoursAgo(5), p:20, detail:'完成数据源梳理\n报表口径待与管理员对齐'},
+  ],
+  t9: [
+    {d:historyHoursAgo(49), p:20, detail:'旧报表字段梳理中'},
+    {d:historyHoursAgo(5), p:60, detail:'旧报表字段已映射\n迁移脚本已完成'},
+    {d:historyHoursAgo(2), p:60, detail:'旧报表字段已映射\n迁移脚本已完成\n后续由新报表替代', changeKind:'delete'},
   ],
   t3: [
     {d:historyHoursAgo(72), p:85, detail:'快照表结构设计完成\n双策略待评审'},
@@ -889,13 +900,14 @@ function createDefaultRange(now) {
 function resolveQueryRange(startValue, endValue, isDefault, now) {
   if (!startValue || !endValue) return null;
   const start = new Date(startValue + 'T00:00:00.000');
-  const end = isDefault ? new Date(now) : new Date(endValue + 'T23:59:59.999');
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start > end) return null;
+  const end = isDefault ? new Date(now) : new Date(endValue + 'T00:00:00.000');
+  if (!isDefault) end.setDate(end.getDate() + 1);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || start >= end) return null;
   return {start, end};
 }
-function snapshotAt(history, at) {
+function snapshotAt(history, at, inclusive = true) {
   const time = at.getTime();
-  return history.filter(h => new Date(h.d).getTime() <= time).pop();
+  return history.filter(h => inclusive ? new Date(h.d).getTime() <= time : new Date(h.d).getTime() < time).pop();
 }
 const parseD = s => new Date(s + 'T00:00:00');
 const fmtD = s => { const d = parseD(s); return (d.getMonth()+1) + '-' + String(d.getDate()).padStart(2,'0'); };
@@ -1005,13 +1017,13 @@ function folderPath(fid) {
   })(TREE, []);
   return path;
 }
-function taskIdsOf(fid) {
+function taskIdsOf(fid, includeDeleted = false) {
   const f = folderById(fid); const ids = [];
   (function collect(n) {
     if (n.tasks) ids.push(...n.tasks);
     if (n.children) n.children.forEach(collect);
   })(f);
-  return ids.filter(id => TASKS[id]);
+  return ids.filter(id => TASKS[id] && (includeDeleted || !TASKS[id].deletedAt));
 }
 
 function summarizeTaskCounts(ids, tasks) {
@@ -1097,7 +1109,7 @@ function treeNode(n, depth) {
     html += '<div class="tchildren">';
     kids.forEach(k => { html += treeNode(k, depth + 1); });
     (n.tasks || []).forEach(tid => {
-      const t = TASKS[tid]; if (!t) return;
+      const t = TASKS[tid]; if (!t || t.deletedAt) return;
       html += `<div class="trow task" data-tid="${tid}" title="点击打开任务详情">
         <span class="chev"></span>
         <span class="imp-dot ${t.imp}"></span>
@@ -1341,8 +1353,8 @@ document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click
 const dashSel = new Set();   /* 选中的成员 id；空 = 整体 */
 let statSel = null;          /* 当前展开柱状图的卡片：done / gt50 / lt50 */
 
-function dashTasks() {
-  let ids = taskIdsOf(selFolder);
+function dashTasks(includeDeleted = false) {
+  let ids = taskIdsOf(selFolder, includeDeleted);
   if (dashSel.size) ids = ids.filter(id => TASKS[id].owners.some(o => dashSel.has(o)));
   return ids.map(id => TASKS[id]);
 }
@@ -1485,21 +1497,23 @@ function renderRangeQuery() {
     <span class="status-dot"></span><span class="status-label">${isDefault ? '已自动查询 · 昨天至今' : '已查询 · 自定义日期'}</span>
     <time>${startLabel} → ${endLabel}</time>
   </div>`;
-  const tasks = dashTasks();
+  const tasks = dashTasks(true);
   const changes = [];
   tasks.forEach(t => {
     const hist = HISTORY[t.id];
     if (!hist) return;
-    const before = snapshotAt(hist, range.start) || hist[0];
-    const after = snapshotAt(hist, range.end);
-    if (!after || new Date(after.d).getTime() <= range.start.getTime()) return;
-    if (before.p === after.p && before.detail === after.detail) return;
-    const ops = diffLines(before.detail, after.detail);
-    changes.push({t, before, after,
+    const before = snapshotAt(hist, range.start, false) || null;
+    const after = snapshotAt(hist, range.end, false);
+    if (!after || new Date(after.d).getTime() < range.start.getTime()) return;
+    const changeKind = after.changeKind === 'delete' ? 'deleted' : before === null ? 'created' : 'updated';
+    if (changeKind === 'updated' && before.p === after.p && before.detail === after.detail) return;
+    const ops = diffLines(before ? before.detail : '', after.detail);
+    changes.push({t, before, after, changeKind, currentlyDeleted: Boolean(t.deletedAt),
       add: ops.filter(o => o.t === '+').length,
       del: ops.filter(o => o.t === '-').length,
       ops});
   });
+  changes.sort((a, b) => Number(a.currentlyDeleted) - Number(b.currentlyDeleted));
   if (!changes.length) {
     box.innerHTML = statusHtml + '<div class="range-empty">该时间段内所选范围的任务没有进展变化。</div>';
     return;
@@ -1509,7 +1523,7 @@ function renderRangeQuery() {
     <div class="chg-actions"><button class="btn ghost chg-action" id="btn-expand-all" type="button">全部展开</button><button class="btn ghost chg-action" id="btn-collapse-all" type="button">全部折叠</button></div>
   </div>
     <div class="chg-list">${changes.map((c, i) => {
-      const delta = c.after.p - c.before.p;
+      const delta = c.before ? c.after.p - c.before.p : c.after.p;
       const cls = delta >= 0 ? 'up' : 'down';
       const sign = delta >= 0 ? '▲' : '▼';
       /* GitHub 式行对齐：删除行在右列补空占位，新增行在左列补空占位 */
@@ -1519,18 +1533,20 @@ function renderRangeQuery() {
         else if (o.t === '-') { L.push(`<span class="dl del">− ${esc(o.x)}</span>`); R.push('<span class="dl blank">&nbsp;</span>'); }
         else { L.push('<span class="dl blank">&nbsp;</span>'); R.push(`<span class="dl add">+ ${esc(o.x)}</span>`); }
       });
-      const beforeTime = formatTimestamp(new Date(c.before.d)).slice(0, 16);
+      const beforeTime = c.before ? formatTimestamp(new Date(c.before.d)).slice(0, 16) : '起始时不存在';
       const afterTime = formatTimestamp(new Date(c.after.d)).slice(0, 16);
-      return `<div class="chg-row open" data-i="${i}">
+      return `<div class="chg-row open${c.currentlyDeleted ? ' deleted' : ''}" data-i="${i}" data-change-kind="${c.changeKind}">
         <span class="imp-dot ${c.t.imp}"></span>
         <span class="desc">${esc(c.t.desc)}</span>
+        ${c.changeKind === 'created' ? '<span class="created-badge">区间内创建</span>' : ''}
+        ${c.currentlyDeleted ? '<span class="deleted-badge">当前已删除</span>' : ''}
         <span>${avaGroup(c.t.owners, true)}</span>
-        <span class="pchg ${cls}">${c.before.p}% → ${c.after.p}% ${sign}</span>
+        <span class="pchg ${cls}">${c.before ? c.before.p + '% → ' : '新建 → '}${c.after.p}% ${sign}</span>
         <span class="dstat"><span class="a">+${c.add}</span> <span class="d">−${c.del}</span></span>
         <span class="chev">▶</span>
       </div>
       <div class="diff-wrap open" data-i="${i}">
-        <div class="diff-col"><h4>起始快照 · ${beforeTime}（进度 ${c.before.p}%）</h4><pre>${L.join('')}</pre></div>
+        <div class="diff-col"><h4>${c.before ? `起始快照 · ${beforeTime}（进度 ${c.before.p}%）` : '起始时不存在'}</h4><pre>${L.join('')}</pre></div>
         <div class="diff-col"><h4>结束快照 · ${afterTime}（进度 ${c.after.p}%）</h4><pre>${R.join('')}</pre></div>
       </div>`;
     }).join('')}</div>`;
@@ -1752,8 +1768,8 @@ $('#m-delete').addEventListener('click', () => { closeModal(); delTask(editing);
 const PALETTE = ['#2f6fe0','#1f9d6b','#d97b1c','#8a55c9','#158a8a','#c2498f'];
 let memberEditing = null;
 
-function ownedCount(mid) { return Object.values(TASKS).filter(t => t.owners.includes(mid) && t.progress < 100).length; }
-function collabCount(mid) { return Object.values(TASKS).filter(t => t.collabs.includes(mid) && t.progress < 100).length; }
+function ownedCount(mid) { return Object.values(TASKS).filter(t => !t.deletedAt && t.owners.includes(mid) && t.progress < 100).length; }
+function collabCount(mid) { return Object.values(TASKS).filter(t => !t.deletedAt && t.collabs.includes(mid) && t.progress < 100).length; }
 function randToken() { return 'zt-' + Math.random().toString(36).slice(2, 10); }
 
 function renderMembers() {
@@ -1830,8 +1846,8 @@ $('#member-modal-overlay').addEventListener('click', e => { if (e.target.id === 
 /* ════════════════ 成员视图（分享链接落地页） ════════════════ */
 function renderShare(mid) {
   const m = member(mid);
-  const owned = Object.values(TASKS).filter(t => t.owners.includes(mid));
-  const collab = Object.values(TASKS).filter(t => t.collabs.includes(mid));
+  const owned = Object.values(TASKS).filter(t => !t.deletedAt && t.owners.includes(mid));
+  const collab = Object.values(TASKS).filter(t => !t.deletedAt && t.collabs.includes(mid));
   const card = (t, ro) => `<div class="stask${ro ? ' readonly' : ''}">
     <div class="r1">
       <span class="imp-dot ${t.imp}"></span>

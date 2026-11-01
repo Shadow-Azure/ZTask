@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/notes/implemented/feature/2026-11-01-deleted-task-history.md
+2026-11-01-deleted-task-history.md: 2ea6b794e7ee33ff8327f2be8c8d70197e166d7c
+2026-11-01-deleted-task-history.en.md: 109b5d84fdf57d634f2a7341970ad1a36fa553be
