@@ -9,11 +9,9 @@ milestone: m1
 depends:
   - m1-01
 priority: P0
-status: backlog
+status: in-progress
 scope:
-  - docs/design/**
-  - docs/README.md
-  - scripts/doc-budgets.manifest.json
+  - plan/fullstack-design/**
   - .agents/flow/issues/m1-design-docs*
 adr: []
 github:
@@ -23,11 +21,11 @@ github:
 
 ## 背景
 
-原型定稿后，需要把界面形态沉淀成可核对的全栈设计文档，作为后续里程碑、路线与 issue 规划的唯一依据。参照物是 harness-evolution 仓库 `plans/fullstack-design` 目录的文档套件结构。
+原型定稿后，需要把界面形态沉淀成可核对的全栈设计文档，作为后续里程碑、路线与 issue 规划的唯一依据。参照物是 harness-evolution 仓库 `plans/fullstack-design` 目录的文档套件结构。套件实际落位 `plan/fullstack-design/`，与参照目录同名同构；scope 按实际落位声明，原先预留的 `docs/design/` 路径与 docs 索引、词数预算登记随之取消。
 
 ## 目标
 
-- 在 `docs/design/` 下产出覆盖架构、功能、前端、后端、API、数据设计的全套设计文档。
+- 在 `plan/fullstack-design/` 下产出覆盖架构、功能、前端、后端、API、数据设计的全套设计文档。
 - 每份文档与用户逐份核对并取得确认。
 - 文档套件成为后续研发里程碑规划的直接输入。
 
@@ -38,15 +36,14 @@ github:
 
 ## 实现内容
 
-- `docs/design/` 下的双语设计文档分册，按上述结构组织，含总览 README。
-- 每个分册登记进 docs 索引与词数预算清单。
+- `plan/fullstack-design/` 下的设计文档分册（中文 base），按上述结构组织，含总览 README；英文侧随逐册核对补齐。
 
 ## 实施步骤
 
 1. 与用户对齐分册清单与写作顺序。
 2. 以定稿原型为基准逐册撰写中文侧。
 3. 逐册与用户核对、修订、定稿。
-4. 补齐英文侧并同步登记索引与预算。
+4. 补齐英文侧。
 
 ## 依赖与交付边界
 
@@ -59,7 +56,7 @@ github:
 pnpm verify:docs && pnpm verify:flow
 ```
 
-- 两条命令均绿；`docs/design/` 每册可从 docs 索引到达。
+- 两条命令均绿；`plan/fullstack-design/` 每册通过现行文档门禁。
 
 ## 验收标准
 
@@ -69,7 +66,7 @@ pnpm verify:docs && pnpm verify:flow
 
 ## 门禁与 CI
 
-- 新增文档受双语三件套、换行、死链、索引、词数预算与术语门禁全量管辖。
+- 分册受换行、死链、术语等现行文档门禁管辖；英文侧补齐后进入双语三件套契约。
 - CI 的 build-and-docs lane 即为验收命令的线上执行。
 
 ## 非目标

@@ -182,7 +182,7 @@ test('custom dashboard dates include the whole start and end days in local time'
   const range = resolveQueryRange('2026-10-20', '2026-10-29', false, new Date(2026, 10, 1, 12, 0, 0));
 
   assert.equal(range.start.getTime(), new Date(2026, 9, 20, 0, 0, 0, 0).getTime());
-  assert.equal(range.end.getTime(), new Date(2026, 9, 29, 23, 59, 59, 999).getTime());
+  assert.equal(range.end.getTime(), new Date(2026, 9, 30, 0, 0, 0, 0).getTime());
 });
 
 test('default dashboard query never extends the end time to future end-of-day', () => {
@@ -282,4 +282,105 @@ test('bulk disclosure controls expand and collapse both task rows and diff panel
   assert.ok(rows.concat(diffs).every(el => el.open));
   setAllChanges(box, false);
   assert.ok(rows.concat(diffs).every(el => !el.open));
+});
+
+
+test('active task scope excludes deleted tasks while history scope retains them', () => {
+  const taskIdsOf = loadFunction('taskIdsOf', {
+    folderById: () => ({ tasks: ['active', 'deleted'], children: [] }),
+    TASKS: {
+      active: { id: 'active' },
+      deleted: { id: 'deleted', deletedAt: '2026-10-29T10:00:00' },
+    },
+  });
+
+  assert.deepEqual(taskIdsOf('folder'), ['active']);
+  assert.deepEqual(taskIdsOf('folder', true), ['active', 'deleted']);
+});
+
+test('history snapshot lookup can exclude the exact boundary for half-open ranges', () => {
+  const snapshotAt = loadFunction('snapshotAt');
+  const history = [
+    { d: '2026-10-31T09:00:00.000', p: 40 },
+    { d: '2026-10-31T10:00:00.000', p: 55 },
+  ];
+  const at = new Date('2026-10-31T10:00:00.000');
+
+  assert.equal(snapshotAt(history, at, false).p, 40);
+  assert.equal(snapshotAt(history, at, true).p, 55);
+});
+
+test('history query includes changes exactly at start and renders created state', () => {
+  const box = { innerHTML: '', querySelectorAll: () => [], querySelector: () => ({ addEventListener() {} }) };
+  const fields = {
+    '#range-start': { value: '2026-10-20' },
+    '#range-end': { value: '2026-10-21' },
+    '#range-result': box,
+  };
+  const pad2 = loadFunction('pad2');
+  const formatLocalDate = loadFunction('formatLocalDate', { pad2 });
+  const formatTimestamp = loadFunction('formatTimestamp', { formatLocalDate, pad2 });
+  const renderRangeQuery = loadFunction('renderRangeQuery', {
+    $: selector => fields[selector],
+    rangeMode: 'custom',
+    resolveQueryRange: loadFunction('resolveQueryRange'),
+    formatTimestamp,
+    dashTasks: () => [{ id: 'new-task', desc: '区间内新建任务', owners: [], imp: 'high' }],
+    HISTORY: { 'new-task': [
+      { d: '2026-10-20T00:00:00.000', p: 20, detail: '创建进展' },
+    ] },
+    snapshotAt: loadFunction('snapshotAt'),
+    diffLines: loadFunction('diffLines'),
+    esc: value => String(value),
+    avaGroup: () => '',
+  });
+
+  renderRangeQuery();
+
+  assert.match(box.innerHTML, /data-change-kind="created"/);
+  assert.match(box.innerHTML, /起始时不存在/);
+});
+
+test('currently deleted changes carry a badge and sort after active changes', () => {
+  const box = { innerHTML: '', querySelectorAll: () => [], querySelector: () => ({ addEventListener() {} }) };
+  const fields = {
+    '#range-start': { value: '2026-10-20' },
+    '#range-end': { value: '2026-10-22' },
+    '#range-result': box,
+  };
+  const pad2 = loadFunction('pad2');
+  const formatLocalDate = loadFunction('formatLocalDate', { pad2 });
+  const formatTimestamp = loadFunction('formatTimestamp', { formatLocalDate, pad2 });
+  const tasks = [
+    { id: 'active', desc: '普通任务', owners: [], imp: 'high' },
+    { id: 'deleted', desc: '已删除任务', owners: [], imp: 'mid', deletedAt: '2026-10-21T10:00:00' },
+  ];
+  const renderRangeQuery = loadFunction('renderRangeQuery', {
+    $: selector => fields[selector],
+    rangeMode: 'custom',
+    resolveQueryRange: loadFunction('resolveQueryRange'),
+    formatTimestamp,
+    dashTasks: includeDeleted => includeDeleted ? tasks : tasks.slice(0, 1),
+    HISTORY: {
+      active: [
+        { d: '2026-10-20T09:00:00', p: 20, detail: '旧进展' },
+        { d: '2026-10-21T09:00:00', p: 30, detail: '新进展' },
+      ],
+      deleted: [
+        { d: '2026-10-20T09:00:00', p: 60, detail: '迁移完成' },
+        { d: '2026-10-21T10:00:00', p: 60, detail: '迁移完成', changeKind: 'delete' },
+      ],
+    },
+    snapshotAt: loadFunction('snapshotAt'),
+    diffLines: loadFunction('diffLines'),
+    esc: value => String(value),
+    avaGroup: () => '',
+  });
+
+  renderRangeQuery();
+
+  assert.match(box.innerHTML, /当前已删除/);
+  assert.match(box.innerHTML, /data-change-kind="deleted"/);
+  assert.ok(box.innerHTML.indexOf('普通任务') < box.innerHTML.indexOf('已删除任务'));
+  assert.ok(box.innerHTML.indexOf('已删除任务') > box.innerHTML.indexOf('id="btn-collapse-all"'));
 });
