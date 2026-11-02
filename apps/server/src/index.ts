@@ -52,3 +52,32 @@ export {
   UnsupportedFormatError,
   VersionConflictError,
 } from "./storage/errors.js";
+
+// 网络与分享链接（#20）：LAN 动态监听、network.json、链接生命周期。
+export {
+  collectShareInterfaces,
+  createNetworkService,
+} from "./modules/network/network-service.js";
+export type {
+  NetworkFile,
+  NetworkListenerHandle,
+  NetworkService,
+  NetworkServiceOptions,
+  RawNetworkInterface,
+  StartNetworkListener,
+} from "./modules/network/network-service.js";
+export { createShareLinkService } from "./modules/share/share-links.js";
+export type {
+  ShareLinkService,
+  ShareLinkServiceOptions,
+  ShareNetworkState,
+} from "./modules/share/share-links.js";
+export { destroySession, destroySessionsForMember } from "./modules/share/share-auth.js";
+export type { ShareLinkFile } from "./modules/share/share-auth.js";
+export { createMemberService } from "./modules/members/member-service.js";
+export type {
+  MemberFile as MemberRecordFile,
+  MemberService,
+  MemberServiceDeps,
+  ShareLinkSummarySource,
+} from "./modules/members/member-service.js";

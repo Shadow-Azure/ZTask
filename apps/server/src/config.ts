@@ -10,6 +10,12 @@ export interface ServerConfig {
   port: number;
   dataDir: string;
   staticRoot: string | null;
+  /**
+   * `--lan` 指定的启动期 LAN 地址（01 §3）；null/缺省表示不尝试。
+   * 这里只做归一化，不校验「是否本机地址」——那份校验在 NetworkService.enable 内，
+   * 失败只标记分享不可用，不影响 loopback 管理端启动（04 §9）。
+   */
+  lanHost?: string | null;
 }
 
 /** CLI/测试传入的原始配置；字段缺省时按默认规则补齐。 */
@@ -18,6 +24,8 @@ export interface ServeConfigInput {
   port?: number;
   dataDir?: string;
   staticRoot?: string | null;
+  /** CLI `--lan <host>`；缺失或空白归一化为 null。 */
+  lanHost?: string;
 }
 
 /**
@@ -83,5 +91,6 @@ export function validateServeConfig(input: ServeConfigInput): ServerConfig {
   const dataDir = trimmedDataDir || defaultDataDir();
 
   const staticRoot = input.staticRoot?.trim() || null;
-  return { host, port, dataDir, staticRoot };
+  const lanHost = input.lanHost?.trim() || null;
+  return { host, port, dataDir, staticRoot, lanHost };
 }

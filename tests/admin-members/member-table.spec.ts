@@ -75,7 +75,9 @@ describe("MemberTable（features/members，原型 mem-table）", () => {
     expect(wrapper.text()).toContain("陈晨");
     expect(wrapper.text()).toContain("前端工程师");
     expect(wrapper.find(".count + .count, .col-count").exists()).toBe(true);
-    expect(wrapper.text()).toContain("分享链接将在 m4 接入");
+    // m4 #20：分享链接列不再占位，未生成时显示状态 + 生成入口（ShareLinkCell）。
+    expect(wrapper.text()).toContain("未生成");
+    expect(wrapper.text()).toContain("生成链接");
 
     const archivedRow = wrapper.find("tr.archived");
     expect(archivedRow.exists()).toBe(true);

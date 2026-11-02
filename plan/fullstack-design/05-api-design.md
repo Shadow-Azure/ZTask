@@ -82,7 +82,7 @@ TaskChange = {
 AdminMember = {
   id, name, role, color, archivedAt,
   counts: { owned, collaborated },
-  shareLink: null | { status, createdAt, lastUsedAt }
+  shareLink: null | { status, createdAt, revokedAt, lastUsedAt }
 }
 
 NetworkState = {
@@ -95,6 +95,7 @@ NetworkState = {
 }
 ```
 
+`shareLink.status` 为 `active | revoked`，`revokedAt` 未吊销时为 null（与 §4.8 单成员查询同构）。
 常规成员列表不返回 raw token。NetworkState 仅本机管理员可见，error 必须脱敏。
 
 ## 3. 管理员：任务夹与任务
@@ -291,6 +292,7 @@ NetworkState = {
 - Body：无。
 - Response 200：`{ id, status, url, createdAt }`。
 
+不要求成员已有 active 链接：对从未生成过的成员调用等价于首次生成（仍返回 200）。
 旧链接和旧会话立即失效，新 URL 使用当前 shareBaseUrl。
 
 ### 4.7 `DELETE /admin/members/{id}/share-link`

@@ -26,13 +26,15 @@ export function parseServeArgs(argv: string[]): ParsedServeArgs {
     .option("--host <host>", "管理监听地址；默认 127.0.0.1，wildcard 会被拒绝", "127.0.0.1")
     .option("--port <port>", "端口；默认 8123，0 仅用于 loopback 测试", "8123")
     .option("--data-dir <dir>", "数据目录；默认 ZTASK_HOME 或 ~/.ztask")
+    .option("--lan <host>", "启动时尝试监听的局域网 IP（也可在成员管理页开启）")
     .option("--no-open", "启动后不自动打开管理页")
-    .action((options: { host: string; port: string; dataDir?: string; open: boolean }) => {
+    .action((options: { host: string; port: string; dataDir?: string; lan?: string; open: boolean }) => {
       parsed = {
         input: {
           host: options.host,
           port: Number(options.port),
           dataDir: options.dataDir,
+          lanHost: options.lan,
         },
         open: options.open,
       };

@@ -137,12 +137,56 @@ export interface AdminMemberCounts {
   collaborated: number;
 }
 
-/** 分享链接的脱敏态（m4 接入前恒为 null；不含 token/URL）。 */
+/** 分享链接的脱敏态（05 §4.1/§4.8；不含 token/URL）。 */
 export interface AdminMemberShareLink {
-  status: string;
+  status: "active" | "revoked";
   /** UTC RFC 3339。 */
   createdAt: string;
+  /** UTC RFC 3339；未吊销为 null。 */
+  revokedAt: string | null;
   lastUsedAt: string | null;
+}
+
+/** `GET /admin/members/{id}/share-link` 的响应（05 §4.8）：从未生成时 status=none。 */
+export type AdminShareLinkState =
+  | { status: "none" }
+  | { status: "active" | "revoked"; createdAt: string; revokedAt: string | null; lastUsedAt: string | null };
+
+/**
+ * 生成/重置链接的响应（05 §4.5–4.6）：完整 url 只在此次响应出现，
+ * 之后只能重新生成；不含 tokenHash。
+ */
+export interface AdminShareLinkIssued {
+  id: string;
+  status: "active";
+  url: string;
+  /** UTC RFC 3339。 */
+  createdAt: string;
+}
+
+/** 可选网卡地址（05 §2.3 NetworkState.interfaces）：管理员必须明确选择。 */
+export interface NetworkInterfaceInfo {
+  name: string;
+  address: string;
+}
+
+/** 分享监听状态（05 §2.3）：running/degraded 是运行时事实，enabled 是期望配置。 */
+export interface ShareListenerState {
+  enabled: boolean;
+  running: boolean;
+  degraded: boolean;
+  host: string | null;
+  port: number | null;
+  shareBaseUrl: string | null;
+  /** 脱敏错误（不含文件路径）；无错误为 null。 */
+  error: string | null;
+}
+
+/** `GET /admin/network` 的响应（05 §2.3/§4.9）：仅本机管理员可见。 */
+export interface NetworkState {
+  loopbackUrl: string;
+  interfaces: NetworkInterfaceInfo[];
+  shareListener: ShareListenerState;
 }
 
 /** 管理端成员行（05 §2.3）：负责中/协作中为主任务口径的在册计数。 */

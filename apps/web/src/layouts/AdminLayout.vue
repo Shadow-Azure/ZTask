@@ -1,18 +1,40 @@
 <script setup lang="ts">
+import { computed } from "vue";
 import { useQuery } from "@tanstack/vue-query";
-import { API_PREFIX } from "@ztask/shared";
-import { requestJson } from "../api/http";
-import type { HealthPayload } from "@ztask/shared";
+import { maskNetworkError, networkApi } from "../api/network";
 
 /**
  * 管理端布局：原型 appbar（logo + 事项跟踪/成员管理导航 + 状态区）。
- * LAN 分享地址与网络管理是 #20 的范围，此处显示服务健康状态。
+ * LAN 状态 chip 轮询 GET /admin/network（15s）：running → `LAN · host:port`、
+ * degraded → 分享异常、未开启 → 仅本机；点击进入成员管理页的局域网分享面板（08 §5、05 §4.9）。
  */
-const health = useQuery({
-  queryKey: ["admin", "health"],
-  queryFn: () => requestJson<HealthPayload>(`${API_PREFIX}/health`),
+const networkQuery = useQuery({
+  queryKey: ["admin", "network"],
+  queryFn: networkApi.network,
+  refetchInterval: 15_000,
   refetchOnWindowFocus: true,
 });
+
+/**
+ * chip 四态：服务不可达 / 连接中 / 分享异常 / LAN 运行 / 仅本机。
+ * 「服务不可达」不能退化成「仅本机」：那是两类完全不同的故障（08 §5）。
+ */
+const lanChip = computed<{ tone: "up" | "off" | "warn" | "down"; text: string; title: string }>(() => {
+  if (networkQuery.isError.value) {
+    return { tone: "down", text: "服务不可达", title: "无法读取网络状态，请确认 ZTask 服务仍在运行" };
+  }
+  const listener = networkQuery.data.value?.shareListener;
+  if (!listener) return { tone: "off", text: "连接中…", title: "正在读取网络状态" };
+  if (listener.degraded) {
+    return { tone: "warn", text: "分享异常", title: maskNetworkError(listener.error) };
+  }
+  if (listener.running && listener.host) {
+    const address = `${listener.host}:${listener.port ?? ""}`;
+    return { tone: "up", text: `LAN · ${address}`, title: `局域网分享中：${address}` };
+  }
+  return { tone: "off", text: "仅本机", title: "局域网分享未开启" };
+});
+
 </script>
 
 <template>
@@ -24,11 +46,9 @@ const health = useQuery({
         <RouterLink to="/members" class="nav-item" :class="{ active: $route.name === 'members' }">成员管理</RouterLink>
       </nav>
       <div class="who">
-        <span class="lan-chip" :class="health.isError.value ? 'down' : ''">
-          <template v-if="health.data.value">服务正常 · v{{ health.data.value.version }}</template>
-          <template v-else-if="health.isLoading.value">连接中…</template>
-          <template v-else>服务不可达</template>
-        </span>
+        <RouterLink to="/members" class="lan-chip" :class="lanChip.tone" :title="lanChip.title">
+          {{ lanChip.text }}
+        </RouterLink>
         <span class="ava" title="管理员">管</span>
         <span>管理员</span>
       </div>
@@ -119,17 +139,35 @@ const health = useQuery({
 .lan-chip {
   font-size: 10.5px;
   font-family: var(--mono);
-  color: #7ee2b8;
-  border: 1px solid #2c3a31;
-  background: rgba(31, 157, 107, 0.12);
+  color: #aeb5c0;
+  border: 1px solid #333a45;
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 999px;
   padding: 2px 10px;
+  text-decoration: none;
+}
+
+.lan-chip:hover {
+  color: #e8ebef;
+  border-color: #4a5563;
 }
 
 .lan-chip.down {
   color: #ff9b9b;
   border-color: #42302f;
   background: rgba(214, 60, 60, 0.12);
+}
+
+.lan-chip.up {
+  color: #7ee2b8;
+  border-color: #2c3a31;
+  background: rgba(31, 157, 107, 0.12);
+}
+
+.lan-chip.warn {
+  color: #ffc27a;
+  border-color: #42362a;
+  background: rgba(217, 123, 28, 0.14);
 }
 
 .ava {

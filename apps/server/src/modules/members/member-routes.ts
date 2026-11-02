@@ -1,18 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
+import type { ShareLinkService } from "../share/share-links.js";
 import { createMemberService } from "./member-service.js";
 
 /**
- * 管理端成员路由（05 §4.1–4.4）；分享链接端点属 m4，不在本模块。
+ * 管理端成员路由（05 §4.1–4.4）；分享链接端点由 share-link-routes 独立注册（§4.5–4.8）。
  * @param app Fastify 实例。
- * @param options 装配项（dataDir 用于直读聚合）。
+ * @param options 装配项（dataDir 用于直读聚合；shareLinkService 用于汇总与归档吊销）。
  */
 export async function memberRoutes(
   app: FastifyInstance,
-  options: { dataDir: string },
+  options: { dataDir: string; shareLinkService?: ShareLinkService },
 ): Promise<void> {
-  const { service } = createMemberService({ dataDir: options.dataDir });
+  const { service } = createMemberService({ dataDir: options.dataDir, shareLinks: options.shareLinkService });
 
   const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   async function loadAggregates(): Promise<TaskAggregate[]> {
