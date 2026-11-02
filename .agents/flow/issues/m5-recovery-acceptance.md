@@ -22,6 +22,7 @@ scope:
   - apps/server/src/app.ts
   - package.json
   - .agents/flow/issues/m5-recovery-acceptance*
+  - .agents/flow/milestones/m5-insights-recovery-release*
 adr: []
 github:
   number: 23
