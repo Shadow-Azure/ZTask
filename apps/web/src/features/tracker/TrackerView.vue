@@ -221,7 +221,24 @@ function openEditorById(taskId: string): void {
 function openTaskDetail(taskId: string): void {
   detailTaskId.value = taskId;
   detailOpen.value = true;
+  // 03 §2：`?task=<id>` 可分享/可后退，成员只读详情同样写回 URL。
+  if (isShareScope.value && route.query.task !== taskId) {
+    void router.replace({ query: { ...route.query, task: taskId } });
+  }
 }
+
+/** `?task=` 深链在成员域直接打开只读详情（03 §2）。 */
+const taskParam = computed(() => (typeof route.query.task === "string" && route.query.task ? route.query.task : null));
+watch(taskParam, (taskId) => {
+  if (!isShareScope.value) return;
+  if (taskId === null) {
+    detailOpen.value = false;
+    detailTaskId.value = null;
+    return;
+  }
+  detailTaskId.value = taskId;
+  detailOpen.value = true;
+}, { immediate: true });
 
 function onTaskOpen(taskId: string): void {
   if (isAdmin.value) {
@@ -234,6 +251,11 @@ function onTaskOpen(taskId: string): void {
 function closeTaskDetail(): void {
   detailOpen.value = false;
   detailTaskId.value = null;
+  if (route.query.task !== undefined) {
+    const query = { ...route.query };
+    delete query.task;
+    void router.replace({ query });
+  }
 }
 
 function openCreate(): void {
@@ -333,7 +355,12 @@ function onTreeDrag(clientX: number): void {
       </div>
 
       <div v-else class="board-body">
-        <EmptyState hint="情况看板统计与历史变化将在 m5 接入" />
+        <EmptyState
+          :title="isShareScope ? '情况看板暂未开放' : undefined"
+          :hint="isShareScope
+            ? '当前版本可在成员个人页与任务管理中查看你的相关事项；统计与历史将在后续版本提供。'
+            : '情况看板统计与历史变化将在 m5 接入'"
+        />
       </div>
     </main>
 

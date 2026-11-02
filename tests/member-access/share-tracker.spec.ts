@@ -313,4 +313,57 @@ describe("成员只读事项跟踪（/s/tracker）", () => {
     });
     expectNoAdminRequest();
   });
+
+  it("?task= 深链直接打开只读详情，关闭后从 URL 移除（03 §2）", async () => {
+    mockShareFetch(defaultResponder({ tasks: () => ({ items: [TASK_A], nextCursor: null }) }));
+    const { wrapper, router } = await mountTracker("/s/tracker?task=t-a");
+
+    await vi.waitFor(() => {
+      expect(dialogElement()?.textContent).toContain("任务详情（只读）");
+    });
+    expect(dialogElement()?.textContent).toContain("成员可见任务 A");
+    expect(router.currentRoute.value.query.task).toBe("t-a");
+
+    dialogElement().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    await vi.waitFor(() => {
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    });
+    expect(router.currentRoute.value.query.task).toBeUndefined();
+    expectNoAdminRequest();
+  });
+
+  it("详情请求 401 时同样清理会话并进入失效页（08 §7）", async () => {
+    mockShareFetch(
+      defaultResponder({ tasks: () => ({ items: [TASK_A], nextCursor: null }) }),
+    );
+    // 覆盖详情端点为 401，其余保持正常。
+    const baseFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname.startsWith("/api/v1/share/tasks/")) return errorResponse(401, "SHARE_SESSION_REQUIRED");
+      return baseFetch(input as RequestInfo, init);
+    }) as typeof fetch;
+
+    const { wrapper, router } = await mountTracker();
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-task-card="t-a"]').exists()).toBe(true);
+    });
+    await wrapper.find('[data-task-card="t-a"] .card-head').trigger("click");
+
+    await vi.waitFor(() => {
+      expect(router.currentRoute.value.path).toBe("/share-invalid");
+    });
+    expectNoAdminRequest();
+  });
+
+  it("成员域「情况看板」不暴露内部 issue 文案（02 §5）", async () => {
+    mockShareFetch(defaultResponder({ tasks: () => ({ items: [], nextCursor: null }) }));
+    const { wrapper } = await mountTracker("/s/tracker?tab=dash");
+
+    await vi.waitFor(() => {
+      expect(wrapper.text()).toContain("情况看板暂未开放");
+    });
+    expect(wrapper.text()).not.toContain("m5");
+    expectNoAdminRequest();
+  });
 });

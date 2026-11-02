@@ -33,13 +33,17 @@ export function useShareSession() {
     queryClient.removeQueries({ queryKey: ["share"] });
   }
 
-  /** 清理内存会话并跳转失效页（不把后端错误正文或 token 写入日志）。 */
-  async function invalidate(): Promise<void> {
+  /**
+   * 清理内存会话并跳转失效页（不把后端错误正文或 token 写入日志）。
+   * @param reason 失效来源；`logout` 表示用户主动退出，页面文案据此区分（避免把退出说成被吊销）。
+   */
+  async function invalidate(reason?: "logout"): Promise<void> {
     member.value = null;
     checked.value = true;
     clearShareCache();
-    if (router.currentRoute.value.path !== "/share-invalid") {
-      await router.replace("/share-invalid");
+    const target = reason === "logout" ? "/share-invalid?from=logout" : "/share-invalid";
+    if (router.currentRoute.value.fullPath !== target) {
+      await router.replace(target);
     }
   }
 
@@ -88,7 +92,7 @@ export function useShareSession() {
     try {
       await shareApi.logout();
     } finally {
-      await invalidate();
+      await invalidate("logout");
     }
   }
 

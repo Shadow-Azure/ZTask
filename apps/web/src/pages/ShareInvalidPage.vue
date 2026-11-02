@@ -1,8 +1,14 @@
 <script setup lang="ts">
+import { computed } from "vue";
+import { useRoute } from "vue-router";
+
 /**
  * 失效链接页（08 §6.1，原型 1941–1953）：品牌条 + .dead-card。
  * 不渲染任何业务导航、链接或 token；只能由管理员重新分发链接。
+ * 主动注销（`?from=logout`）复用同一布局但换中性文案，不把"用户自己退出"说成"被吊销"。
  */
+const route = useRoute();
+const loggedOut = computed(() => route.query.from === "logout");
 </script>
 
 <template>
@@ -12,9 +18,10 @@
     </header>
     <div class="dead-wrap">
       <div class="dead-card" role="alert">
-        <div class="ic" aria-hidden="true">🔗</div>
-        <h2>链接已失效</h2>
-        <p>该分享链接已被管理员重置或吊销。<br>请联系管理员获取新的访问链接。</p>
+        <div class="ic" aria-hidden="true">{{ loggedOut ? "👋" : "🔗" }}</div>
+        <h2>{{ loggedOut ? "已退出成员视图" : "链接已失效" }}</h2>
+        <p v-if="loggedOut">你已退出本次成员会话。<br>如需继续访问，请重新打开管理员分享的专属链接。</p>
+        <p v-else>该分享链接已被管理员重置或吊销。<br>请联系管理员获取新的访问链接。</p>
       </div>
     </div>
   </div>

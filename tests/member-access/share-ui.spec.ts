@@ -156,7 +156,10 @@ describe("ShareLayout（成员壳）", () => {
     expect(removeSpy).toHaveBeenCalledWith({ queryKey: ["share"] });
     expect(queryClient.getQueryData(["share", "tasks", "home"])).toBeUndefined();
     expect(wrapper.find('[aria-label="成员导航"]').exists()).toBe(false);
-    expect(wrapper.text()).toContain("链接已失效");
+    // 主动退出不应被描述成"链接被吊销"：同一页面换中性文案（?from=logout）。
+    expect(router.currentRoute.value.query.from).toBe("logout");
+    expect(wrapper.text()).toContain("已退出成员视图");
+    expect(wrapper.text()).not.toContain("链接已失效");
     wrapper.unmount();
   });
 

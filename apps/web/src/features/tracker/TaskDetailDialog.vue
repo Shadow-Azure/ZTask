@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import type { ShareMemberRole, ShareTaskDetail, Subtask, Task } from "@ztask/shared";
 import { shareApi } from "../../api/share";
+import { useShareSession } from "../share/useShareSession";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
 import ImportanceMark from "../../components/ui/ImportanceMark.vue";
 import ProgressRing from "../../components/ui/ProgressRing.vue";
@@ -23,6 +24,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ close: [] }>();
 
+const session = useShareSession();
+
 /** query key 依赖任务 id：关闭时父级置 null，旧数据不会串到下一次打开。 */
 const taskIdKey = computed(() => props.taskId);
 
@@ -42,6 +45,15 @@ interface SubtaskDetail {
 function isSubtaskDetail(value: ShareTaskDetail): value is SubtaskDetail {
   return "task" in value;
 }
+
+// 会话过期/链接吊销时，详情请求的 401 同样清 share 缓存并进入失效页（08 §7）。
+watch(
+  () => detailQuery.error.value,
+  (cause) => {
+    if (cause) session.handleAuthError(cause);
+  },
+  { immediate: true },
+);
 
 const detail = computed<ShareTaskDetail | null>(() => detailQuery.data.value ?? null);
 const mainTask = computed<Task | null>(() => {
