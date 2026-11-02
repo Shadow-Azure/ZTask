@@ -19,6 +19,7 @@ scope:
   - .agents/flow/issues/m2-app-bootstrap*
   - pnpm-lock.yaml
   - .gitignore
+  - .github/workflows/ci.yml
 adr: []
 github:
   number: 12
