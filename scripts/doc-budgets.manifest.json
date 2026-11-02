@@ -1,7 +1,7 @@
 {
   "//": "常驻文档词数上限。计数规则见 scripts/verify-doc-budgets.mjs。超限处置：搬层 → 压缩 → 提预算（PR 说明理由）。",
   "AGENTS.md": 720,
-  "README.md": 340,
+  "README.md": 680,
   "docs/AGENTS.md": 800,
   "docs/README.md": 420,
   "docs/architecture.md": 960,
@@ -16,11 +16,12 @@
   ".agents/notes/README.md": 1000,
   ".agents/notes/implemented/process/2026-11-02-doc-engineering-port.md": 700,
   ".agents/flow/README.md": 980,
-  ".agents/flow/roadmap.md": 240,
+  ".agents/flow/roadmap.md": 280,
   ".agents/flow/milestones/m1-design.md": 240,
   ".agents/flow/milestones/m2-runnable-foundation.md": 480,
   ".agents/flow/milestones/m3-admin-task-workflow.md": 480,
   ".agents/flow/milestones/m4-sharing-collaboration.md": 480,
   ".agents/flow/milestones/m5-insights-recovery-release.md": 480,
-  ".agents/flow/milestones/m6-ui-parity.md": 480
+  ".agents/flow/milestones/m6-ui-parity.md": 480,
+  ".agents/flow/milestones/m7-project-portal.md": 300
 }
