@@ -261,16 +261,34 @@ export function createNetworkService(options: NetworkServiceOptions): NetworkSer
     }
   }
 
+  /**
+   * 运行中的 host 是否仍在本机网卡列表里。
+   * `running` 原本只等于「曾经 bind 成功」，笔记本换网/网卡禁用后地址会消失，
+   * 继续返回 running + 旧 shareBaseUrl 会让管理员分发不可达地址（01 §3.1、04 §9）。
+   * @returns 地址仍在则为 true；未运行恒为 false。
+   */
+  function activeHostReachable(): boolean {
+    const current = active;
+    if (current === null) return false;
+    return listInterfaces().some((entry) => sameAddress(entry.address, current.host));
+  }
+
   function state(): NetworkState {
+    // 运行中地址已消失：按 degraded 呈现（不改 network.json，等管理员重新选择）。
+    const live = active !== null && activeHostReachable();
+    if (active !== null && !live) {
+      degraded = true;
+      lastError = "分享地址已不在本机网卡上：请重新选择地址并开启";
+    }
     const shareListener: ShareListenerState = {
       enabled: persisted.shareListener.enabled,
-      running: active !== null,
-      // degraded 只描述「配置要求开启但本次启动失败」；用户主动关闭后不再显示 degraded。
-      degraded: degraded && active === null,
+      running: live,
+      // degraded 只描述「要求开启但没有可用入口」；用户主动关闭后不再显示 degraded。
+      degraded: degraded && !live,
       host: active?.host ?? persisted.shareListener.host ?? null,
       port: active?.port ?? persisted.shareListener.port ?? null,
-      shareBaseUrl: active ? buildShareBaseUrl(active.host, active.port) : null,
-      error: active === null && degraded ? lastError : null,
+      shareBaseUrl: live && active !== null ? buildShareBaseUrl(active.host, active.port) : null,
+      error: !live && degraded ? lastError : null,
     };
     return {
       loopbackUrl: buildShareBaseUrl(options.loopbackHost, loopbackPort()),
@@ -424,11 +442,11 @@ export function createNetworkService(options: NetworkServiceOptions): NetworkSer
     },
 
     shareBaseUrl(): string | null {
-      return active === null ? null : buildShareBaseUrl(active.host, active.port);
+      return active === null || !activeHostReachable() ? null : buildShareBaseUrl(active.host, active.port);
     },
 
     isRunning(): boolean {
-      return active !== null;
+      return active !== null && activeHostReachable();
     },
 
     async close() {

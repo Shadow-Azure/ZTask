@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { ApiError, type AdminMember, type AdminMemberShareLink, type AdminShareLinkState } from "@ztask/shared";
 import { networkApi, shareLinkApi } from "../../api/network";
@@ -31,8 +31,13 @@ const emit = defineEmits<{
 const queryClient = useQueryClient();
 const toast = useToast();
 
-/** 409/链路错误后用 GET share-link 纠正过期列表态；列表刷新后以服务端为准。 */
-const reconciled = ref<AdminMemberShareLink | null>(null);
+/**
+ * 409/链路错误后用 GET share-link 一次性纠正过期列表态。
+ * `undefined` = 尚未纠正；`null` = 服务端确认「从未生成」。
+ * 一旦父级列表带来新事实（15s 轮询/失效重取）就清掉本地纠正，
+ * 否则它（优先级更高）会永久盖住 revoked 等服务端变化。
+ */
+const reconciled = ref<AdminMemberShareLink | null | undefined>(undefined);
 const confirmRotateOpen = ref(false);
 const confirmRevokeOpen = ref(false);
 
@@ -43,7 +48,16 @@ const networkQuery = useQuery({
   refetchOnWindowFocus: true,
 });
 
-const state = computed<AdminMemberShareLink | null>(() => reconciled.value ?? props.member.shareLink);
+const state = computed<AdminMemberShareLink | null>(() =>
+  reconciled.value !== undefined ? reconciled.value : props.member.shareLink,
+);
+
+watch(
+  () => props.member.shareLink,
+  () => {
+    reconciled.value = undefined;
+  },
+);
 
 const lastUsedText = computed(() => {
   const used = state.value?.lastUsedAt;

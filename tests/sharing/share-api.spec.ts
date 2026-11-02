@@ -261,6 +261,19 @@ describe("同源 mutation 校验（04 §8）", () => {
       url: `/api/v1/admin/members/${memberId}/share-link/rotate`,
     });
     expect(noOrigin.statusCode).toBe(200);
+
+    // Origin 与 Host 相同时，Sec-Fetch-Site: cross-site 仍然一票否决（rebinding 场景）。
+    const originMatchesButCrossSite = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/members/${memberId}/share-link/rotate`,
+      headers: {
+        host: "127.0.0.1:8123",
+        origin: "http://127.0.0.1:8123",
+        "sec-fetch-site": "cross-site",
+      },
+    });
+    expect(originMatchesButCrossSite.statusCode).toBe(403);
+    expect((originMatchesButCrossSite.json() as { error: { code: string } }).error.code).toBe("CROSS_SITE_REQUEST");
   });
 });
 
@@ -317,5 +330,73 @@ describe("LAN listener 上的 Admin API（04 §4.1）", () => {
     } finally {
       await lanApp.close();
     }
+  });
+
+  it("百分号编码的 admin 路径不能绕过守卫（raw.url 前缀不是判定依据）", async () => {
+    const memberId = await createMemberViaApi(app, "陈晨");
+    await enableLan();
+    const lanApp = await buildApp(config(), {
+      store,
+      listenerKind: "lan",
+      networkService: network,
+      shareLinkService: shareLinks,
+    });
+    try {
+      const encodedCalls = [
+        { method: "GET" as const, url: "/api/v1/%61dmin/network" },
+        { method: "GET" as const, url: "/api/v1/admi%6E/members" },
+        { method: "POST" as const, url: "/api/v1/%61dmin/members", payload: { name: "外部" } },
+        { method: "POST" as const, url: `/api/v1/%61dmin/members/${memberId}/share-link/rotate` },
+        { method: "DELETE" as const, url: "/api/v1/%61dmin/network/share-listener" },
+      ];
+      for (const call of encodedCalls) {
+        const response = await lanApp.inject(call);
+        expect(response.statusCode, `${call.method} ${call.url}`).toBe(403);
+        expect((response.json() as { error: { code: string } }).error.code).toBe("ADMIN_LOCAL_ONLY");
+      }
+
+      // 二次编码不会命中 admin 路由：必须 404，而不是 200。
+      const doubleEncoded = await lanApp.inject({ method: "GET", url: "/api/v1/%2561dmin/members" });
+      expect(doubleEncoded.statusCode).toBe(404);
+      // 编码路径也没有拿到任何成员数据。
+      expect(doubleEncoded.body).not.toContain("陈晨");
+
+      const members = await app.inject({ method: "GET", url: "/api/v1/admin/members" });
+      expect((members.json() as { items: Array<{ name: string }> }).items.map((item) => item.name)).toEqual(["陈晨"]);
+    } finally {
+      await lanApp.close();
+    }
+  });
+});
+
+describe("Admin Host 白名单（防 DNS rebinding）", () => {
+  it("loopback 对端但 Host 是外部域名：403；本机回环名放行", async () => {
+    const rebound = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/members",
+      remoteAddress: "127.0.0.1",
+      headers: { host: "attacker.example:8123" },
+    });
+    expect(rebound.statusCode).toBe(403);
+    expect((rebound.json() as { error: { code: string } }).error.code).toBe("ADMIN_LOCAL_ONLY");
+
+    for (const host of ["127.0.0.1:8123", "localhost:8123", "[::1]:8123"]) {
+      const allowed = await app.inject({
+        method: "GET",
+        url: "/api/v1/admin/members",
+        remoteAddress: "127.0.0.1",
+        headers: { host },
+      });
+      expect(allowed.statusCode, host).toBe(200);
+    }
+
+    // 编码路径 + 外部 Host 同样必须拒绝。
+    const encodedRebind = await app.inject({
+      method: "GET",
+      url: "/api/v1/%61dmin/members",
+      remoteAddress: "127.0.0.1",
+      headers: { host: "attacker.example:8123" },
+    });
+    expect(encodedRebind.statusCode).toBe(403);
   });
 });

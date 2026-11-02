@@ -28,6 +28,19 @@ export const networkApi = {
 };
 
 /**
+ * 网络错误脱敏（05 §4.9）：服务端 error 已脱敏，前端再去掉可能的绝对路径并截断，
+ * 供顶栏 chip 与网络面板共用，避免两处正则漂移。
+ * @param message 监听错误文案。
+ * @param fallback 无错误时的兜底文案。
+ * @returns 可展示的短文案。
+ */
+export function maskNetworkError(message: string | null, fallback = "分享监听异常"): string {
+  if (!message) return fallback;
+  const masked = message.replace(/(?:\/[^\s,;:]+)+/g, "…").slice(0, 120);
+  return masked || fallback;
+}
+
+/**
  * 管理端分享链接生命周期端点（05 §4.5–§4.8）：
  * 完整 url 只在生成/重置当次响应出现；GET 永远只返回脱敏态。
  */

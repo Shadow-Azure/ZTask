@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { ApiError } from "@ztask/shared";
-import { networkApi } from "../../api/network";
+import { maskNetworkError, networkApi } from "../../api/network";
 import { useToast } from "../../components/ui/toast";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
@@ -98,16 +98,6 @@ const shareBaseUrl = computed(() => {
   return state.host ? `http://${state.host}:${state.port ?? ""}` : "";
 });
 
-/**
- * 展示用的脱敏兜底：服务端 error 已脱敏，这里再去掉可能的绝对路径与超长内容。
- * @param message 监听错误文案。
- * @returns 可展示的短文案。
- */
-function maskError(message: string | null): string {
-  if (!message) return "监听未启动，请重新选择地址";
-  const masked = message.replace(/(?:\/[^\s,;:]+)+/g, "…").slice(0, 120);
-  return masked || "监听未启动，请重新选择地址";
-}
 
 /**
  * 校验端口输入（05 §4.9：非法端口由前端先拦，避免无意义请求）。
@@ -171,7 +161,7 @@ const enableMutation = useMutation({
   onSuccess: (next) => {
     const state = next.shareListener;
     if (!state?.running) {
-      toast.show(`分享未开启：${maskError(state?.error ?? null)}`);
+      toast.show(`分享未开启：${maskNetworkError(state?.error ?? null, "监听未启动，请重新选择地址")}`);
     } else if (switching.value) {
       toast.show(`已切换分享地址：${state.host}:${state.port}；旧 URL 需要重新分发`);
     } else {
@@ -238,7 +228,7 @@ function submit(): void {
     />
     <template v-else>
       <p v-if="degraded" class="net-error">
-        分享异常：{{ maskError(listener?.error ?? null) }}
+        分享异常：{{ maskNetworkError(listener?.error ?? null, "监听未启动，请重新选择地址") }}
       </p>
 
       <div v-if="!running" class="net-form">

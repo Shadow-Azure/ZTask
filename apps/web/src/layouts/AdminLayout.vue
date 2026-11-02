@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useQuery } from "@tanstack/vue-query";
-import { networkApi } from "../api/network";
+import { maskNetworkError, networkApi } from "../api/network";
 
 /**
  * 管理端布局：原型 appbar（logo + 事项跟踪/成员管理导航 + 状态区）。
@@ -15,12 +15,18 @@ const networkQuery = useQuery({
   refetchOnWindowFocus: true,
 });
 
-/** chip 三态：以 shareListener 运行时事实为准，查询失败按「仅本机」降级展示。 */
-const lanChip = computed<{ tone: "up" | "off" | "warn"; text: string; title: string }>(() => {
+/**
+ * chip 四态：服务不可达 / 连接中 / 分享异常 / LAN 运行 / 仅本机。
+ * 「服务不可达」不能退化成「仅本机」：那是两类完全不同的故障（08 §5）。
+ */
+const lanChip = computed<{ tone: "up" | "off" | "warn" | "down"; text: string; title: string }>(() => {
+  if (networkQuery.isError.value) {
+    return { tone: "down", text: "服务不可达", title: "无法读取网络状态，请确认 ZTask 服务仍在运行" };
+  }
   const listener = networkQuery.data.value?.shareListener;
-  if (!listener) return { tone: "off", text: "仅本机", title: "局域网分享未开启" };
+  if (!listener) return { tone: "off", text: "连接中…", title: "正在读取网络状态" };
   if (listener.degraded) {
-    return { tone: "warn", text: "分享异常", title: maskError(listener.error) };
+    return { tone: "warn", text: "分享异常", title: maskNetworkError(listener.error) };
   }
   if (listener.running && listener.host) {
     const address = `${listener.host}:${listener.port ?? ""}`;
@@ -29,15 +35,6 @@ const lanChip = computed<{ tone: "up" | "off" | "warn"; text: string; title: str
   return { tone: "off", text: "仅本机", title: "局域网分享未开启" };
 });
 
-/**
- * 顶栏只展示脱敏错误摘要（05 §4.9：error 不得含文件路径）。
- * @param message 监听错误文案。
- * @returns 去掉绝对路径并截断的短文案。
- */
-function maskError(message: string | null): string {
-  if (!message) return "分享监听异常";
-  return message.replace(/(?:\/[^\s,;:]+)+/g, "…").slice(0, 120) || "分享监听异常";
-}
 </script>
 
 <template>
@@ -153,6 +150,12 @@ function maskError(message: string | null): string {
 .lan-chip:hover {
   color: #e8ebef;
   border-color: #4a5563;
+}
+
+.lan-chip.down {
+  color: #ff9b9b;
+  border-color: #42302f;
+  background: rgba(214, 60, 60, 0.12);
 }
 
 .lan-chip.up {

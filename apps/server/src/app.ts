@@ -63,8 +63,84 @@ function isLoopbackRemote(remoteAddress: string | undefined): boolean {
   return remoteAddress !== undefined && isLoopbackHost(remoteAddress);
 }
 
-/** 会产生副作用的 HTTP 方法；GET/HEAD/OPTIONS 不做同源 mutation 校验。 */
+/** 产生副作用的 HTTP 方法；GET/HEAD/OPTIONS 不做同源 mutation 校验。 */
 const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+const ADMIN_PATH_PREFIX = `${API_PREFIX}/admin`;
+
+/**
+ * 判定一个已解码路径是否落在 Admin API 命名空间。
+ * @param path 已解码的路径（路由模板或 pathname）。
+ * @returns 是否属于 Admin API。
+ */
+function isAdminPath(path: string): boolean {
+  return path === ADMIN_PATH_PREFIX || path.startsWith(`${ADMIN_PATH_PREFIX}/`);
+}
+
+/**
+ * 取出请求路径并做与 Fastify 路由一致的「一次百分号解码」。
+ *
+ * 守卫绝不能只看 `request.raw.url`：它保留编码，而 fastify 路由匹配解码后的段，
+ * `/api/v1/%61dmin/members` 会通过前缀比较却又命中 admin 路由 → LAN 提权。
+ * 这里对 404 场景单次 decodeURIComponent（与路由解码次数一致）；二次编码
+ * `%2561dmin` 解码后仍是 `%61dmin`，不会命中 admin 路由，保持 404。
+ * @param rawUrl 原始请求 URL。
+ * @returns 解码后的 pathname。
+ */
+function decodedPathname(rawUrl: string): string {
+  let pathname: string;
+  try {
+    pathname = new URL(rawUrl, "http://placeholder").pathname;
+  } catch {
+    pathname = rawUrl;
+  }
+  try {
+    return decodeURIComponent(pathname);
+  } catch {
+    return pathname;
+  }
+}
+
+/**
+ * 判断请求是否命中 Admin 路由：优先用 fastify 已匹配的路由模板（与注册表一致），
+ * 未命中路由时回退到解码后的 pathname。
+ * @param request Fastify 请求。
+ * @returns true 表示应按 Admin 规则校验。
+ */
+function isAdminRequest(request: FastifyRequest): boolean {
+  const routeUrl = request.routeOptions.url;
+  if (typeof routeUrl === "string" && routeUrl !== "") return isAdminPath(routeUrl);
+  return isAdminPath(decodedPathname(request.raw.url ?? "/"));
+}
+
+/**
+ * 提取 Host 的 hostname 部分（去掉端口与 IPv6 方括号）。
+ * @param host Host 头。
+ * @returns 小写 hostname。
+ */
+function hostnameOf(host: string): string {
+  if (host.startsWith("[")) {
+    const end = host.indexOf("]");
+    return end === -1 ? host.toLowerCase() : host.slice(1, end).toLowerCase();
+  }
+  return host.split(":")[0]!.toLowerCase();
+}
+
+/**
+ * Admin 请求的 Host 白名单（防 DNS rebinding）。
+ *
+ * 「对端是 loopback」不足以证明请求来自管理员浏览器：DNS rebinding 会让
+ * `attacker.example` 解析到 127.0.0.1，此时 remoteAddress 仍是 loopback。
+ * 因此 Admin API 额外要求 Host 是本机回环名或服务实际绑定的主机名。
+ * @param host Host 头。
+ * @param configuredHost 服务绑定的 host。
+ * @returns true 表示 Host 可信。
+ */
+function isTrustedAdminHost(host: string | undefined, configuredHost: string): boolean {
+  if (host === undefined) return false;
+  const name = hostnameOf(host);
+  return name === "127.0.0.1" || name === "localhost" || name === "::1" || name === configuredHost.toLowerCase();
+}
 
 /**
  * 同源 mutation 校验（04 §8「mutation 检查 Origin/Fetch-Site」）。
@@ -79,17 +155,18 @@ const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 function isSameOriginMutation(request: FastifyRequest): boolean {
   const host = request.headers.host;
   if (host === undefined) return false;
-  const origin = request.headers.origin;
-  if (origin !== undefined) {
-    try {
-      return new URL(origin).host === host;
-    } catch {
-      // `Origin: null`（沙箱 iframe 等）无法解析，一律拒绝。
-      return false;
-    }
-  }
+  // Sec-Fetch-Site 是浏览器声明的「发起方与目标关系」，比 Origin 更贴近实际来源：
+  // 即使 Origin 与 Host 恰好相同（DNS rebinding 场景），cross-site 也必须拒绝。
   const site = request.headers["sec-fetch-site"];
-  return typeof site !== "string" || site === "same-origin" || site === "none";
+  if (typeof site === "string" && site !== "same-origin" && site !== "none") return false;
+  const origin = request.headers.origin;
+  if (origin === undefined) return true;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    // `Origin: null`（沙箱 iframe 等）无法解析，一律拒绝。
+    return false;
+  }
 }
 
 /**
@@ -146,10 +223,16 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   // 插件路由在 boot 时把当时的 hook 链固化进路由上下文；之后再 addHook 不会回溯。
   // 若把守卫放在路由注册之后，LAN app 上的 /admin/* 会先命中路由而绕过 403，
   // 直接破坏「LAN listener 一律拒绝 Admin API」这条红线。
+  //
+  // 路径判定必须用「解码后的路由模板」而不是 `raw.url`：`/api/v1/%61dmin/members`
+  // 在 raw.url 上不以 `/api/v1/admin` 开头，却会被 fastify 解码后命中 admin 路由。
+  // Host 白名单补上 DNS rebinding 的一半缺失：对端是 loopback 不等于页面就是本机。
   app.addHook("preHandler", async (request, reply) => {
-    const url = request.raw.url ?? "/";
-    if (!url.startsWith(`${API_PREFIX}/admin`)) return;
-    const localAdmin = request.listenerKind === "loopback" && isLoopbackRemote(request.socket.remoteAddress);
+    if (!isAdminRequest(request)) return;
+    const localAdmin =
+      request.listenerKind === "loopback" &&
+      isLoopbackRemote(request.socket.remoteAddress) &&
+      isTrustedAdminHost(request.headers.host, config.host);
     if (!localAdmin) {
       await reply.status(403).send({
         error: {

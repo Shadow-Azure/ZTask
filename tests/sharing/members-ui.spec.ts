@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomBytes } from "node:crypto";
 import { nextTick } from "vue";
 import { mount, type DOMWrapper, type VueWrapper } from "@vue/test-utils";
 import { VueQueryPlugin } from "@tanstack/vue-query";
@@ -38,6 +39,8 @@ let members: AdminMember[];
 let forcedErrors: { generate?: ForcedError; rotate?: ForcedError; enable?: ForcedError };
 /** GET share-link 的权威态覆盖：模拟列表过期（列表未生成、服务端已有 active）。 */
 let shareLinkOverrides: Record<string, AdminMemberShareLink | null>;
+/** 模拟服务不可达：GET /admin/network 返回 500，用于顶栏 chip 的 down 态。 */
+let networkDown = false;
 let fetchCalls: FetchCall[];
 let issuedCount = 0;
 
@@ -118,11 +121,12 @@ function revokedLink(overrides: Partial<AdminMemberShareLink> = {}): AdminMember
   };
 }
 
-/** 服务端发布的完整 URL：host/port 取当前 shareBaseUrl 事实，token 每次不同。 */
-function issueUrl(memberId: string): string {
+/** 服务端发布的完整 URL：与生产同形（`/#/s/<43 字符 base64url>`），token 每次不同。 */
+function issueUrl(_memberId: string): string {
   issuedCount += 1;
   const state = net.shareListener;
-  return `http://${state.host ?? "192.168.1.5"}:${state.port ?? 8123}/z/${memberId}-${issuedCount}`;
+  const token = randomBytes(32).toString("base64url");
+  return `http://${state.host ?? "192.168.1.5"}:${state.port ?? 8123}/#/s/${token}`;
 }
 
 /** 记录调用并模拟管理端网络/成员/分享链接端点（m4 前端契约测试用）。 */
@@ -132,6 +136,7 @@ async function handleRequest(path: string, init?: RequestInit): Promise<Response
   fetchCalls.push({ path, method, body });
 
   if (path === `${API}/network` && method === "GET") {
+    if (networkDown) return errorResponse({ status: 500, code: "INTERNAL_ERROR", message: "内部错误" });
     // 每次返回深拷贝，避免测试本地修改响应体影响服务端事实。
     return jsonResponse(200, JSON.parse(JSON.stringify(net)));
   }
@@ -212,6 +217,7 @@ beforeEach(() => {
   members = [makeMember("m-1", "陈晨")];
   forcedErrors = {};
   shareLinkOverrides = {};
+  networkDown = false;
   fetchCalls = [];
   issuedCount = 0;
   localStorage.clear();
@@ -313,7 +319,7 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     await vi.waitFor(() => expect(wrapper.find(".link-result").exists()).toBe(true));
 
     const issuedUrl = wrapper.find(".link-result .link-url").text();
-    expect(issuedUrl).toMatch(/^http:\/\/192\.168\.1\.5:8123\/z\/m-1-/);
+    expect(issuedUrl).toMatch(/^http:\/\/192\.168\.1\.5:8123\/#\/s\/[A-Za-z0-9_-]{43}$/);
     expect(wrapper.find(".link-result").text()).toContain("复制");
     expect(wrapper.text()).toContain("链接包含访问凭证，请只发给该成员");
     expect(wrapper.text()).toContain("只能重置");
@@ -407,6 +413,25 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     // GET 纠正后该行不再是「未生成」，而是可重置的 active 态。
     await vi.waitFor(() => expect(wrapper.text()).toContain("已生成"));
     expect(wrapper.text()).not.toContain("生成链接");
+    wrapper.unmount();
+  });
+
+  it("reconcile 只做一次性纠正：随后吊销并刷新，行必须回到「已吊销」", async () => {
+    members = [makeMember("m-1", "陈晨")];
+    shareLinkOverrides["m-1"] = activeLink();
+    forcedErrors.generate = { status: 409, code: "ACTIVE_SHARE_LINK_EXISTS", message: "已有有效链接" };
+    lanRunning();
+    const { wrapper } = await mountApp();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("生成链接"));
+
+    await button(wrapper, "生成链接").trigger("click");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("已生成"));
+
+    await button(wrapper, "吊销").trigger("click");
+    await nextTick();
+    dialogButton(".btn.danger-btn").click();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("已吊销"));
+    expect(wrapper.text()).not.toContain("尚未使用");
     wrapper.unmount();
   });
 
@@ -603,5 +628,16 @@ describe("AdminLayout LAN 状态 chip（08 §5、02 F1）", () => {
     expect(warn.wrapper.find(".appbar .lan-chip").classes()).toContain("warn");
     expect(warn.wrapper.find(".appbar .lan-chip").attributes("title")).not.toContain("/Users/secret");
     warn.wrapper.unmount();
+  });
+
+  it("服务不可达：显示明确故障态而不是「仅本机」", async () => {
+    networkDown = true;
+    const { wrapper } = await mountApp("/members");
+    await vi.waitFor(
+      () => expect(wrapper.find(".appbar .lan-chip").text()).toBe("服务不可达"),
+      { timeout: 8_000 },
+    );
+    expect(wrapper.find(".appbar .lan-chip").classes()).toContain("down");
+    wrapper.unmount();
   });
 });

@@ -292,6 +292,7 @@ NetworkState = {
 - Body：无。
 - Response 200：`{ id, status, url, createdAt }`。
 
+不要求成员已有 active 链接：对从未生成过的成员调用等价于首次生成（仍返回 200）。
 旧链接和旧会话立即失效，新 URL 使用当前 shareBaseUrl。
 
 ### 4.7 `DELETE /admin/members/{id}/share-link`

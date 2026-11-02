@@ -242,6 +242,18 @@ describe("enable（07 §3.3）", () => {
     });
   });
 
+  it("enable 与 disable 交错：串行队列保证最终状态与最后一次意图一致", async () => {
+    const { fake, service } = await makeService();
+    const [enabled, disabled] = await Promise.all([
+      service.enable("192.168.1.5", 8123),
+      service.disable(),
+    ]);
+    expect(enabled.shareListener.running).toBe(true);
+    expect(disabled.shareListener.running).toBe(false);
+    expect(fake.events.filter((event) => event.startsWith("start"))).toHaveLength(1);
+    await service.close();
+  });
+
   it("并发 enable 串行化：最终只保留最后一个入口", async () => {
     const { fake, service } = await makeService();
     fake.delayMs = 10;
@@ -382,6 +394,35 @@ describe("restore（启动恢复）", () => {
     });
     const state = await service.restore();
     expect(state.shareListener).toMatchObject({ enabled: false, running: false, degraded: false });
+  });
+});
+
+describe("运行中地址消失（04 §9 运行态）", () => {
+  it("host 从网卡列表消失后：running=false、degraded、shareBaseUrl=null，isRunning=false", async () => {
+    let interfaces = [...FAKE_INTERFACES];
+    const { service } = await makeService({ listInterfaces: () => interfaces });
+
+    await service.enable("192.168.1.5", 8123);
+    expect(service.isRunning()).toBe(true);
+    expect(service.shareBaseUrl()).toBe("http://192.168.1.5:8123");
+
+    // 笔记本换网：旧 IP 已不在本机网卡上。
+    interfaces = interfaces.filter((entry) => entry.address !== "192.168.1.5");
+    const state = service.state();
+    expect(state.shareListener).toMatchObject({
+      running: false,
+      degraded: true,
+      shareBaseUrl: null,
+    });
+    expect(state.shareListener.error).toBeTruthy();
+    expect(service.isRunning()).toBe(false);
+    expect(service.shareBaseUrl()).toBeNull();
+
+    // 地址回到网卡列表后恢复 running，不需要重新 enable。
+    interfaces = [...FAKE_INTERFACES];
+    expect(service.state().shareListener).toMatchObject({ running: true, degraded: false });
+    expect(service.shareBaseUrl()).toBe("http://192.168.1.5:8123");
+    await service.close();
   });
 });
 

@@ -308,5 +308,10 @@ describe("归档成员（07 §7.1）", () => {
 
     const regenerate = await app.inject({ method: "POST", url: `/api/v1/admin/members/${memberId}/share-link` });
     expect(regenerate.statusCode).toBe(404);
+
+    // rotate 同样不能给已归档成员留下 active 链接（06 §8 的顺序边界）。
+    const rotate = await app.inject({ method: "POST", url: `/api/v1/admin/members/${memberId}/share-link/rotate` });
+    expect(rotate.statusCode).toBe(404);
+    expect((await readLinkFile(memberId)).status).toBe("revoked");
   });
 });
