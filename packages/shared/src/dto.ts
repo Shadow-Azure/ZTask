@@ -64,6 +64,34 @@ export interface FolderTreeNode extends Folder {
   counts: { done: number; todo: number };
 }
 
+/** 成员在相关任务中的角色（05 §6.5）；决定个人页写权限，只读跟踪忽略它。 */
+export type ShareMemberRole = "owner" | "collaborator";
+
+/** `/share/session` 的 200/201 响应：只含最小成员摘要，不含 token/verifier（05 §6.1–6.2）。 */
+export interface ShareSessionResponse {
+  member: MemberSummary;
+}
+
+/** `GET /share/tasks?view=home` 的响应（05 §6.4）：负责/协作两组已按 memberId 裁剪。 */
+export interface ShareHomeTasks {
+  owned: Task[];
+  collaborated: Task[];
+}
+
+/** `GET /share/tasks?view=tracker` 的响应（05 §6.4）：分页游标为不透明字符串。 */
+export interface ShareTrackerTasks {
+  items: Task[];
+  nextCursor: string | null;
+}
+
+/**
+ * `GET /share/tasks/{id}` 的响应（05 §6.5）：主任务返回 Task 本体，
+ * 小任务返回小任务与「只含当前成员可见小任务」的父任务。
+ */
+export type ShareTaskDetail =
+  | (Task & { memberRole: ShareMemberRole })
+  | { task: Subtask; parent: Task; memberRole: ShareMemberRole };
+
 /** GET /api/v1/health 的响应体。健康检查匿名可用，不泄露文件系统路径。 */
 export interface HealthPayload {
   /** 恒为 "ok"；不可达时客户端收到的是连接错误而非降级 payload。 */

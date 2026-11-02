@@ -1,20 +1,71 @@
 <script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import { useShareSession } from "../features/share/useShareSession";
+import LoadingState from "../components/ui/LoadingState.vue";
+import ErrorState from "../components/ui/ErrorState.vue";
+
 /**
- * 成员壳（03 §2）：只提供"成员个人页"和"事项跟踪"两个导航；
- * 不存在成员管理、链接管理或网络配置——越权导航从前端就不渲染。
+ * 成员壳（08 §6.1，原型 381–390）：挂载时用 Cookie 恢复会话，
+ * 未确认会话前不渲染 RouterView，避免子页先发 401 请求；
+ * 401 进入失效页；网络/5xx 等瞬时故障在壳内给出可重试错误，不误判成链接失效（§6.8）。
+ * 导航严格只有「成员个人页」「事项跟踪」两个链接，
+ * 顶栏右侧展示脱敏成员身份与注销按钮——不渲染 token/链接原文。
  */
+const { member, restore, logout } = useShareSession();
+
+/** 本次挂载是否已完成会话确认；只用于门控 RouterView，避免模块态跨页面泄漏。 */
+const ready = ref(false);
+/** 恢复的瞬时失败（非 401）：在壳内显示 ErrorState，重试成功后照常渲染成员内容。 */
+const restoreFailed = ref(false);
+
+const initial = computed(() => (member.value?.name ?? "成").slice(0, 1));
+
+/**
+ * 尝试恢复会话；401 由 restore 内部进入失效页，非 401 只标记壳内错误态。
+ */
+async function restoreSession(): Promise<void> {
+  restoreFailed.value = false;
+  try {
+    ready.value = await restore();
+  } catch {
+    // 网络/5xx 是瞬时故障，不代表链接失效：留在壳内让用户重试（08 §6.1）。
+    ready.value = false;
+    restoreFailed.value = true;
+  }
+}
+
+onMounted(restoreSession);
+
+async function onLogout(): Promise<void> {
+  // logout 内部先清 share 作用域缓存再进入失效页；请求失败也保持同一结局（08 §7）。
+  await logout().catch(() => undefined);
+}
 </script>
 
 <template>
   <div class="share-shell">
-    <div class="share-bar">
+    <header class="share-bar">
       <div class="logo"><span class="mark">Z</span>ZTask<span class="sub">成员视图</span></div>
-      <nav class="share-nav" aria-label="成员导航">
+
+      <nav v-if="ready && member" class="share-nav" aria-label="成员导航">
         <RouterLink to="/s/home" class="nav-item" :class="{ active: $route.name === 'share-home' }">成员个人页</RouterLink>
         <RouterLink to="/s/tracker" class="nav-item" :class="{ active: $route.name === 'share-tracker' }">事项跟踪</RouterLink>
       </nav>
+
+      <div v-if="ready && member" class="share-user">
+        <span class="ava" :style="{ background: member.color }" :title="member.name" aria-hidden="true">{{ initial }}</span>
+        <span class="share-user-name">{{ member.name }}</span>
+        <button class="ghost" type="button" @click="onLogout">注销</button>
+      </div>
+    </header>
+
+    <RouterView v-if="ready && member" />
+    <div v-else-if="restoreFailed" class="share-restoring">
+      <ErrorState message="无法连接 ZTask 服务" retryable @retry="restoreSession" />
     </div>
-    <RouterView />
+    <div v-else class="share-restoring">
+      <LoadingState label="正在恢复成员会话…" />
+    </div>
   </div>
 </template>
 
@@ -24,68 +75,152 @@
   background: var(--bg);
 }
 
+/* 原型 381–382：48px 浅色品牌条。 */
 .share-bar {
+  height: 48px;
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 0 16px;
-  height: 46px;
-  background: #16181d;
-  color: #cfd4dc;
+  gap: 10px;
+  padding: 0 18px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
 .logo {
-  font-weight: 700;
-  font-size: 13.5px;
-  color: #fff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  flex: none;
 }
 
 .logo .mark {
-  background: var(--blue);
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--blue), #6f9bff);
   color: #fff;
-  border-radius: 6px;
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .logo .sub {
-  font-weight: 400;
   font-size: 11px;
-  color: #8a919c;
+  font-weight: 500;
+  color: var(--text-faint);
+  margin-left: 2px;
 }
 
 .share-nav {
   display: flex;
-  gap: 4px;
-  margin-left: 12px;
+  gap: 2px;
+  margin-left: 22px;
 }
 
 .nav-item {
-  font-size: 12.5px;
-  color: #aeb5c0;
+  font-size: 13px;
+  color: var(--text-dim);
   text-decoration: none;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  padding: 4px 12px;
+  padding: 5px 14px;
+  border-radius: 8px;
 }
 
 .nav-item:hover {
-  color: #e8ebef;
+  background: var(--bg-inset);
 }
 
 .nav-item.active {
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  font-weight: 600;
+}
+
+.share-user {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+  min-width: 0;
+}
+
+.ava {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
   color: #fff;
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 35%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  flex: none;
+}
+
+.share-user-name {
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 注销是动作而非导航项：ghost 按钮与链接视觉分离（08 §6.1）。 */
+.ghost {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 3px 12px;
+  cursor: pointer;
+  flex: none;
+}
+
+.ghost:hover {
+  color: var(--text);
+  background: var(--bg-inset);
+}
+
+.share-restoring {
+  min-height: calc(100vh - 48px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* 恢复失败的瞬时故障提示与恢复中的加载态共用居中容器，限宽避免整行拉满。 */
+.share-restoring :deep(.error-state) {
+  width: min(420px, 100%);
+}
+
+@media (max-width: 720px) {
+  .share-bar {
+    height: auto;
+    min-height: 48px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    row-gap: 6px;
+  }
+
+  .logo .sub {
+    display: none;
+  }
+
+  .share-nav {
+    margin-left: 0;
+  }
+
+  .share-user-name {
+    max-width: 96px;
+  }
 }
 </style>

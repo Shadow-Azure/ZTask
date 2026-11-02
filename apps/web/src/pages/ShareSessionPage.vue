@@ -1,64 +1,51 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { useRoute } from "vue-router";
+import { onMounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { shareApi } from "../api/share";
+import { useShareSession } from "../features/share/useShareSession";
+import LoadingState from "../components/ui/LoadingState.vue";
 
 /**
- * 分享令牌交换页占位（/#/s/<token>）：会话交换（POST /share/session、
- * HttpOnly Cookie、地址清理）由 m4 接入；本页只落结构且绝不显示原始 token。
+ * 分享令牌交换页（08 §6.1，03 §2 /#/s/<token>）：
+ * POST /share/session 换 HttpOnly 会话 → setMember + 清 share 缓存 → replace /#/s/home，
+ * 让 fragment token 从地址栏消失；失败统一进入失效页。
+ * token 只作为 exchange 的参数短暂存在，不进 ref/DOM/console/localStorage。
  */
 const route = useRoute();
+const router = useRouter();
+const { setMember, clearShareCache } = useShareSession();
 
-/** token 只显示首尾片段，中间以长度代替（不把 secret 泄露进 DOM）。 */
-const maskedToken = computed(() => {
+const state = ref<"loading" | "error">("loading");
+
+onMounted(async () => {
   const token = String(route.params.token ?? "");
-  if (token.length <= 8) return "••••••";
-  return `${token.slice(0, 4)}••••${token.slice(-4)}（长度 ${token.length}）`;
+  try {
+    const response = await shareApi.exchange(token);
+    setMember(response.member);
+    // 清理 share 作用域缓存，防止上一个会话的私有数据残留（08 §7）。
+    clearShareCache();
+    await router.replace("/s/home");
+  } catch {
+    state.value = "error";
+    clearShareCache();
+    await router.replace("/share-invalid");
+  }
 });
 </script>
 
 <template>
   <div class="session-body">
-    <div class="session-card">
-      <h2>正在验证你的专属链接…</h2>
-      <p class="token-line">链接标识：{{ maskedToken }}</p>
-      <p class="note">会话交换（令牌 → HttpOnly Cookie）将在 m4 接入；交换成功后地址栏会立即清除链接标识。</p>
-    </div>
+    <LoadingState :label="state === 'loading' ? '正在验证你的专属链接…' : '链接验证失败，正在跳转…'" />
   </div>
 </template>
 
 <style scoped>
 .session-body {
-  min-height: calc(100vh - 46px);
+  min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
-}
-
-.session-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 22px 26px;
-  max-width: 420px;
-}
-
-.session-card h2 {
-  font-size: 14px;
-  margin-bottom: 8px;
-}
-
-.token-line {
-  font-size: 12px;
-  font-family: var(--mono);
-  color: var(--text-dim);
-  word-break: break-all;
-}
-
-.note {
-  font-size: 11.5px;
-  color: var(--text-faint);
-  margin-top: 8px;
+  padding: 24px;
+  background: var(--bg);
 }
 </style>

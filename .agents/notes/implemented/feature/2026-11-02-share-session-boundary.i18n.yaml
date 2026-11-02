@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/notes/implemented/feature/2026-11-02-share-session-boundary.md
+2026-11-02-share-session-boundary.md: 09918d230fd135bb823805cef518ba3690c195db
+2026-11-02-share-session-boundary.en.md: 383fc3ad95e3c19dc6c811f45b89403bdd082986
