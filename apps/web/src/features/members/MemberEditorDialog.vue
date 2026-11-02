@@ -69,7 +69,7 @@ function save(): void {
 </script>
 
 <template>
-  <BaseDialog :open="open" :title="member ? '编辑成员' : '添加成员'" @close="emit('close')">
+  <BaseDialog :open="open" :title="member ? '编辑成员' : '添加成员'" :width="440" @close="emit('close')">
     <div class="field">
       <label for="member-name">姓名</label>
       <input id="member-name" v-model="name" class="text-input" placeholder="成员姓名…">
@@ -102,19 +102,32 @@ function save(): void {
   margin-bottom: 14px;
 }
 
+/* 原型 430：字段标签 11px/650、大写、0.4px 字距（此前只有 11px + faint，R4-D7）。 */
 .field label {
   font-size: 11px;
+  font-weight: 650;
   color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
 }
 
+/* 原型 765/769 + 427：姓名/角色沿用 .m-desc-input 形态——13px/500、inset 灰底、radius 9、
+ * 7/10 内距、透明描边；聚焦时蓝描边 + 白底（R3-D7）。 */
 .text-input {
   font: inherit;
   font-size: 13px;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  padding: 6px 10px;
-  background: var(--bg-card);
+  font-weight: 500;
   color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 7px 10px;
+  outline: none;
+  background: var(--bg-inset);
+}
+
+.text-input:focus {
+  border-color: var(--blue);
+  background: var(--bg-card);
 }
 
 .color-input {

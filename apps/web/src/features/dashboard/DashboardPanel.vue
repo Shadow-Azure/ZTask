@@ -12,6 +12,8 @@ import ChangesPanel from "../history/ChangesPanel.vue";
  * 情况看板（05 §5.1–5.2、§6.12–6.13，02 §7，原型 1352–1445）：
  * 三统计卡 + 成员多选过滤 + 点击卡片展开该集合的预计完成时间堆叠柱。
  * 管理员与成员复用同一组 DTO 与渲染，只有数据范围不同（成员域不提供成员过滤，避免探测他人）。
+ * 视觉对齐原型 269–298（D14）：统计卡三格居中、24px mono 总数；58px 渐变柱、段内白色计数、
+ * 柱顶总数、x 轴动态日期副标签、图例右置；栅格按后端固定 5 桶展开（含「未排期」，02 §7.6）。
  */
 const props = defineProps<{
   /** admin = 全团队可筛选；share = 当前成员相关任务，无成员筛选。 */
@@ -137,18 +139,63 @@ function toggleBucket(key: BucketKey): void {
 const chart = computed<DashboardDueDistribution | null>(() => dueQuery.data.value ?? null);
 const chartBuckets = computed<DueBucket[]>(() => chart.value?.buckets ?? []);
 const chartMax = computed(() => Math.max(1, ...chartBuckets.value.map((bucket) => bucket.total)));
-const chartTitle = computed(() => {
-  const def = BUCKET_DEFS.find((item) => item.key === activeBucket.value);
-  return def ? `${def.title}任务的预计完成时间分布` : "";
-});
+const hasBars = computed(() => chartBuckets.value.some((bucket) => bucket.total > 0));
 
 /**
- * 柱高百分比：以当前集合最大桶为 100%，全部为 0 时也保持 0。
- * @param total 该桶任务数。
- * @returns 0–100 的百分比。
+ * 图表标题（原型 1422 titleMap + 1438 拼接）：「已完成任务 / 完成度 > 50% 的任务 /
+ * 完成度 ≤ 50% 的任务」+「的预计完成时间分布」（D14：不再拼接「进行中 ·」前缀）。
  */
-function barHeight(total: number): string {
-  return `${Math.round((total / chartMax.value) * 100)}%`;
+const chartTitle = computed(() => {
+  const titles: Record<BucketKey, string> = {
+    done: "已完成任务",
+    gt50: "完成度 > 50% 的任务",
+    lt50: "完成度 ≤ 50% 的任务",
+  };
+  const base = titles[activeBucket.value ?? "done"];
+  return activeBucket.value === null ? "" : `${base}的预计完成时间分布`;
+});
+
+/** 用服务端 asOf 推 x 轴日期副标签（原型 1433–1435：今天 / +7 天 / +30 天，M-D）。 */
+function chartDay(offsetDays: number): string {
+  const asOf = chart.value?.asOf;
+  if (asOf === undefined) return "";
+  const base = new Date(asOf);
+  if (Number.isNaN(base.getTime())) return "";
+  base.setDate(base.getDate() + offsetDays);
+  return `${base.getMonth() + 1}-${String(base.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * x 轴副标签：动态日期范围（原型 1434）。
+ * @param key 桶键。
+ * @returns 如 `10-29 ~ 11-05`；未排期桶无日期语义，返回「未设置预计完成」。
+ */
+function dueSubLabel(key: DueKey): string {
+  if (key === "unscheduled") return "未设置预计完成";
+  if (key === "overdue") return `< ${chartDay(0)}`;
+  if (key === "week") return `${chartDay(0)} ~ ${chartDay(7)}`;
+  if (key === "month") return `${chartDay(7)} ~ ${chartDay(30)}`;
+  return `> ${chartDay(30)}`;
+}
+
+/**
+ * 柱高（px，原型 1448–1451）：以当前集合最大桶为 150px 基准；有值的桶不低于 14px，空桶 3px。
+ * @param total 该桶任务数。
+ * @returns 柱高像素值。
+ */
+function barHeightPx(total: number): number {
+  const height = Math.round((total / chartMax.value) * 150);
+  return Math.max(height, total > 0 ? 14 : 3);
+}
+
+/**
+ * 段内白色计数（原型 1452–1454）：段高按占该柱总数的百分比；0 计数的段不渲染。
+ * @param count 该段任务数。
+ * @param total 该柱任务总数。
+ * @returns 段高百分比字符串。
+ */
+function segHeight(count: number, total: number): string {
+  return `${Math.round((count / Math.max(1, total)) * 100)}%`;
 }
 
 /**
@@ -178,7 +225,7 @@ function dueLabel(key: DueKey): string {
         <span class="chip-ava" :style="{ background: member.color }" aria-hidden="true">{{ member.name.slice(0, 1) }}</span>
         {{ member.name }}
       </button>
-      <span class="all-hint">{{ access === "admin" ? "不选 = 全部成员" : "不选 = 我的相关任务整体" }}</span>
+      <span class="all-hint">{{ access === "admin" ? "不选 = 查看整体任务情况" : "不选 = 我的相关任务整体" }}</span>
     </div>
 
     <div v-if="!folderId" class="dash-empty">
@@ -227,7 +274,15 @@ function dueLabel(key: DueKey): string {
       </div>
 
       <div v-if="activeBucket" class="chart-panel" role="region" :aria-label="chartTitle">
-        <h3>{{ chartTitle }}</h3>
+        <!-- 原型 285–287：标题行右侧图例。 -->
+        <h3>
+          {{ chartTitle }}
+          <span class="legend">
+            <span><i class="li high" />高</span>
+            <span><i class="li mid" />中</span>
+            <span><i class="li low" />低</span>
+          </span>
+        </h3>
         <LoadingState v-if="dueQuery.isLoading.value" label="分布加载中…" />
         <ErrorState
           v-else-if="dueQuery.isError.value"
@@ -235,29 +290,50 @@ function dueLabel(key: DueKey): string {
           retryable
           @retry="dueQuery.refetch()"
         />
-        <div v-else-if="(chart?.buckets ?? []).every((bucket) => bucket.total === 0)" class="chart-empty">
+        <div v-else-if="!hasBars" class="chart-empty">
           该集合暂无任务，换个统计卡片{{ access === "admin" ? "或调整成员筛选" : "" }}试试。
         </div>
-        <div v-else class="chart">
-          <div v-for="bucket in chartBuckets" :key="bucket.key" class="chart-col">
-            <div class="chart-track" role="img" :aria-label="`${dueLabel(bucket.key as DueKey)} ${bucket.total} 项任务，高 ${bucket.importance.high}、中 ${bucket.importance.mid}、低 ${bucket.importance.low}`">
-              <div class="chart-bar" :style="{ height: barHeight(bucket.total) }">
-                <span class="seg high" :style="{ flexGrow: bucket.importance.high }" />
-                <span class="seg mid" :style="{ flexGrow: bucket.importance.mid }" />
-                <span class="seg low" :style="{ flexGrow: bucket.importance.low }" />
+        <template v-else>
+          <!-- 原型 288–295：58px 居中柱、段内白色计数、柱顶总数、渐变填充、图底 1px 基线。 -->
+          <div class="chart">
+            <div
+              v-for="bucket in chartBuckets"
+              :key="bucket.key"
+              class="bargroup"
+              role="img"
+              :aria-label="`${dueLabel(bucket.key as DueKey)} ${bucket.total} 项任务，高 ${bucket.importance.high}、中 ${bucket.importance.mid}、低 ${bucket.importance.low}`"
+            >
+              <span class="btotal">{{ bucket.total }}</span>
+              <div class="bar-stack" :style="{ height: `${barHeightPx(bucket.total)}px` }">
+                <div
+                  v-if="bucket.importance.low > 0"
+                  class="bar-seg low"
+                  :style="{ height: segHeight(bucket.importance.low, bucket.total) }"
+                  :title="`低 ${bucket.importance.low}`"
+                >{{ bucket.importance.low }}</div>
+                <div
+                  v-if="bucket.importance.mid > 0"
+                  class="bar-seg mid"
+                  :style="{ height: segHeight(bucket.importance.mid, bucket.total) }"
+                  :title="`中 ${bucket.importance.mid}`"
+                >{{ bucket.importance.mid }}</div>
+                <div
+                  v-if="bucket.importance.high > 0"
+                  class="bar-seg high"
+                  :style="{ height: segHeight(bucket.importance.high, bucket.total) }"
+                  :title="`高 ${bucket.importance.high}`"
+                >{{ bucket.importance.high }}</div>
               </div>
             </div>
-            <div class="chart-total">{{ bucket.total }}</div>
-            <div class="chart-label" :class="{ emphasis: bucket.key === 'overdue' && activeBucket !== 'done' }">
-              {{ dueLabel(bucket.key as DueKey) }}
-            </div>
           </div>
-        </div>
-        <div v-if="chart && (chart.buckets ?? []).some((bucket) => bucket.total > 0)" class="legend">
-          <span><i class="li high" />高</span>
-          <span><i class="li mid" />中</span>
-          <span><i class="li low" />低</span>
-        </div>
+          <!-- 原型 296–298：x 轴文案带动态日期范围副标签。 -->
+          <div class="chart-x">
+            <span v-for="bucket in chartBuckets" :key="bucket.key">
+              {{ dueLabel(bucket.key as DueKey) }}
+              <b>{{ dueSubLabel(bucket.key as DueKey) }}</b>
+            </span>
+          </div>
+        </template>
       </div>
 
       <ChangesPanel :access="access" :folder-id="folderId" :member-ids="memberIds" />
@@ -266,16 +342,17 @@ function dueLabel(key: DueKey): string {
 </template>
 
 <style scoped>
+/* 原型 261/269/284/302：块级流式排布，间距靠各块自身 margin（相邻外边距合并后
+ * 筛选→统计卡 14、统计卡→图表 12、图表→变化面板 16）。此前统一 flex gap 12 会吃掉这套节奏（R4-D4）。 */
 .dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  display: block;
 }
 
 .dash-filter {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
 }
 
@@ -286,6 +363,8 @@ function dueLabel(key: DueKey): string {
 }
 
 .mchip {
+  /* `font: inherit` 必须置首：`font` 简写会重置 font-size，写在后面的 12px 会被打回继承的 13px（R3-D6）。 */
+  font: inherit;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -297,7 +376,6 @@ function dueLabel(key: DueKey): string {
   border-radius: 999px;
   padding: 3px 12px 3px 5px;
   background: var(--bg-card);
-  font: inherit;
 }
 
 .mchip:hover {
@@ -311,6 +389,7 @@ function dueLabel(key: DueKey): string {
   font-weight: 600;
 }
 
+/* 原型 79–80/216：成员 chip 头像 = .ava.sm 18px / 9.5px / 600（此前 9px/400，R4-D4）。 */
 .chip-ava {
   display: inline-flex;
   width: 18px;
@@ -319,7 +398,8 @@ function dueLabel(key: DueKey): string {
   color: #fff;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
+  font-size: 9.5px;
+  font-weight: 600;
   flex: none;
 }
 
@@ -332,6 +412,8 @@ function dueLabel(key: DueKey): string {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 14px;
+  /* 原型 269：下边距 4，与图表面板的 12 外边距合并成 12（无图表时与变化面板的 16 合并成 16）。 */
+  margin-bottom: 4px;
 }
 
 .stat-card {
@@ -351,14 +433,17 @@ function dueLabel(key: DueKey): string {
   border-color: var(--border-strong);
 }
 
+/* 原型 270–282：统计卡 active 蓝描边 + 3px 15% 光环；sc-total 24px mono。 */
 .stat-card.active {
   border-color: var(--blue);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 15%, transparent);
 }
 
+/* 原型 273：标题 12px/600 + --text-dim；副标签 10.5px/--text-faint（R3-D8）。 */
 .sc-title {
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -372,11 +457,12 @@ function dueLabel(key: DueKey): string {
 }
 
 .sc-total {
-  margin-top: 8px;
+  margin: 2px 0 8px;
   font-family: var(--mono);
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   line-height: 1;
+  color: var(--text);
 }
 
 .sc-total small {
@@ -384,30 +470,32 @@ function dueLabel(key: DueKey): string {
   font-size: 11px;
   font-weight: 400;
   color: var(--text-faint);
-  margin-left: 5px;
+  margin-left: 4px;
 }
 
+/* 原型 276–280：三格居中（数值上、标签下、格内 inset 底）。 */
 .sc-break {
-  display: flex;
-  gap: 8px;
-  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
 }
 
 .sc-cell {
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 5px;
-  font-size: 11px;
-  color: var(--text-faint);
+  text-align: center;
   background: var(--bg-inset);
-  border-radius: 7px;
-  padding: 4px 8px;
+  border-radius: 8px;
+  padding: 5px 2px 4px;
 }
 
 .sc-cell b {
+  display: block;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 14px;
+}
+
+.sc-cell span {
+  font-size: 10px;
+  color: var(--text-faint);
 }
 
 .sc-cell.high b {
@@ -423,121 +511,49 @@ function dueLabel(key: DueKey): string {
 }
 
 .sc-hint {
-  margin-top: 9px;
+  margin-top: 8px;
   font-size: 10.5px;
   color: var(--text-faint);
 }
 
+.stat-card.active .sc-hint {
+  color: var(--blue);
+}
+
+/* 原型 284–287：图表面板 16/18 内距、上外边距 12（与统计卡下边距 4 合并为 12）；h3 13px/650，图例右置。 */
 .chart-panel {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 14px 16px 16px;
+  padding: 16px 18px;
+  margin-top: 12px;
   box-shadow: var(--shadow);
 }
 
 .chart-panel h3 {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
-  margin-bottom: 14px;
-}
-
-.chart {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  align-items: end;
-  min-height: 168px;
-}
-
-.chart-col {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 10px;
+  margin-bottom: 0;
 }
 
-.chart-track {
+.chart-panel h3 .legend {
+  margin-left: auto;
   display: flex;
-  align-items: flex-end;
-  width: 100%;
-  height: 130px;
-  background: var(--bg-inset);
-  border-radius: 8px;
-  padding: 4px;
-  box-sizing: border-box;
-}
-
-.chart-bar {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  border-radius: 5px;
-  overflow: hidden;
-  min-height: 2px;
-}
-
-.chart-bar .seg {
-  min-height: 0;
-}
-
-.chart-bar .seg.high {
-  background: var(--red);
-}
-
-.chart-bar .seg.mid {
-  background: var(--orange);
-}
-
-.chart-bar .seg.low {
-  background: #8a93a1;
-}
-
-.chart-total {
-  font-family: var(--mono);
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.chart-label {
+  gap: 12px;
   font-size: 11px;
   color: var(--text-dim);
-  white-space: nowrap;
-}
-
-.chart-label.emphasis {
-  color: var(--red);
-  font-weight: 600;
-}
-
-.chart-empty {
-  padding: 26px 0;
-  text-align: center;
-  font-size: 11.5px;
-  color: var(--text-faint);
-}
-
-.legend {
-  display: flex;
-  gap: 14px;
-  justify-content: flex-end;
-  margin-top: 8px;
-  font-size: 11px;
-  color: var(--text-faint);
-}
-
-.legend span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  font-weight: 400;
 }
 
 .legend .li {
+  display: inline-block;
   width: 9px;
   height: 9px;
-  border-radius: 2px;
-  display: inline-block;
+  border-radius: 2.5px;
+  margin-right: 4px;
 }
 
 .legend .li.high {
@@ -549,7 +565,103 @@ function dueLabel(key: DueKey): string {
 }
 
 .legend .li.low {
-  background: #8a93a1;
+  background: var(--low-strong);
+}
+
+/*
+ * 原型 288：图区 = 单行栅格 + 底部 1px 基线。
+ * 后端固定返回 5 桶（overdue/week/month/later/unscheduled，02 §7.6「未排期」独立桶
+ * 保证三卡总数与柱合计一致），因此栅格按桶数 5 列展开（原型只有 4 桶是未含未排期语义）。
+ */
+.chart {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 18px;
+  align-items: end;
+  height: 190px;
+  padding: 18px 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 原型 289：柱组纵向贴底。 */
+.bargroup {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 0;
+}
+
+/* 原型 290：58px 柱体、顶部圆角 6、inset 底色兜底。 */
+.bar-stack {
+  width: 58px;
+  display: flex;
+  flex-direction: column-reverse;
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+  background: var(--bg-inset);
+}
+
+/* 原型 291–294：段内白色 mono 计数、渐变填充（高红/中橙/低灰）。 */
+.bar-seg {
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  min-height: 0;
+}
+
+.bar-seg.high {
+  background: linear-gradient(180deg, var(--red-light), var(--red));
+}
+
+.bar-seg.mid {
+  background: linear-gradient(180deg, var(--orange-light), var(--orange));
+}
+
+.bar-seg.low {
+  background: linear-gradient(180deg, var(--low-light), var(--low-strong));
+}
+
+/* 原型 295：柱顶总数 mono 11px。 */
+.btotal {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
+/* 原型 296–298：x 轴标签 + mono 副标签，与柱区同栅格。 */
+.chart-x {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 18px;
+  padding: 8px 8px 2px;
+}
+
+.chart-x span {
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.chart-x b {
+  display: block;
+  font-size: 10px;
+  color: var(--text-faint);
+  font-weight: 400;
+  font-family: var(--mono);
+}
+
+.chart-empty {
+  padding: 26px 0;
+  text-align: center;
+  font-size: 11.5px;
+  color: var(--text-faint);
 }
 
 .dash-empty {
@@ -577,8 +689,14 @@ function dueLabel(key: DueKey): string {
     grid-template-columns: 1fr;
   }
 
-  .chart {
-    grid-template-columns: repeat(2, 1fr);
+  .chart,
+  .chart-x {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .bar-stack {
+    width: 40px;
   }
 }
 </style>

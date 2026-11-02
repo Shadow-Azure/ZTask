@@ -476,6 +476,7 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
         items.push({
           taskId: candidate.aggregate.taskId,
           description: candidate.after.snapshot.task.description,
+          importance: candidate.aggregate.task.importance,
           owners: ownerIdsOf(candidate.after, candidate.aggregate.taskId).map((memberId) =>
             memberSummary(members, memberId),
           ),

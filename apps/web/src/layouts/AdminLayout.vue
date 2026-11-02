@@ -4,7 +4,8 @@ import { useQuery } from "@tanstack/vue-query";
 import { maskNetworkError, networkApi } from "../api/network";
 
 /**
- * 管理端布局：原型 appbar（logo + 事项跟踪/成员管理导航 + 状态区）。
+ * 管理端布局：原型 appbar（logo + 事项跟踪/成员管理导航 + 状态区，原型 52–71）。
+ * 白底 52px、1px 下边框；logo mark 24px 蓝渐变；导航 active 蓝字浅蓝底无边框；
  * LAN 状态 chip 轮询 GET /admin/network（15s）：running → `LAN · host:port`、
  * degraded → 分享异常、未开启 → 仅本机；点击进入成员管理页的局域网分享面板（08 §5、05 §4.9）。
  */
@@ -62,124 +63,130 @@ const lanChip = computed<{ tone: "up" | "off" | "warn" | "down"; text: string; t
   min-height: 100vh;
 }
 
+/* 原型 53–56：52px 白底产品 appbar，1px 下边框。 */
 .appbar {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 0 16px;
-  height: 46px;
-  background: #16181d;
-  color: #cfd4dc;
+  gap: 10px;
+  padding: 0 18px;
+  height: 52px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
   position: sticky;
   top: 0;
   z-index: 100;
 }
 
+/* 原型 57–62：15px/700 文字 + 24px 蓝渐变 mark（圆角 7、字重 800）。 */
 .logo {
-  font-weight: 700;
-  font-size: 13.5px;
-  color: #fff;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
 }
 
 .logo .mark {
-  background: var(--blue);
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--blue), var(--blue-light));
   color: #fff;
-  border-radius: 6px;
-  width: 20px;
-  height: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .logo .sub {
-  font-weight: 400;
   font-size: 11px;
-  color: #8a919c;
+  font-weight: 500;
+  color: var(--text-faint);
   margin-left: 2px;
 }
 
+/* 原型 63–69：13px 导航；active 蓝字 + 10% 浅蓝底、无边框。 */
 .appnav {
   display: flex;
-  gap: 4px;
+  gap: 2px;
+  margin-left: 22px;
 }
 
 .nav-item {
-  font-size: 12.5px;
-  color: #aeb5c0;
+  font-size: 13px;
+  color: var(--text-dim);
   text-decoration: none;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  padding: 4px 12px;
+  padding: 5px 14px;
+  border-radius: 8px;
 }
 
 .nav-item:hover {
-  color: #e8ebef;
+  background: var(--bg-inset);
 }
 
 .nav-item.active {
-  color: #fff;
-  border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 35%, transparent);
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
+  font-weight: 600;
 }
 
+/* 原型 70–71：右侧身份区 + LAN chip（mono 10.5px 绿字浅绿底）。 */
 .who {
   margin-left: auto;
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11.5px;
-  color: #aeb5c0;
+  color: var(--text-dim);
+  font-size: 12px;
 }
 
 .lan-chip {
-  font-size: 10.5px;
   font-family: var(--mono);
-  color: #aeb5c0;
-  border: 1px solid #333a45;
-  background: rgba(255, 255, 255, 0.04);
+  font-size: 10.5px;
+  color: var(--text-dim);
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 1.5px 9px;
   text-decoration: none;
-}
-
-.lan-chip:hover {
-  color: #e8ebef;
-  border-color: #4a5563;
-}
-
-.lan-chip.down {
-  color: #ff9b9b;
-  border-color: #42302f;
-  background: rgba(214, 60, 60, 0.12);
+  white-space: nowrap;
 }
 
 .lan-chip.up {
-  color: #7ee2b8;
-  border-color: #2c3a31;
-  background: rgba(31, 157, 107, 0.12);
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  border-color: color-mix(in srgb, var(--green) 30%, transparent);
 }
 
 .lan-chip.warn {
-  color: #ffc27a;
-  border-color: #42362a;
-  background: rgba(217, 123, 28, 0.14);
+  color: var(--orange);
+  background: color-mix(in srgb, var(--orange) 10%, transparent);
+  border-color: color-mix(in srgb, var(--orange) 30%, transparent);
 }
 
+.lan-chip.down {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+  border-color: color-mix(in srgb, var(--red) 30%, transparent);
+}
+
+.lan-chip:hover {
+  filter: brightness(0.97);
+}
+
+/* 原型 74–77：22px 圆形头像；管理员固定 #212832 底。 */
 .ava {
   width: 22px;
   height: 22px;
-  border-radius: 999px;
+  border-radius: 50%;
   background: #212832;
   color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
   font-size: 11px;
+  font-weight: 600;
 }
 
 @media (max-width: 900px) {

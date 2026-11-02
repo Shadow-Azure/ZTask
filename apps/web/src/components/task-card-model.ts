@@ -1,4 +1,4 @@
-import type { Importance } from "@ztask/shared";
+import type { Importance, MemberSummary } from "@ztask/shared";
 
 /** 小任务的只读展示行。 */
 export interface TaskCardSubtask {
@@ -7,6 +7,8 @@ export interface TaskCardSubtask {
   progress: number;
   /** 负责人显示名（可选；无负责人时显示待分配）。 */
   ownerName?: string;
+  /** 负责人成员色（可选；用于头像，缺省灰色）。 */
+  ownerColor?: string;
 }
 
 /**
@@ -18,7 +20,8 @@ export interface TaskCardModel {
   description: string;
   /** 任务夹路径显示（可选）。 */
   folderName?: string;
-  owners: string[];
+  /** 负责人摘要（含成员色，用于头像组）。 */
+  owners: MemberSummary[];
   importance: Importance;
   /** YYYY-MM-DD 或 null。 */
   dueDate: string | null;
@@ -46,4 +49,16 @@ export function isOverdue(model: Pick<TaskCardModel, "dueDate" | "progress">): b
  */
 export function doneSubtaskCount(subtasks: TaskCardSubtask[]): number {
   return subtasks.filter((subtask) => subtask.progress >= 100).length;
+}
+
+/**
+ * 截止日显示（原型 fmtD）：`YYYY-MM-DD` → `M-D`（mono 列宽友好）。
+ * @param dueDate YYYY-MM-DD 或 null。
+ * @returns 短日期；null 返回 null。
+ */
+export function formatDueShort(dueDate: string | null): string | null {
+  if (dueDate === null) return null;
+  const [, month, day] = dueDate.split("-");
+  if (month === undefined || day === undefined) return dueDate;
+  return `${Number(month)}-${day}`;
 }

@@ -291,8 +291,10 @@ describe("MemberHomePage（成员个人页只读）", () => {
     expect(collabCard.exists()).toBe(true);
     expect(collabCard.text()).toContain("协作任务 · 只读");
     expect(collabCard.find(".ro-tag").text()).toBe("协作任务 · 只读");
-    expect(collabCard.text()).toContain("李雷");
-    expect(collabCard.text()).toContain("韩梅梅");
+    // D17：负责人/协作渲染为头像组（首字），完整姓名保留在头像 title 上。
+    const avaTitles = collabCard.findAll(".ava").map((item) => item.attributes("title") ?? "");
+    expect(avaTitles.some((title) => title.includes("李雷"))).toBe(true);
+    expect(avaTitles.some((title) => title.includes("韩梅梅"))).toBe(true);
     expect(collabCard.text()).toContain("（暂无进展记录）");
     // 协作卡必须零控件，不能依赖前端隐藏来兜底服务端权限。
     expect(collabCard.findAll("input")).toHaveLength(0);

@@ -14,10 +14,11 @@ const state = toastState();
 </template>
 
 <style scoped>
+/* 原型 487–489：距视口底 34px。 */
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 26px;
+  bottom: 34px;
   transform: translateX(-50%);
   z-index: 400;
   display: flex;
@@ -27,13 +28,14 @@ const state = toastState();
   pointer-events: none;
 }
 
+/* 原型 489：深底白字、r9、9px 18px 内距、0 8px 24px 阴影（R6-D1 逐值对齐）。 */
 .toast-item {
-  background: #16181d;
-  color: #e8ebef;
+  background: #212832;
+  color: #fff;
   font-size: 12.5px;
-  border-radius: 8px;
-  padding: 8px 16px;
-  box-shadow: 0 6px 24px rgba(20, 28, 44, 0.3);
+  border-radius: 9px;
+  padding: 9px 18px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
   animation: toast-in 0.2s ease;
 }
 

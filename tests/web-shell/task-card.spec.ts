@@ -9,7 +9,10 @@ function model(overrides: Partial<TaskCardModel> = {}): TaskCardModel {
     id: "t-1",
     description: "任务树组件重构",
     folderName: "2026 Q4 迭代",
-    owners: ["陈晨", "林悦"],
+    owners: [
+      { id: "m-1", name: "陈晨", role: "前端", color: "#2f6fe0" },
+      { id: "m-2", name: "林悦", role: "后端", color: "#8a55c9" },
+    ],
     importance: "high",
     dueDate: "2099-01-01",
     progress: 70,

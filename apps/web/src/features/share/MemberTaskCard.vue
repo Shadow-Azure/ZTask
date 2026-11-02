@@ -9,10 +9,12 @@ import BaseDialog from "../../components/ui/BaseDialog.vue";
 
 /**
  * 成员视图任务卡（原型 1851–1886、1892–1910，08 §6.2）：
- * - 只读形态（协作任务 / 只读跟踪）：展示重要度、任务夹路径、负责人与协作、预计完成、
- *   小任务摘要、进度与完整进展详情，不渲染任何输入控件。
- * - 可编辑形态（我负责的）：进度滑块只改本地草稿，点击「保存进度」才提交；完整详情可编辑并
- *   独立保存；小任务可新建/编辑/删除。所有写操作携带聚合 version，409 时保留草稿并提示刷新。
+ * - 只读形态（协作任务 / 只读跟踪）：展示重要度、任务夹路径（原型为无样式内联文本，D17）、
+ *   负责人与协作（头像组）、预计完成、小任务摘要、进度与完整进展详情，不渲染任何输入控件。
+ * - 可编辑形态（我负责的，D13）：左 240px 灰底进度面板（含蓝色 mono % 值）+ 右侧进展详情，
+ *   foot =「保存进度」+「✓ 已保存」瞬时反馈 + 生效时机提示；小任务可新建/编辑/删除（B-4 增强）。
+ *   进度滑块只改本地草稿，点击「保存进度」才提交；详情独立保存；所有写操作携带聚合 version，
+ *   409 时保留草稿并提示刷新。
  * 分配、重要度、预计完成、所在任务夹与主任务描述永不提供编辑入口（02 §4.2）。
  */
 const props = defineProps<{
@@ -32,8 +34,6 @@ const toast = useToast();
 const IMPORTANCE_NAMES: Record<Importance, string> = { high: "高", mid: "中", low: "低" };
 const IMPORTANCES: readonly Importance[] = ["high", "mid", "low"];
 
-const ownerNames = computed(() => props.task.owners.map((owner) => owner.name).join("、"));
-const collaboratorNames = computed(() => props.task.collaborators.map((member) => member.name).join("、"));
 const overdue = computed(() => isOverdue({ dueDate: props.task.dueDate, progress: props.task.progress }));
 const dueLabel = computed(() => {
   if (props.task.dueDate === null) return "未设置";
@@ -89,6 +89,18 @@ watch(
 const progressDirty = computed(() => progressDraft.value !== props.task.progress);
 const detailDirty = computed(() => detailDraft.value !== props.task.detail);
 
+/** 「✓ 已保存」瞬时反馈（原型 .saved 的淡入淡出，1.8s）。 */
+const savedFlash = ref(false);
+let savedTimer: ReturnType<typeof setTimeout> | undefined;
+
+function flashSaved(): void {
+  savedFlash.value = true;
+  if (savedTimer !== undefined) clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => {
+    savedFlash.value = false;
+  }, 1800);
+}
+
 watch(conflict, async (value) => {
   if (value === null) return;
   await nextTick();
@@ -141,6 +153,7 @@ const progressMutation = useMutation({
     conflict.value = null;
     progressBaseVersion.value = null;
     progressDraft.value = result.task.progress;
+    flashSaved();
     toast.show("进度已保存");
     invalidateShareTasks();
   },
@@ -157,6 +170,7 @@ const detailMutation = useMutation({
     conflict.value = null;
     detailBaseVersion.value = null;
     detailDraft.value = result.task.detail;
+    flashSaved();
     toast.show("进展详情已保存");
     invalidateShareTasks();
   },
@@ -263,14 +277,25 @@ function discardDraftsAndRefresh(): void {
     <div class="r1">
       <span class="imp-dot" :class="task.importance" aria-hidden="true" />
       <span class="desc">{{ task.description }}</span>
-      <span v-if="folderPath" class="sub-badge">📁 {{ folderPath }}</span>
+      <span v-if="folderPath" class="folder-path">📁 {{ folderPath }}</span>
       <span class="imp" :class="task.importance">重要度 · {{ IMPORTANCE_NAMES[task.importance] }}</span>
       <span v-if="readonly" class="ro-tag">协作任务 · 只读</span>
     </div>
 
     <div class="meta">
-      <span><span class="k">负责人</span>{{ ownerNames || "—" }}</span>
-      <span v-if="collaboratorNames"><span class="k">协作</span>{{ collaboratorNames }}</span>
+      <span>
+        <span class="k">负责人</span>
+        <span class="ava-group">
+          <span v-for="owner in task.owners" :key="owner.id" class="ava" :style="{ background: owner.color }" :title="`${owner.name} · ${owner.role}`">{{ owner.name.slice(0, 1) }}</span>
+        </span>
+        <span v-if="task.owners.length === 0">—</span>
+      </span>
+      <span v-if="task.collaborators.length">
+        <span class="k">协作</span>
+        <span class="ava-group">
+          <span v-for="member in task.collaborators" :key="member.id" class="ava" :style="{ background: member.color }" :title="`${member.name} · ${member.role}`">{{ member.name.slice(0, 1) }}</span>
+        </span>
+      </span>
       <span>
         <span class="k">预计完成</span>
         <span class="due" :class="{ overdue }">{{ dueLabel }}</span>
@@ -297,52 +322,53 @@ function discardDraftsAndRefresh(): void {
         <button class="mini-btn" type="button" @click="discardDraftsAndRefresh">放弃草稿并刷新</button>
       </p>
 
+      <!-- D13（原型 1867–1885）：左 240px 灰底进度面板（含蓝色 mono % 值）+ 右进展详情。 -->
       <div class="edit-row">
-        <div class="edit-progress">
-          <label class="edit-label" :for="`progress-${task.id}`">进度 {{ progressDraft }}%</label>
-          <div class="progress-control">
-            <input
-              :id="`progress-${task.id}`"
-              v-model.number="progressDraft"
-              type="range"
-              min="0"
-              max="100"
-              step="5"
-              @input="onProgressInput"
-            >
-            <button
-              class="btn primary"
-              type="button"
-              :disabled="!progressDirty || progressMutation.isPending.value"
-              @click="progressMutation.mutate()"
-            >
-              {{ progressMutation.isPending.value ? "保存中…" : "保存进度" }}
-            </button>
-          </div>
+        <div class="pedit">
+          <label class="plabel" :for="`progress-${task.id}`">进度</label>
+          <input
+            :id="`progress-${task.id}`"
+            v-model.number="progressDraft"
+            type="range"
+            min="0"
+            max="100"
+            step="5"
+            @input="onProgressInput"
+          >
+          <span class="pv">{{ progressDraft }}%</span>
         </div>
-
-        <div class="edit-detail">
-          <label class="edit-label" :for="`detail-${task.id}`">完整进展详情</label>
+        <div class="detail-col">
           <textarea
             :id="`detail-${task.id}`"
             v-model="detailDraft"
             class="detail-input"
-            :aria-describedby="`detail-hint-${task.id}`"
+            :aria-label="`进展详情：${task.description}`"
             placeholder="记录当前进展、阻塞点、下一步计划…（保存会追加一份新的完整快照）"
             @input="onDetailInput"
           />
-          <div class="detail-foot">
-            <span :id="`detail-hint-${task.id}`" class="edit-hint">历史 revision 不可修改；保存会追加一份完整快照。</span>
-            <button
-              class="btn primary"
-              type="button"
-              :disabled="!detailDirty || detailMutation.isPending.value"
-              @click="detailMutation.mutate()"
-            >
-              {{ detailMutation.isPending.value ? "保存中…" : "保存详情" }}
-            </button>
-          </div>
         </div>
+      </div>
+
+      <!-- D13（原型 1881–1885）：foot = 保存按钮 + 「✓ 已保存」瞬时反馈 + 生效时机提示。 -->
+      <div class="foot">
+        <button
+          class="btn primary"
+          type="button"
+          :disabled="!progressDirty || progressMutation.isPending.value"
+          @click="progressMutation.mutate()"
+        >
+          {{ progressMutation.isPending.value ? "保存中…" : "保存进度" }}
+        </button>
+        <button
+          class="btn ghost"
+          type="button"
+          :disabled="!detailDirty || detailMutation.isPending.value"
+          @click="detailMutation.mutate()"
+        >
+          {{ detailMutation.isPending.value ? "保存中…" : "保存详情" }}
+        </button>
+        <span class="saved" :class="{ show: savedFlash }">✓ 已保存</span>
+        <span class="foot-hint">进度调整需点击「保存进度」后生效；详情保存会追加一份完整快照</span>
       </div>
 
       <div class="sub-edit-area">
@@ -461,19 +487,9 @@ function discardDraftsAndRefresh(): void {
   background: #8a93a1;
 }
 
-.sub-badge {
+/* D17（原型 1855）：路径为无样式内联文本，不做 chip。 */
+.folder-path {
   flex: none;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--text-faint);
-  background: var(--bg-inset);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 1px 8px;
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .imp {
@@ -524,6 +540,28 @@ function discardDraftsAndRefresh(): void {
   margin-right: 3px;
 }
 
+/* D17（原型 79–80/1860–1861）：负责人/协作 = 头像组，18px、-6px 叠放、2px 白描边。 */
+.ava-group {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.meta .ava {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 600;
+}
+
+.ava-group .ava + .ava {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
 .due {
   font-family: var(--mono);
   font-size: 11.5px;
@@ -566,8 +604,10 @@ function discardDraftsAndRefresh(): void {
   flex: none;
 }
 
+/* R8-D2（原型 405–406）：原型 .sd 自然宽，百分比紧跟描述右侧（gap 7px）而非被推到行尾；
+ * 行尾对齐交给下方 .sub-actions 的 margin-left:auto（可编辑卡的增能按钮），长描述仍可收缩换行。 */
 .sub-ro li .sd {
-  flex: 1;
+  flex: 0 1 auto;
   min-width: 0;
   word-break: break-word;
 }
@@ -581,6 +621,7 @@ function discardDraftsAndRefresh(): void {
   display: inline-flex;
   gap: 6px;
   flex: none;
+  margin-left: auto;
 }
 
 .mini-btn {
@@ -606,7 +647,7 @@ function discardDraftsAndRefresh(): void {
 
 .read-row {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  grid-template-columns: 240px 1fr;
   gap: 14px;
   align-items: start;
   margin-top: 10px;
@@ -693,6 +734,7 @@ function discardDraftsAndRefresh(): void {
   border-radius: 8px;
 }
 
+/* D13（原型 396）：编辑行 = 240px 进度面板 + 1fr 详情。 */
 .edit-row {
   display: grid;
   grid-template-columns: 240px 1fr;
@@ -701,32 +743,41 @@ function discardDraftsAndRefresh(): void {
   margin-top: 10px;
 }
 
-.edit-progress,
-.edit-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.edit-label {
-  font-size: 11px;
-  color: var(--text-faint);
-}
-
-.progress-control {
+/* 原型 397：灰底圆角进度面板。 */
+.pedit {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
   background: var(--bg-inset);
   border-radius: 9px;
-  padding: 7px 10px;
+  padding: 9px 12px;
 }
 
-.progress-control input[type="range"] {
+.plabel {
+  font-size: 11px;
+  color: var(--text-faint);
+  flex: none;
+}
+
+.pedit input[type="range"] {
   flex: 1;
-  min-width: 60px;
+  min-width: 0;
   accent-color: var(--blue);
+}
+
+/* 原型 399：蓝色 mono 百分比值。 */
+.pv {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--blue);
+  width: 40px;
+  text-align: right;
+  flex: none;
+}
+
+.detail-col {
+  min-width: 0;
 }
 
 .detail-input {
@@ -738,23 +789,41 @@ function discardDraftsAndRefresh(): void {
   line-height: 1.7;
   color: var(--text);
   background: var(--bg-inset);
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   border-radius: 9px;
   padding: 8px 10px;
   box-sizing: border-box;
 }
 
 .detail-input:focus {
-  outline: 2px solid color-mix(in srgb, var(--blue) 35%, transparent);
+  outline: none;
   border-color: var(--blue);
+  background: var(--bg-card);
 }
 
-.detail-foot {
+/* 原型 414–415：foot = 保存按钮 + 淡入淡出的「✓ 已保存」+ 提示行。 */
+.foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
+  margin-top: 10px;
   flex-wrap: wrap;
+}
+
+.saved {
+  font-size: 11px;
+  color: var(--green);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.saved.show {
+  opacity: 1;
+}
+
+.foot-hint {
+  font-size: 11px;
+  color: var(--text-faint);
 }
 
 .edit-hint {

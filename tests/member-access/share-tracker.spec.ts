@@ -251,10 +251,11 @@ describe("成员只读事项跟踪（/s/tracker）", () => {
     const { wrapper } = await mountTracker();
 
     await vi.waitFor(() => {
-      expect(wrapper.find(".empty-state").exists()).toBe(true);
+      expect(wrapper.find(".empty-tip").exists()).toBe(true);
     });
-    const empty = wrapper.find(".empty-state");
-    expect(empty.text()).toContain("暂无相关任务");
+    const empty = wrapper.find(".empty-tip");
+    // D18（原型 1196）：空态为纯文本行，成员端说明只读范围。
+    expect(empty.text()).toContain("没有与你相关的任务");
     expect(empty.text()).toContain("成员视图为只读");
     expect(empty.text()).not.toContain("新建任务");
     expectNoAdminRequest();

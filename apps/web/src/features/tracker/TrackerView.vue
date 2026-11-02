@@ -2,7 +2,7 @@
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
-import type { AdminMember, Task } from "@ztask/shared";
+import type { AdminMember, FolderTreeNode, Task } from "@ztask/shared";
 import type { TaskCardModel } from "../../components/task-card-model";
 import { adminApi, adminTaskApi } from "../../api/admin";
 import { shareApi } from "../../api/share";
@@ -12,7 +12,6 @@ import TaskDetailDialog from "./TaskDetailDialog.vue";
 import FolderTree from "../folders/FolderTree.vue";
 import DashboardPanel from "../dashboard/DashboardPanel.vue";
 import PaneResizer from "../../components/ui/PaneResizer.vue";
-import EmptyState from "../../components/ui/EmptyState.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
 import { isShareUnauthorized, useShareSession } from "../share/useShareSession";
@@ -23,7 +22,9 @@ import { readPreference, writePreference } from "../../lib/preferences";
  * 查询参数驱动服务端筛选（folder 深链、importance/q 服务端查询），统一只读任务卡。
  * 管理端经 TaskEditorDialog 编辑；成员域（scope=share）只发 `GET /share/**`（05 §6.4–6.5/§6.11），
  * 不注册任何编辑 mutation，点击卡片打开只读 TaskDetailDialog。
- * 看板（情况看板 tab）由 DashboardPanel 复用同一组统计 DTO；历史 diff 仍属后续 issue。
+ * 面板头对齐原型 607–617：crumb 一行（路径 + N 个任务计数 + scope-hint 右对齐）、tabs 另起一行（D7）；
+ * 管理端无 folder query 时默认选中首个根夹（原型 993，D8）；列表/树空态为原型式纯文本（D18）。
+ * 看板（情况看板 tab）由 DashboardPanel 复用同一组统计 DTO。
  */
 const props = defineProps<{ access?: "admin" | "readonly"; scope?: "admin" | "share" }>();
 
@@ -45,7 +46,7 @@ watch(treeWidth, (value) => {
 
 const activeTab = computed<"tasks" | "dash">(() => (route.query.tab === "dash" ? "dash" : "tasks"));
 const selectedFolderId = computed(() => (typeof route.query.folder === "string" && route.query.folder ? route.query.folder : null));
-/** 成员域未选任务夹时展示「全部任务夹」的相关任务；管理端仍需先选夹（08 §2.1）。 */
+/** 成员域未选任务夹时展示「全部任务夹」的相关任务；管理端由 D8 默认选首个根夹。 */
 const canLoadTasks = computed(() => isShareScope.value || selectedFolderId.value !== null);
 
 function switchTab(tab: "tasks" | "dash"): void {
@@ -140,15 +141,31 @@ const activeMembers = computed<AdminMember[]>(() =>
   (membersQuery.data.value?.items ?? []).filter((member) => member.archivedAt === null),
 );
 
+const folderTree = computed<FolderTreeNode[]>(() => foldersQuery.data.value?.tree ?? []);
+
 const folderNameById = computed(() => {
   const map = new Map<string, string>();
-  const walk = (nodes: { id: string; name: string; children: unknown[] }[]): void => {
+  const walk = (nodes: FolderTreeNode[]): void => {
     for (const node of nodes) {
       map.set(node.id, node.name);
-      walk((node.children as { id: string; name: string; children: unknown[] }[]) ?? []);
+      walk(node.children ?? []);
     }
   };
-  walk(foldersQuery.data.value?.tree ?? []);
+  walk(folderTree.value);
+  return map;
+});
+
+/** 任务夹完整路径（「2026 Q4 迭代 / 客户端重构」），供编辑浮窗头部展示（原型 704–708）。 */
+const folderPathById = computed(() => {
+  const map = new Map<string, string>();
+  const walk = (nodes: FolderTreeNode[], trail: string[]): void => {
+    for (const node of nodes) {
+      const path = [...trail, node.name];
+      map.set(node.id, path.join(" / "));
+      walk(node.children ?? [], path);
+    }
+  };
+  walk(folderTree.value, []);
   return map;
 });
 
@@ -160,6 +177,14 @@ watch([() => foldersQuery.data.value, selectedFolderId], ([tree]) => {
   const query = { ...route.query };
   delete query.folder;
   void router.replace({ query });
+});
+
+// D8（原型 993 `selFolder = 'f1'`）：管理端无 folder query 时默认选中首个根夹；
+// 树为空（空库）或成员域不适用，保留引导空态。
+watch(folderTree, (tree) => {
+  if (!isAdmin.value || tree.length === 0) return;
+  if (selectedFolderId.value !== null || route.query.folder !== undefined) return;
+  void router.replace({ query: { ...route.query, folder: tree[0]!.id } });
 });
 
 const taskItems = computed(() => accumulated.value);
@@ -174,22 +199,20 @@ const showLoadMoreError = computed(
   () => isShareScope.value && pageCursor.value !== null && tasksQuery.isError.value && !taskErrorIsAuth.value,
 );
 
-const emptyTitle = computed(() => {
-  if (debouncedQ.value) return "没有匹配的任务";
-  return isShareScope.value ? "暂无相关任务" : "暂无任务";
-});
-/** 只读空态不提示新建任务（02 §5）：成员域说明范围而不是给写入口。 */
-const emptyHint = computed(() => {
-  if (debouncedQ.value) return "调整搜索关键词或筛选条件";
-  return isShareScope.value ? "当前范围内没有与你相关的任务；成员视图为只读。" : "点击「＋ 新建任务」创建第一个任务";
+/** D18（原型 1196）：列表空态为纯文本行，管理端提示新建，成员端说明只读范围。 */
+const emptyTip = computed(() => {
+  if (isShareScope.value) return "当前范围内没有与你相关的任务；成员视图为只读。";
+  return "当前条件下没有任务。点击工具栏「＋ 新建任务」创建第一条任务。";
 });
 
 function toCardModel(task: Task): TaskCardModel {
   return {
     id: task.id,
     description: task.description,
-    folderName: folderNameById.value.get(task.folderId),
-    owners: task.owners.map((owner) => owner.name),
+    // R3-D2（原型 1201 `from !== selName ? from : null`）：直选夹即任务直属夹时不渲染来源夹标签，
+    // 只有跨夹（父夹含子夹任务）时才标注来源。
+    folderName: task.folderId === selectedFolderId.value ? undefined : folderNameById.value.get(task.folderId),
+    owners: task.owners,
     importance: task.importance,
     dueDate: task.dueDate,
     progress: task.progress,
@@ -199,6 +222,7 @@ function toCardModel(task: Task): TaskCardModel {
       description: sub.description,
       progress: sub.progress,
       ownerName: sub.owner?.name,
+      ownerColor: sub.owner?.color,
     })),
   };
 }
@@ -229,6 +253,30 @@ function openEditorById(taskId: string): void {
   if (!isAdmin.value) return;
   const task = accumulated.value.find((item) => item.id === taskId);
   if (task) openEditor(task);
+}
+
+/**
+ * 树内任务行点击（原型 1074–1076）：打开编辑浮窗；树 DTO 只有轻量字段，
+ * 不在当前列表（如未选其所在夹）时按 id 拉取完整聚合再开（D2）。
+ */
+async function openTreeTask(taskId: string): Promise<void> {
+  if (!isAdmin.value) {
+    openTaskDetail(taskId);
+    return;
+  }
+  const local = accumulated.value.find((item) => item.id === taskId);
+  if (local) {
+    openEditor(local);
+    return;
+  }
+  try {
+    const detail = await adminTaskApi.get(taskId);
+    // 树只列主任务；若 id 命中小任务（数据竞争），退回其父任务。
+    const task = "task" in detail ? detail.parent : detail;
+    openEditor(task);
+  } catch {
+    // 拉取失败（已删除/网络）不打断浏览：左侧列表仍是事实来源。
+  }
 }
 
 /** 只读详情：成员点击任务卡，不创建编辑草稿（08 §6.3）。 */
@@ -290,6 +338,26 @@ function onTreeDrag(clientX: number): void {
   const left = treeSide.value?.getBoundingClientRect().left ?? 0;
   treeWidth.value = Math.min(480, Math.max(220, clientX - left));
 }
+
+/**
+ * 树头「＋ 新建任务夹」：原型 1127–1128 点击后把行内输入挂到当前选中夹的子层
+ * （`folderInputParent = selFolder`），按钮本身保留；行内输入由 FolderTree/FolderTreeNode 渲染。
+ * 选中夹不在可见树里（URL 残留旧 id / 树仍在加载）时退化为树根行，避免入口点了没反应。
+ */
+const creatingFolder = ref(false);
+const creatingFolderParent = ref<string | null>(null);
+
+function startCreateFolder(): void {
+  if (!isAdmin.value) return;
+  const folderId = selectedFolderId.value;
+  creatingFolderParent.value = folderId !== null && folderNameById.value.has(folderId) ? folderId : null;
+  creatingFolder.value = true;
+}
+
+function closeCreateFolder(): void {
+  creatingFolder.value = false;
+  creatingFolderParent.value = null;
+}
 </script>
 
 <template>
@@ -297,9 +365,17 @@ function onTreeDrag(clientX: number): void {
     <aside ref="treeSide" class="tree-side" :style="{ width: `${treeWidth}px` }">
       <div class="tree-head">
         <h2>任务夹</h2>
+        <!-- D19（原型 599–602）：新建入口在树头标题右侧；点击后行内输入落在选中夹子层（原型 1120–1128）。 -->
+        <button v-if="isAdmin" class="tree-create-btn" type="button" @click="startCreateFolder">＋ 新建任务夹</button>
       </div>
       <div class="tree-body">
-        <FolderTree :can-edit="isAdmin" :scope="scopePrefix" />
+        <FolderTree
+          :scope="scopePrefix"
+          :creating="creatingFolder"
+          :create-parent-id="creatingFolderParent"
+          @open-task="openTreeTask"
+          @close-create="closeCreateFolder"
+        />
       </div>
     </aside>
 
@@ -308,6 +384,7 @@ function onTreeDrag(clientX: number): void {
       label="调整任务树宽度"
       :min="220"
       :max="480"
+      :step="16"
       class="tree-resizer"
       @drag="onTreeDrag"
     />
@@ -316,6 +393,7 @@ function onTreeDrag(clientX: number): void {
       <div class="board-head">
         <div class="crumb">
           <span class="path">{{ selectedFolderId ? folderNameById.get(selectedFolderId) ?? "选中任务夹" : "全部任务夹" }}</span>
+          <span v-if="canLoadTasks" class="cnt">{{ taskItems.length }} 个任务</span>
           <span class="scope-hint">包含子任务夹中的全部任务</span>
         </div>
         <div class="tabs" role="tablist" aria-label="事项跟踪视图">
@@ -347,14 +425,13 @@ function onTreeDrag(clientX: number): void {
           retryable
           @retry="tasksQuery.refetch()"
         />
-        <EmptyState v-else-if="!canLoadTasks" title="先选择任务夹" hint="在左侧任务夹树中选择一个任务夹以查看任务" />
+        <div v-else-if="!canLoadTasks" class="empty-tip">在左侧任务夹树中选择一个任务夹以查看任务。</div>
         <div v-else class="task-list">
           <TaskCard v-for="task in taskItems" :key="task.id" :task="toCardModel(task)" @open="onTaskOpen" />
-          <EmptyState
+          <div
             v-if="taskItems.length === 0 && !tasksQuery.isFetching.value"
-            :title="emptyTitle"
-            :hint="emptyHint"
-          />
+            class="empty-tip"
+          >{{ emptyTip }}</div>
           <button
             v-if="showLoadMore"
             class="btn load-more"
@@ -383,6 +460,8 @@ function onTreeDrag(clientX: number): void {
       :folder-id="selectedFolderId"
       :task="editorTask"
       :members="activeMembers"
+      :folders="folderTree"
+      :folder-path="editorTask ? folderPathById.get(editorTask.folderId) : undefined"
       @close="editorOpen = false"
       @saved="onSaved"
     />
@@ -397,10 +476,11 @@ function onTreeDrag(clientX: number): void {
 </template>
 
 <style scoped>
+/* 原型 136：tracker 高度扣除 52px appbar。 */
 .tracker {
   display: flex;
   align-items: stretch;
-  height: calc(100vh - 46px);
+  height: calc(100vh - 52px);
   overflow: hidden;
 }
 
@@ -409,26 +489,44 @@ function onTreeDrag(clientX: number): void {
   display: flex;
   flex-direction: column;
   background: var(--bg-panel);
-  border-right: 1px solid var(--border);
   min-width: 220px;
   max-width: 480px;
 }
 
+/* 原型 144–147：标题行右侧「＋ 新建任务夹」，无下边框。 */
 .tree-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: 6px;
+  padding: 12px 14px 8px;
 }
 
 .tree-head h2 {
-  font-size: 12.5px;
-  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* 原型 146–147/599–602：11.5px 蓝字、无边框、hover 浅蓝底（新建行已移入树内，按钮常驻）。 */
+.tree-create-btn {
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--blue);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+
+.tree-create-btn:hover {
+  background: color-mix(in srgb, var(--blue) 10%, transparent);
 }
 
 .tree-body {
-  padding: 10px 12px;
+  padding: 2px 8px 14px;
   overflow: auto;
   flex: 1;
 }
@@ -445,66 +543,88 @@ function onTreeDrag(clientX: number): void {
   min-width: 0;
 }
 
+/* 原型 177：白底头部、12/20/0 内距、1px 下边框。 */
 .board-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
+  padding: 12px 20px 0;
+  background: var(--bg-card);
   border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
 }
 
+/* 原型 178–181：crumb 一行；计数 mono；scope-hint 右对齐。 */
 .crumb {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
+  margin-bottom: 10px;
   min-width: 0;
 }
 
 .path {
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cnt {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  flex: none;
 }
 
 .scope-hint {
-  font-size: 10.5px;
+  margin-left: auto;
+  font-size: 11px;
   color: var(--text-faint);
+  flex: none;
 }
 
+/* 原型 182–188：tabs 在 crumb 下一行，13px、7/16/9 内距、active 650。 */
 .tabs {
   display: flex;
-  gap: 2px;
+  gap: 4px;
 }
 
 .tabs button {
   border: none;
   background: transparent;
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text-dim);
-  padding: 5px 14px;
+  padding: 7px 16px 9px;
   cursor: pointer;
   border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tabs button:hover {
+  color: var(--text);
 }
 
 .tabs button.active {
   color: var(--blue);
+  font-weight: 650;
   border-bottom-color: var(--blue);
-  font-weight: 600;
 }
 
+/* 原型 189：16/20/40 内距。 */
 .board-body {
-  padding: 12px 16px;
+  padding: 16px 20px 40px;
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
+/* 原型 192：工具栏 12px 下距、8px 间距、可换行。 */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
 }
 
 .toolbar .spacer {
@@ -516,31 +636,43 @@ function onTreeDrag(clientX: number): void {
   color: var(--text-faint);
 }
 
+/* 原型 199–201：11.5px 胶囊筛选。 */
 .fchip {
   font-size: 11.5px;
   color: var(--text-dim);
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 3px 12px;
+  padding: 2px 11px;
   cursor: pointer;
+}
+
+.fchip:hover {
+  border-color: var(--border-strong);
 }
 
 .fchip.active {
   color: var(--blue);
   border-color: var(--blue);
-  background: color-mix(in srgb, var(--blue) 8%, var(--bg-card));
+  background: color-mix(in srgb, var(--blue) 9%, transparent);
+  font-weight: 600;
 }
 
+/* 原型 202：170px 宽搜索框。 */
 .search-box {
   font: inherit;
   font-size: 12px;
   border: 1px solid var(--border);
-  border-radius: 7px;
-  padding: 4px 10px;
-  width: 180px;
+  border-radius: 8px;
+  padding: 5px 10px;
+  width: 170px;
   background: var(--bg-card);
   color: var(--text);
+  outline: none;
+}
+
+.search-box:focus {
+  border-color: var(--blue);
 }
 
 .ro-tag {
@@ -551,18 +683,22 @@ function onTreeDrag(clientX: number): void {
   padding: 3px 10px;
 }
 
+/* 原型 257：键位提示行。 */
 .hint-line {
   font-size: 11px;
   color: var(--text-faint);
+  margin: 10px 2px 0;
 }
 
+/* 原型 193–195：主按钮 12.5px/600、radius 8、6/14 内距。 */
 .btn {
   font: inherit;
-  font-size: 12px;
-  border-radius: 7px;
-  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 6px 14px;
   cursor: pointer;
-  border: 1px solid var(--border);
+  border: 1px solid transparent;
   background: var(--bg-card);
   color: var(--text);
 }
@@ -573,9 +709,19 @@ function onTreeDrag(clientX: number): void {
   color: #fff;
 }
 
+.btn.primary:hover {
+  background: #2a63c8;
+}
+
 .btn:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+/* 原型 205：任务列表 14px 间距。 */
+.task-list {
+  display: grid;
+  gap: 14px;
 }
 
 .load-more {
@@ -590,6 +736,12 @@ function onTreeDrag(clientX: number): void {
   gap: 10px;
   font-size: 12px;
   color: var(--red);
+}
+
+/* D18（原型 1196）：空态纯文本行。原型 .empty-tip 无任何 CSS 规则（1057/1196 行仅使用），
+ * 即继承正文 13px/--text；web 早前的 12px 灰字属弱化，回归普通正文行（R3-D1，仅保留内距）。 */
+.empty-tip {
+  padding: 16px 4px;
 }
 
 @media (max-width: 900px) {

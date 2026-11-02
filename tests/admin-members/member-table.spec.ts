@@ -89,7 +89,8 @@ describe("MemberTable（features/members，原型 mem-table）", () => {
   it("添加成员：打开浮窗 → 校验空姓名靠近字段报错 → 填写后发送 POST", async () => {
     mockFetch();
     const wrapper = await mountTable();
-    await wrapper.find(".btn.primary").trigger("click");
+    // D9：「＋ 添加成员」入口由 MembersPage 标题行承载，表格组件经 defineExpose 暴露打开方法。
+    (wrapper.vm as unknown as { openCreate: () => void }).openCreate();
     await nextTick();
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
     expect(dialog).toBeTruthy();
@@ -116,10 +117,10 @@ describe("MemberTable（features/members，原型 mem-table）", () => {
   it("归档：确认弹窗含影响说明，确认后发送 DELETE", async () => {
     mockFetch();
     const wrapper = await mountTable();
-    await wrapper.findAll(".link-btn.danger")[0]!.trigger("click");
+    await wrapper.findAll(".mini-btn.red")[0]!.trigger("click");
     await nextTick();
     const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
-    expect(dialog.textContent).toContain("无法访问");
+    expect(dialog.textContent).toContain("立即失效");
     expect(dialog.textContent).toContain("待分配");
 
     (dialog.querySelector(".btn.danger-btn") as HTMLButtonElement).click();

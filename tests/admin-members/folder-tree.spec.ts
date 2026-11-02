@@ -45,9 +45,12 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-async function mountTree(canEdit: boolean) {
+async function mountTree(
+  canEdit: boolean,
+  extra: { creating?: boolean; createParentId?: string | null } = {},
+) {
   const wrapper = mount(FolderTree, {
-    props: { canEdit },
+    props: { canEdit, ...extra },
     global: { plugins: [createAppRouter(), [VueQueryPlugin, { queryClient: createAppQueryClient() }]] },
     attachTo: document.body,
   });
@@ -60,27 +63,25 @@ async function mountTree(canEdit: boolean) {
 }
 
 describe("FolderTree（features/folders）", () => {
-  it("渲染服务端树与任务计数；管理员可见新建入口", async () => {
+  it("渲染服务端树与任务计数（新建入口由树头 TrackerView 承载）", async () => {
     mockFetch();
     const wrapper = await mountTree(true);
     expect(wrapper.text()).toContain("客户增量构");
     expect(wrapper.text()).toContain("数据平台");
-    expect(wrapper.text()).toContain("0/1");
-    expect(wrapper.text()).toContain("＋ 新建任务夹");
+    expect(wrapper.text()).toContain("✓0○1");
     wrapper.unmount();
   });
 
-  it("非管理员不渲染新建入口", async () => {
-    mockFetch();
-    const wrapper = await mountTree(false);
-    expect(wrapper.text()).not.toContain("＋ 新建任务夹");
-    wrapper.unmount();
-  });
-
-  it("创建任务夹发送 POST（parentId 取当前选中/根）并失效树查询", async () => {
+  it("未处于新建态时不渲染树内新建行", async () => {
     mockFetch();
     const wrapper = await mountTree(true);
-    await wrapper.find(".create-btn").trigger("click");
+    expect(wrapper.find(".create-input").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("处于新建态时渲染树根新建行并发送 POST（parentId=null）", async () => {
+    mockFetch();
+    const wrapper = await mountTree(true, { creating: true, createParentId: null });
     await wrapper.find(".create-input").setValue("新夹");
     await wrapper.find(".create-input").trigger("keydown", { key: "Enter" });
     await new Promise((resolve) => setTimeout(resolve, 5));

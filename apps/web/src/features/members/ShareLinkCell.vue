@@ -9,7 +9,8 @@ import BaseDialog from "../../components/ui/BaseDialog.vue";
 /**
  * 成员分享链接单元格（08 §5，原型 .link-cell/.link-box，ztask-prototype.html:1786–1794）：
  * 只渲染脱敏状态（member.shareLink）；raw URL 只在本次生成/重置后交给表格下方的
- * 受控结果区展示，刷新后不伪称能复制旧链接，而提示「重新生成以复制」。
+ * 受控结果区展示，刷新后不伪称能复制旧链接，而提示「重置后可复制」（D10 折中：
+ * 行内保留原型式「复制」入口，但只在受控结果区持有本成员新链接时可用）。
  * 重置/吊销复用统一确认 Dialog；LAN 未开启时先引导网络面板，再调生成端点。
  */
 const props = defineProps<{
@@ -24,6 +25,8 @@ const emit = defineEmits<{
   issued: [payload: { member: AdminMember; url: string }];
   /** 吊销成功：清掉该成员可能残留的旧 URL 结果区。 */
   cleared: [memberId: string];
+  /** 点击行内「复制」：由父级复制受控结果区的 URL（URL 不随列表渲染进 DOM）。 */
+  "copy-issued": [];
   /** LAN 未开启：父级聚焦/滚动到局域网分享面板。 */
   "needs-network": [];
 }>();
@@ -188,7 +191,14 @@ function generate(): void {
     <template v-else-if="state.status === 'active'">
       <span class="link-state">已生成</span>
       <span class="link-meta">{{ lastUsedText }}</span>
-      <span v-if="issuedMemberId !== member.id" class="link-meta faint">重新生成以复制</span>
+      <!-- 原型 1788：行内「复制」；完整 URL 不常驻 DOM，仅在受控结果区持有新链接时可点（D10）。 -->
+      <button
+        class="mini-btn blue"
+        type="button"
+        :disabled="issuedMemberId !== member.id"
+        :title="issuedMemberId === member.id ? '复制本次生成的完整链接' : '完整链接不常驻页面；生成或重置后即可在此复制'"
+        @click="emit('copy-issued')"
+      >复制</button>
       <button class="mini-btn" type="button" :disabled="busy" @click="confirmRotateOpen = true">重置</button>
       <button class="mini-btn red" type="button" :disabled="busy" @click="confirmRevokeOpen = true">吊销</button>
     </template>
@@ -261,11 +271,6 @@ function generate(): void {
   white-space: nowrap;
 }
 
-.link-meta.faint {
-  color: var(--text-faint);
-  font-family: inherit;
-}
-
 .link-none {
   font-size: 11.5px;
   color: var(--text-faint);
@@ -292,7 +297,10 @@ function generate(): void {
   border-color: color-mix(in srgb, var(--blue) 45%, transparent);
 }
 
+/* 原型 372：蓝色变体 hover 只换底色、文字保持蓝；本组件因 :not(:disabled) 使
+ * hover 规则特异性高于 .mini-btn.blue，需在变体 hover 里把 color 再声明一次（R7-D2）。 */
 .mini-btn.blue:hover:not(:disabled) {
+  color: var(--blue);
   background: color-mix(in srgb, var(--blue) 8%, transparent);
 }
 
@@ -301,7 +309,9 @@ function generate(): void {
   border-color: color-mix(in srgb, var(--red) 40%, transparent);
 }
 
+/* 原型 374：红色变体 hover 同理保持红字（R7-D2）。 */
 .mini-btn.red:hover:not(:disabled) {
+  color: var(--red);
   background: color-mix(in srgb, var(--red) 7%, transparent);
 }
 

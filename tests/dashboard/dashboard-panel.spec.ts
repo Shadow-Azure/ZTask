@@ -128,7 +128,7 @@ describe("情况看板（05 §5.1–5.2）", () => {
     wrapper.unmount();
   });
 
-  it("点击卡片展开分布：请求 bucket 并渲染 4 个桶与堆叠柱", async () => {
+  it("点击卡片展开分布：请求 bucket 并渲染 5 个桶与堆叠柱", async () => {
     const wrapper = await mountPanel({ access: "admin", folderId: "f-root" });
     await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
 
@@ -139,13 +139,14 @@ describe("情况看板（05 §5.1–5.2）", () => {
     expect(dueCall?.query).toContain("bucket=gt50");
     expect(dueCall?.query).toContain("folderId=f-root");
 
-    expect(wrapper.findAll(".chart-col")).toHaveLength(5);
-    expect(wrapper.find(".chart").text()).toContain("已逾期");
-    expect(wrapper.find(".chart").text()).toContain("一周内");
-    expect(wrapper.find(".chart").text()).toContain("一月内");
-    expect(wrapper.find(".chart").text()).toContain("一月后");
-    expect(wrapper.find(".chart").text()).toContain("未排期");
-    expect(wrapper.findAll(".chart-bar .seg.high").length).toBeGreaterThan(0);
+    expect(wrapper.findAll(".bargroup")).toHaveLength(5);
+    const axis = wrapper.find(".chart-x").text();
+    expect(axis).toContain("已逾期");
+    expect(axis).toContain("一周内");
+    expect(axis).toContain("一月内");
+    expect(axis).toContain("一月后");
+    expect(axis).toContain("未排期");
+    expect(wrapper.findAll(".bar-stack .bar-seg.high").length).toBeGreaterThan(0);
 
     // 再点一次收起。
     await wrapper.findAll(".stat-card")[1]!.trigger("click");

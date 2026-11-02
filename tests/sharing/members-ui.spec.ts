@@ -293,7 +293,8 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     expect(active).toMatch(/最近使用 \d{2}-\d{2} \d{2}:\d{2}/);
     expect(active).toContain("重置");
     expect(active).toContain("吊销");
-    expect(active).toContain("重新生成以复制");
+    // D10 裁决后的形态：完整链接不常驻 DOM，行内「复制」入口常驻（仅在本次会话生成后可点）。
+    expect(active).toContain("复制");
     expect(active).not.toContain("未生成");
 
     expect(rows[1]!.text()).toContain("尚未使用");
@@ -341,7 +342,10 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     await vi.waitFor(() => expect(second.wrapper.text()).toContain("已生成"));
     expect(second.wrapper.find(".link-result").exists()).toBe(false);
     expect(second.wrapper.find(".link-copy").exists()).toBe(false);
-    expect(second.wrapper.text()).toContain("重新生成以复制");
+    // D10 裁决后：刷新后行内「复制」仍在但不可点（完整链接不常驻 DOM）。
+    const reissueCopies = second.wrapper.findAll("button").filter((item) => item.text() === "复制");
+    expect(reissueCopies.length).toBeGreaterThan(0);
+    for (const copyBtn of reissueCopies) expect(copyBtn.attributes("disabled")).toBeDefined();
     expect(second.wrapper.text()).not.toContain(issuedUrl);
     second.wrapper.unmount();
   });
@@ -447,26 +451,30 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     wrapper.unmount();
   });
 
-  it("受控结果区按成员对齐：给 B 生成后，A 行回到「重新生成以复制」", async () => {
+  it("受控结果区按成员对齐：给 B 生成后，A 行复制禁用、B 行复制可用", async () => {
     members = [makeMember("m-a", "陈晨"), makeMember("m-b", "林悦")];
     lanRunning();
     const { wrapper } = await mountApp();
     await vi.waitFor(() => expect(wrapper.text()).toContain("陈晨"));
 
+    const copyButton = (row: DOMWrapper<Element>) =>
+      row.findAll("button").find((item) => item.text() === "复制");
+
     await button(wrapper, "生成链接").trigger("click");
     await vi.waitFor(() => expect(wrapper.find(".link-result").text()).toContain("陈晨"));
 
-    // A 已有结果区，所以 A 行不重复提示；B 仍是未生成。
+    // D10：结果区属于 A，A 行的复制可点；B 仍是未生成。
     let rows = wrapper.findAll("tbody tr");
-    expect(rows[0]!.text()).not.toContain("重新生成以复制");
+    expect(copyButton(rows[0]!)?.attributes("disabled")).toBeUndefined();
     expect(rows[1]!.text()).toContain("生成链接");
 
     await button(wrapper, "生成链接").trigger("click");
     await vi.waitFor(() => expect(wrapper.find(".link-result").text()).toContain("林悦"));
 
     rows = wrapper.findAll("tbody tr");
-    // 结果区现在展示 B：A 的 URL 不再可见，A 行必须提示重新生成，而不是假装可复制。
-    expect(rows[0]!.text()).toContain("重新生成以复制");
+    // 结果区现在展示 B：A 的复制入口必须禁用，而不是假装可复制。
+    expect(copyButton(rows[0]!)?.attributes("disabled")).toBeDefined();
+    expect(copyButton(rows[1]!)?.attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".link-result").text()).not.toContain("陈晨");
     wrapper.unmount();
   });
@@ -479,7 +487,7 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     await button(wrapper, "生成链接").trigger("click");
     await vi.waitFor(() => expect(wrapper.find(".link-result").exists()).toBe(true));
 
-    await button(wrapper, "归档").trigger("click");
+    await button(wrapper, "移除").trigger("click");
     await nextTick();
     expect(openDialog().textContent).toContain("分享链接会立即失效");
     dialogButton(".btn.danger-btn").click();
