@@ -6,7 +6,7 @@ English | [中文](m3-tracker-experience.md)
 kind: issue
 milestone: m3
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/web/src/features/tracker/**
   - apps/web/src/features/tasks/**
@@ -14,6 +14,7 @@ scope:
   - tests/tracker/**
   - apps/web/src/pages/TrackerPage.vue
   - .agents/flow/issues/m3-tracker-experience*
+  - .agents/flow/milestones/m3-admin-task-workflow*
 adr: []
 github:
   number: 17
