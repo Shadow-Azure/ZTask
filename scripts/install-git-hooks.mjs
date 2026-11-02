@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // 安装本地 git 钩子（每个 clone 跑一次），刻意窄：pre-commit 只查暂存文本的
-// 尾随空白，commit-msg 只提醒提交标题挂 (#N) 流程引用，pre-push 跑 doc-quick；
+// 尾随空白，commit-msg 要求提交标题挂 (#N) 流程引用，pre-push 跑 doc-quick；
 // 穷尽覆盖归 CI。幂等，重复安装安全。
 // 同时注册 .i18n.yaml 的 fail-closed merge driver（.gitattributes 已引用），
 // 免得安装入口散成两条命令。
@@ -26,11 +26,12 @@ exit $status
 `,
   "commit-msg": `#!/bin/sh
 # Installed by scripts/install-git-hooks.mjs — do not edit.
-# 开发流程的本地提醒：提交标题须挂 flow issue 引用 (#N)（契约见
-# .agents/flow/README.md；穷尽覆盖归 CI 的 verify-flow --diff）。提醒级：
-# 流程尚未同步到 GitHub 时也要能提交，拦截交给 CI。
-grep -Eq '[(（]#[0-9]+[)）]' "$1" || echo "commit-msg: 提交标题缺 issue 引用 (#N)——CI 会拦截（--no-verify 可跳过，风险自担）" >&2
-exit 0
+# 开发流程的本地门禁：提交标题须挂 flow issue 引用 (#N)（契约见
+# .agents/flow/README.md；穷尽覆盖仍归 CI 的 verify-flow --diff）。
+grep -Eq '[(（]#[0-9]+[)）]' "$1" || {
+  echo "commit-msg: 提交标题缺 issue 引用 (#N)（--no-verify 可跳过，风险自担）" >&2
+  exit 1
+}
 `,
   "pre-push": `#!/bin/sh
 # Installed by scripts/install-git-hooks.mjs — do not edit.

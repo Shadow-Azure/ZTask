@@ -17,7 +17,7 @@ export function createGateRunner(gateModule, prefix) {
   const dirs = [];
   let seq = 0;
   const run = async (files) => {
-    const dir = mkdtempSync(path.join(tmpdir(), `studywiki-${prefix}-`));
+    const dir = mkdtempSync(path.join(tmpdir(), `ztask-${prefix}-`));
     for (const [rel, content] of Object.entries(files)) {
       const full = path.join(dir, rel);
       mkdirSync(path.dirname(full), { recursive: true });

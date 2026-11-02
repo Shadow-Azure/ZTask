@@ -7,6 +7,25 @@
 - 常驻文档以中文为 base 侧，英文侧（`.en.md`）随同 PR 同步修改，改后重录 `pnpm record:i18n -- <pair>`。
 - 代码、提交信息、PR 标题用英文或中文均可；流程 issue 引用 `(#N)` 写进提交标题。
 
+## 命令
+
+```sh
+pnpm install
+pnpm lint:docs
+pnpm verify:docs
+pnpm test:gates
+pnpm test
+pnpm route:gates
+pnpm verify:flow
+pnpm verify:flow-online
+pnpm flow:sync
+pnpm flow:new-issue
+pnpm record:i18n
+pnpm archive:note
+pnpm install:hooks
+pnpm install-merge-driver
+```
+
 ## 提交前
 
 - 快速档门禁必须绿：`pnpm lint:docs`。

@@ -14,8 +14,8 @@ ZTask is a team progress management tool: it gives a team one consistent answer 
 
 ## Current state
 
-The project is at an early stage: the product shape is undecided, and the engineering work that moves first is the documentation system (bilingual, budgeted, gated) and the development flow gates (the flow tree is not initialized yet; separate planning is pending).
+The project now has a runnable CLI, server, admin shell, shared contract, and storage-recovery foundation. Progress modeling and task workflows continue through M3 and later milestones. The documentation system and development-flow gates are initialized and maintained with implementation.
 
 ## Evolution
 
-The roadmap is pending; when planning lands it builds the flow tree under `.agents/flow/` (rules in the in-repo flow README), and returns to this file to verify the new direction stays inside the boundaries.
+The roadmap and current milestones live in [.agents/flow/roadmap.md](../.agents/flow/roadmap.en.md). Expanding product boundaries starts in this file, followed by adjustment of deliverables in the flow tree.

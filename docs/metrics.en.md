@@ -1,8 +1,8 @@
-# Metrics (pending)
+# Metrics
 
 English | [中文](metrics.md)
 
-ZTask has no product yet; this file reserves the place of metrics engineering: any number worth tracking long-term gets registered here with its definition before any collection is built.
+ZTask is moving from a runnable foundation toward task workflows: any number worth tracking long-term gets registered here with its definition before collection is implemented.
 
 ## Defined
 
@@ -11,4 +11,4 @@ ZTask has no product yet; this file reserves the place of metrics engineering: a
 
 ## Pending
 
-After launch, the first product capabilities define: timeliness of progress updates, status consistency, collaboration participation. No collection is built before a definition is registered in this file.
+Once task workflows stabilize, add: timeliness of progress updates, status consistency, and collaboration participation. No collection is built before its definition is registered here.

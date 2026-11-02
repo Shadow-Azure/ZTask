@@ -4,26 +4,40 @@
 
 ## 环境
 
-- Node 22 + pnpm（`packageManager` 字段锁定版本）。`pnpm install` 后执行 `pnpm install:hooks` 安装 git 钩子与 `.i18n.yaml` 合并驱动。
-- 无数据库、无外部服务；本地门禁全部离线可跑。
+- Node 22 与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定。
+- 首次 clone 执行 `pnpm install && pnpm install:hooks`。安装器同时注册 `.i18n.yaml` 的 fail-closed merge driver。
+- 文档门禁与流程门禁均离线运行；在线流程校验需要已认证的 `gh`。
 
-## 常用命令
+## 日常循环
 
-| 命令 | 作用 |
-| --- | --- |
-| `pnpm lint:docs` | 快速档文档门禁（秒级，提交前随手跑） |
-| `pnpm verify:docs` | 全量文档门禁（含死链、ts 围栏编译、门禁自测试） |
-| `pnpm verify:flow` | 开发流程门禁（流程树未初始化时自动跳过） |
-| `pnpm test:gates` | 门禁自测试 |
-| `pnpm record:i18n -- <pair>` | 改完双语两侧后重录配对记录 |
+```sh
+pnpm route:gates
+pnpm lint:docs
+pnpm verify:docs
+```
 
-## 分支与提交
+`route:gates` 读取工作树路径并给出建议组合。仅文档改动通常跑 `lint:docs`；改变文档结构、死链或围栏时跑 `verify:docs`。门禁脚本本身还必须跑 `pnpm test:gates`，产品代码按对应 workspace 测试与 `pnpm build` 验证。
 
-- 分支名 `feat/`、`fix/`、`docs/` 前缀加短横线主题。
-- 提交标题用语义化前缀（`docs:`、`chore(gates):`、`ci:` 等）；流程树初始化后标题须挂 issue 引用 `(#N)`，现在只有本地提醒不拦截。
-- push 前钩子自动跑快速档；穷尽覆盖归 CI。
+新增或修改非平凡决策时，在同一 PR 写 Agent Note。修改双语任一侧时，最小修补另一侧并执行：
 
-## CI
+```sh
+pnpm record:i18n -- docs/foo.md
+```
 
-- 静态 lane：`pnpm test:gates`、`pnpm verify:docs`、PR 时 `node scripts/verify-flow.mjs --diff origin/<base>`（base 无流程树则跳过）。
-- 在线 lane（PR）：`verify-flow-online.mjs` 校验流程树与 GitHub 双侧一致，需要 `GH_TOKEN`。
+配对记录是“确认两侧一致”的动作，重录前先审阅两侧 diff。契约见 [i18n/README.md](i18n/README.md)。
+
+## 本地钩子
+
+`pnpm install:hooks` 安装三条窄钩子：
+
+- `pre-commit` 拒绝暂存文本的尾随空白。
+- `commit-msg` 要求提交标题包含 flow issue 引用 `(#N)`。
+- `pre-push` 执行快速文档门禁。
+
+钩子提供及时反馈，穷尽覆盖仍由 CI 承担。
+
+## 流程与 CI
+
+开工前把需求落到 `.agents/flow/` 的 roadmap、milestone 与 issue，规则见 [.agents/flow/README.md](../.agents/flow/README.md)。新 issue 用 `pnpm flow:new-issue` 生成，编号回填走 `pnpm flow:sync`，提交、PR 标题与 scope 由流程门禁对账。
+
+CI 静态 lane 依次运行 `pnpm test`、`pnpm build` 和 `pnpm verify:docs`，PR 另跑流程 diff 校验。在线 lane 运行 `verify-flow-online`，只校验 GitHub 状态，不写远端。

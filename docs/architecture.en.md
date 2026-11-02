@@ -1,21 +1,37 @@
-# Architecture (initial stage)
+# Architecture
 
 English | [中文](architecture.md)
 
-## Shape
+## Application composition
 
-The initial stage is a single repository on one Node toolchain (pnpm) with no product code. The repository currently consists of three parts:
+ZTask is a local-first team progress tool managed as a pnpm workspace with four layers:
 
-- `docs/`: resident documentation (bilingual triplets with gates).
-- `.agents/`: the Agent Note system and the development flow rules (flow tree not initialized).
-- `scripts/`: gate scripts and flow tooling (plain Node, no build step).
+- `apps/cli/`: the user entry point; parses `serve` arguments, builds configuration, starts the server, and handles shutdown signals.
+- `apps/server/`: the Fastify service, static frontend fallback, data-directory lock, and local JSON/JSONL storage.
+- `apps/web/`: the admin shell built with Vue 3, Vue Router, and TanStack Query.
+- `packages/shared/`: the cross-surface API prefix, DTOs, and error contract.
+
+`tests/` covers startup, configuration, storage recovery, the web shell, and shared behavior. `plan/fullstack-design/` holds the design and implementation basis.
+
+## Startup and data flow
+
+The CLI parses configuration and calls the server's `serve()`. Startup is fixed to: data-directory single-writer lock → manifest, recovery, and indexes → Fastify assembly and listening. Any failure releases the lock. The service listens only on loopback, and `/api/v1/admin` additionally validates request origin. Unmatched API routes return a uniform JSON 404; other paths fall back to the SPA when static output exists.
+
+The server treats the data directory as its persistence boundary. Tasks, folders, members, revisions, and the manifest are stored separately; recovery and indexes complete before listening. Later requests use the storage facade. The web client calls `/api/v1` through its HTTP layer, while the shared package pins request, response, and error shapes.
+
+## Documentation engineering
+
+Documentation is a first-class artifact with three layers:
+
+- `docs/AGENTS.md` defines writing and placement rules, while `docs/README.md` owns the sole document index.
+- `docs/i18n/` holds the pairing contract, terminology, and translation prompt; every resident document is a `.md`, `.en.md`, and `.i18n.yaml` triplet.
+- `.agents/notes/` records decisions, `.agents/flow/` records the roadmap, milestones, and issues, and `docs/postmortem/` is reserved for incident narratives.
+
+`scripts/` provides composable gates. `run-gates` combines quick and full modes; `route-gates` recommends commands for changed paths; every check has an independent spec. `gate-coverage` reconciles scripts with tests, while `ci-wiring` detects drift among modes, CI, and command lists.
 
 ## Technical constraints
 
-- Gate scripts use only the Node standard library plus the typescript compiler API; no runtime dependencies. devDependencies hold only typescript and @redocly/ajv (used by the gate self tests).
-- Byte-level doc gates (blob hash, pairing records) require a uniform LF text shape, enforced via `.gitattributes`.
-- Product technology choices are undecided; when choosing, edit this file first, then write code.
-
-## Direction
-
-The first batch of product capabilities is expected to form around progress modeling; module boundaries, data flow and interface contracts sections will follow then, with executable constraints sunk into new gates.
+- Gate scripts use the Node standard library and the TypeScript compiler API without runtime dependencies.
+- Blob hashes, pair records, and structural signatures require LF text, enforced by `.gitattributes`.
+- Storage writes pass through the single-writer lock and write queue; recovery completes before HTTP opens.
+- The admin API is local-host-only by default; later issues extend LAN access.
