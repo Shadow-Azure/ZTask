@@ -6,7 +6,7 @@ English | [中文](m7-readme-showcase.md)
 kind: issue
 milestone: m7
 priority: P1
-status: in-progress
+status: done
 scope:
   - README*
   - docs/assets/ztask-admin.png
