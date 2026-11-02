@@ -5,6 +5,17 @@ import { DASHBOARD_BUCKET_KEYS, type DashboardBucketKey } from "./dashboard-serv
 type Query = Record<string, unknown>;
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CALENDAR_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/** 历史查询模式（05 §5.3）。 */
+export type ChangesMode = "default" | "custom";
+
+/** 通过校验的历史查询参数。 */
+export interface ChangesParams {
+  mode: ChangesMode;
+  startDate?: string;
+  endDate?: string;
+}
 
 /**
  * folderId 必填（05 §5.1–5.2）；缺失或空串 400。
@@ -62,4 +73,65 @@ export function parseMemberIds(query: Query): string[] {
     }
   }
   return out;
+}
+
+/**
+ * 严格校验 `YYYY-MM-DD`：形状合法且日历上真实存在（拒绝 2026-02-31 / 2026-13-01）。
+ * @param value 日期字符串。
+ * @returns 是否为合法日期。
+ */
+function isCalendarDate(value: string): boolean {
+  const match = CALENDAR_DATE_PATTERN.exec(value);
+  if (!match) return false;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  return (
+    parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day
+  );
+}
+
+/** 读取单值 query；重复参数或空串一律 400。 */
+function singleValue(value: unknown, name: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ApiError(400, "INVALID_REQUEST", `${name} 非法`);
+  }
+  return value.trim();
+}
+
+/**
+ * 解析 `GET .../dashboard/changes` 的区间参数（05 §5.3）：
+ * - mode 缺省 default，只接受 default|custom；
+ * - custom 必须同时传 startDate/endDate，且为真实存在的 YYYY-MM-DD；
+ * - startDate 不得晚于 endDate（按日历日比较）；
+ * - default 模式下忽略日期参数（区间由服务端按 manifest 时区计算）。
+ * 任一不满足返回 400 INVALID_REQUEST。
+ * @param query 请求 query。
+ * @returns 校验后的 mode 与日期。
+ */
+export function parseChangesParams(query: Query): ChangesParams {
+  const rawMode = query.mode;
+  let mode: ChangesMode = "default";
+  if (rawMode !== undefined) {
+    if (rawMode !== "default" && rawMode !== "custom") {
+      throw new ApiError(400, "INVALID_REQUEST", "mode 须为 default 或 custom");
+    }
+    mode = rawMode;
+  }
+  if (mode === "default") return { mode };
+
+  const startDate = singleValue(query.startDate, "startDate");
+  const endDate = singleValue(query.endDate, "endDate");
+  if (startDate === undefined || endDate === undefined) {
+    throw new ApiError(400, "INVALID_REQUEST", "custom 模式必须传 startDate 与 endDate");
+  }
+  if (!isCalendarDate(startDate) || !isCalendarDate(endDate)) {
+    throw new ApiError(400, "INVALID_REQUEST", "startDate/endDate 须为 YYYY-MM-DD");
+  }
+  if (startDate > endDate) {
+    throw new ApiError(400, "INVALID_REQUEST", "startDate 不能晚于 endDate");
+  }
+  return { mode, startDate, endDate };
 }

@@ -14,6 +14,7 @@ import { networkRoutes } from "./modules/network/network-routes.js";
 import { shareLinkRoutes } from "./modules/share/share-link-routes.js";
 import { createDashboardService } from "./modules/dashboard/dashboard-service.js";
 import { dashboardRoutes } from "./modules/dashboard/dashboard-routes.js";
+import { createHistoryService } from "./modules/revisions/history-service.js";
 import type { NetworkService } from "./modules/network/network-service.js";
 import type { ShareLinkService } from "./modules/share/share-links.js";
 
@@ -31,6 +32,11 @@ export interface BuildAppOptions {
   networkService?: NetworkService;
   /** 分享链接服务；提供后挂接 /admin/members/{id}/share-link（05 §4.5–4.8）。 */
   shareLinkService?: ShareLinkService;
+  /**
+   * 看板/历史服务的可注入时钟（测试固定「今天/昨天」与 now）；缺省系统时间。
+   * 写入侧 revision 的 recordedAt 由 TaskStore 的 clock 决定，需要确定性时两者应注入同一时钟。
+   */
+  clock?: () => Date;
 }
 
 declare module "fastify" {
@@ -299,11 +305,17 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   }
 
   if (options.store) {
-    // 看板服务按 manifest 时区求「今天」（05 §5.2）；管理员与分享域共享同一实例，
-    // 保证两边口径一致（LAN app 与 loopback app 各自 buildApp，但同 dataDir/timeZone）。
+    // 看板/历史服务按 manifest 时区求「今天」与本地日期边界（05 §5.2–5.3）；
+    // 管理员与分享域共享同一实例，保证两边口径一致。
     const dashboardService = createDashboardService({
       dataDir: config.dataDir,
       timeZone: options.store.manifest.timeZone,
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
+    });
+    const historyService = createHistoryService({
+      dataDir: config.dataDir,
+      timeZone: options.store.manifest.timeZone,
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
     });
     // 管理端业务路由（#15/#16）；Admin 本机专用守卫已在路由注册前安装。
     await app.register(folderRoutes, { dataDir: config.dataDir });
@@ -311,11 +323,12 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     // 管理端与成员写共用同一 TaskStore/串行队列（06 §8.2）：否则两条队列会把
     // 同 expectedVersion 的并发提交都判成功，造成丢写甚至 revisionTip 损坏。
     await app.register(taskRoutes, { dataDir: config.dataDir, taskStore: options.store.tasks });
-    await app.register(dashboardRoutes, { service: dashboardService });
+    await app.register(dashboardRoutes, { service: dashboardService, historyService });
     await app.register(shareRoutes, {
       dataDir: config.dataDir,
       taskStore: options.store.tasks,
       dashboardService,
+      historyService,
     });
   }
 

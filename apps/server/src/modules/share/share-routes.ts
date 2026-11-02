@@ -33,7 +33,8 @@ import {
 import { createMemberService, type MemberFile } from "../members/member-service.js";
 import { createFolderService } from "../folders/folder-service.js";
 import type { DashboardService } from "../dashboard/dashboard-service.js";
-import { parseBucket, parseFolderId, parseMemberIds } from "../dashboard/dashboard-query.js";
+import type { HistoryService } from "../revisions/history-service.js";
+import { parseBucket, parseChangesParams, parseFolderId, parseMemberIds } from "../dashboard/dashboard-query.js";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
 import type { TaskStore } from "../../storage/task-store.js";
@@ -168,13 +169,18 @@ function isAfterCursor(aggregate: TaskAggregate, cursor: CursorPosition): boolea
 /**
  * 成员分享域路由（05 §6.1–6.11）：会话交换/恢复/注销、相关任务视图/详情、
  * 只读任务夹树，以及 #19 的成员写端点（进度/详情/小任务，§6.6–6.10）。
- * #21 追加看板两路由（§6.12–6.13），复用注入的看板服务。
+ * #21 追加看板两路由（§6.12–6.13），#22 追加热时间段（§6.14）；复用注入的看板/历史服务。
  * @param app Fastify 实例。
- * @param options 装配项（dataDir、共享任务队列与看板服务）。
+ * @param options 装配项（dataDir、共享任务队列、看板服务与历史服务）。
  */
 export async function shareRoutes(
   app: FastifyInstance,
-  options: { dataDir: string; taskStore?: TaskStore; dashboardService: DashboardService },
+  options: {
+    dataDir: string;
+    taskStore?: TaskStore;
+    dashboardService: DashboardService;
+    historyService: HistoryService;
+  },
 ): Promise<void> {
   const { store: memberStore } = createMemberService({ dataDir: options.dataDir });
   // 写路径复用同一 dataDir 与提交协议（06 §8.2）；成员身份由 preHandler 解析的 principal 提供。
@@ -377,6 +383,19 @@ export async function shareRoutes(
       bucket: parseBucket(query),
       memberIds: parseMemberIds(query),
       shareMemberId: principal.memberId,
+    });
+  });
+
+  // 05 §6.14：成员只能看「当前相关任务」的历史；memberIds 只能在可见范围内缩小，
+  // 越界成员由历史服务返回 400。no-store 由本插件 onRequest 钩子统一覆盖。
+  app.get(`${SHARE_BASE_PATH}/dashboard/changes`, async (request) => {
+    const principal = requirePrincipal(request);
+    const query = request.query as Record<string, unknown>;
+    return await options.historyService.changes({
+      folderId: parseFolderId(query),
+      memberIds: parseMemberIds(query),
+      shareMemberId: principal.memberId,
+      ...parseChangesParams(query),
     });
   });
 

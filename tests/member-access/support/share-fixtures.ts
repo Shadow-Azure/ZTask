@@ -54,20 +54,25 @@ export function tmpDataDir(): string {
 /**
  * 启动带 store 的测试 app（与管理端共享同一装配）。
  * @param dataDir 临时数据目录。
- * @param options timeZone 仅在 manifest 首建时生效（#21 看板时区用例）。
+ * @param options timeZone 仅在 manifest 首建时生效（#21 看板时区用例）；
+ *   clock 同时注入 TaskStore（revision recordedAt）与看板/历史服务（now）。
  * @returns 未监听的 Fastify 实例。
  */
 export async function createMemberAccessApp(
   dataDir: string,
-  options: { timeZone?: string } = {},
+  options: { timeZone?: string; clock?: () => Date } = {},
 ): Promise<FastifyInstance> {
   await mkdir(dataDir, { recursive: true });
   const store = await initStore({
     dataDir,
     applicationVersion: "0.1.0",
     ...(options.timeZone !== undefined ? { timeZone: options.timeZone } : {}),
+    ...(options.clock !== undefined ? { clock: options.clock } : {}),
   });
-  return await buildApp({ host: "127.0.0.1", port: 0, dataDir, staticRoot: null }, { store });
+  return await buildApp(
+    { host: "127.0.0.1", port: 0, dataDir, staticRoot: null },
+    { store, ...(options.clock !== undefined ? { clock: options.clock } : {}) },
+  );
 }
 
 /**

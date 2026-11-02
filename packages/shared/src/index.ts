@@ -8,6 +8,7 @@ export type {
   AdminShareLinkIssued,
   AdminShareLinkState,
   ChangeKind,
+  DashboardChanges,
   DashboardDueDistribution,
   DashboardSummary,
   DueBucket,
@@ -32,4 +33,6 @@ export type {
   ShareTrackerTasks,
   Subtask,
   Task,
+  TaskChange,
+  TaskChangeSnapshot,
 } from "./dto.js";

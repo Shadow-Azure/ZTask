@@ -109,6 +109,46 @@ export interface DashboardDueDistribution {
   buckets: DueBucket[];
 }
 
+/**
+ * 历史窗口单侧的完整快照（05 §2.2/§5.3）：只含 diff 所需的进度与完整详情文本，
+ * 行级差异由前端用 jsdiff 计算，服务端不返回 diff 结果。
+ */
+export interface TaskChangeSnapshot {
+  /** 0–100 整数。 */
+  progress: number;
+  detail: string;
+  /** UTC RFC 3339。 */
+  recordedAt: string;
+}
+
+/**
+ * 时间段内一条任务变化（05 §5.3/§6.14）：before 为 null 表示窗口开始时任务不存在。
+ * currentlyDeleted 独立于 changeKind——窗口内更新过的任务也可能已被删除。
+ */
+export interface TaskChange {
+  taskId: string;
+  description: string;
+  owners: MemberSummary[];
+  before: TaskChangeSnapshot | null;
+  after: TaskChangeSnapshot;
+  changeKind: "created" | "updated" | "deleted";
+  currentlyDeleted: boolean;
+}
+
+/**
+ * `GET /admin/dashboard/changes` 与 `GET /share/dashboard/changes` 的响应（05 §2.2/§5.3/§6.14）。
+ * start/end 是服务端按 manifest 时区解析出的实际 UTC 边界，窗口语义为 `[start,end)`。
+ */
+export interface DashboardChanges {
+  /** UTC RFC 3339。 */
+  start: string;
+  /** UTC RFC 3339。 */
+  end: string;
+  /** 解析区间所用的 IANA 时区（manifest.timeZone）。 */
+  timeZone: string;
+  items: TaskChange[];
+}
+
 /** 成员在相关任务中的角色（05 §6.5）；决定个人页写权限，只读跟踪忽略它。 */
 export type ShareMemberRole = "owner" | "collaborator";
 

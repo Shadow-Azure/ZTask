@@ -6,6 +6,7 @@ import { adminApi } from "../../api/admin";
 import { shareApi } from "../../api/share";
 import LoadingState from "../../components/ui/LoadingState.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
+import ChangesPanel from "../history/ChangesPanel.vue";
 
 /**
  * 情况看板（05 §5.1–5.2、§6.12–6.13，02 §7，原型 1352–1445）：
@@ -258,6 +259,8 @@ function dueLabel(key: DueKey): string {
           <span><i class="li low" />低</span>
         </div>
       </div>
+
+      <ChangesPanel :access="access" :folder-id="folderId" :member-ids="memberIds" />
     </template>
   </section>
 </template>
