@@ -70,7 +70,7 @@ export interface HealthPayload {
   status: "ok";
   /** 服务进程的语义化版本。 */
   version: string;
-  /** 进程已运行秒数，向上取整。 */
+  /** 进程已运行秒数，向下取整。 */
   uptimeSeconds: number;
 }
 
