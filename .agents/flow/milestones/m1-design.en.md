@@ -6,7 +6,7 @@ English | [中文](m1-design.md)
 kind: milestone
 id: m1
 title: 阶段 1：原型与全栈设计对齐
-status: active
+status: done
 github:
   number: 1
   url: https://github.com/Shadow-Azure/ZTask/milestone/1
