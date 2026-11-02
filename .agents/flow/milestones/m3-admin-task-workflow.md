@@ -6,7 +6,7 @@
 kind: milestone
 id: m3
 title: 阶段 3：管理端任务闭环
-status: planned
+status: done
 github:
   number: 3
   url: https://github.com/Shadow-Azure/ZTask/milestone/3
