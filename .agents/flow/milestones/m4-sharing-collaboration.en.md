@@ -6,7 +6,7 @@ English | [中文](m4-sharing-collaboration.md)
 kind: milestone
 id: m4
 title: 阶段 4：分享与成员协作
-status: planned
+status: done
 github:
   number: 4
   url: https://github.com/Shadow-Azure/ZTask/milestone/4

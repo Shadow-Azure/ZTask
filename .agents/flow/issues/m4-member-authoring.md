@@ -6,7 +6,7 @@
 kind: issue
 milestone: m4
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/share/**
   - apps/web/src/features/share/**
@@ -21,6 +21,7 @@ scope:
   - apps/server/src/app.ts
   - .agents/notes/implemented/feature/2026-11-02-*
   - .agents/flow/issues/m4-member-authoring*
+  - .agents/flow/milestones/m4-sharing-collaboration*
 adr: []
 github:
   number: 19
