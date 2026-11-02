@@ -26,6 +26,17 @@ pnpm record:i18n -- docs/foo.md
 
 The pair record confirms that both sides agree; review both diffs before recording it. See the contract in [i18n/README.md](i18n/README.en.md).
 
+## Backup, restore and diagnostics
+
+```sh
+pnpm serve
+node apps/cli/dist/cli.js backup
+node apps/cli/dist/cli.js doctor
+node apps/cli/dist/cli.js restore --backup <backup-dir> --data-dir <data-dir>
+```
+
+`restore` requires the service to be stopped and the target directory to be absent or empty; after restoring, start with the same `--data-dir`. New users should run `serve` first so the directory exists; backups live under `<data-dir>/backups/`.
+
 ## Local hooks
 
 `pnpm install:hooks` installs three narrow hooks:

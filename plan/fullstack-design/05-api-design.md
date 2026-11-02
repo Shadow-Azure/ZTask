@@ -365,6 +365,15 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 
 历史窗口统一为 `[start,end)`：before 取 `<start` 的最后快照，after 取 `<end` 的最后快照。default 由服务端按 manifest 时区计算昨天 00:00 至 now；custom 的 endDate 解析为次日 00:00 以包含结束日全天。响应中的 start/end 是实际解析后的 UTC 边界。历史候选包含 active 与软删除任务；成员权限采用“当前相关任务的历史”，按 after/delete 快照 assignment 与当前 active member 计算。
 
+### 5.4 `POST /admin/maintenance/backup`
+
+- 解决问题：在服务运行中生成一致性备份。
+- Params：无。
+- Body：无。
+- Response 201：`{ backupDir, report }`。
+
+服务端暂停写队列并等待在途写入，复制数据目录到临时目录（排除 `locks/`、`tmp/`、`backups/`），校验 manifest、JSON、JSONL checksum、revision tip 与引用关系后写 `backup.json`（`formatVersion/appVersion/createdAt/timeZone/dataDir/files/bytes/excluded/validation`），再原子发布到 `<dataDir>/backups/<UTC 时间戳>-<uuid>/`。并发备份返回 409 `BACKUP_IN_PROGRESS`。恢复与诊断只通过 CLI 离线执行，不暴露 HTTP。
+
 ## 6. 成员分享域
 
 分享域同时服务两个页面：成员个人页允许 owner 主任务更新进度/完整详情并管理小任务；只读事项跟踪只使用 GET。没有成员管理或团队目录端点。
@@ -526,7 +535,7 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 | 401 | `SHARE_SESSION_REQUIRED` | 无成员会话或会话过期 |
 | 403 | `ADMIN_LOCAL_ONLY`、`OWNER_REQUIRED`、`TASK_READ_ONLY` | 已知身份但页面、角色或资源不允许操作 |
 | 404 | `TASK_NOT_FOUND`、`SHARE_LINK_INVALID` | 不存在或对成员不可见，不泄露他人资源 |
-| 409 | `TASK_VERSION_CONFLICT`、`ACTIVE_SHARE_LINK_EXISTS`、`LAN_SHARE_DISABLED` | 并发、链接状态或分享未开启 |
+| 409 | `TASK_VERSION_CONFLICT`、`ACTIVE_SHARE_LINK_EXISTS`、`LAN_SHARE_DISABLED`、`BACKUP_IN_PROGRESS` | 并发、链接状态、分享未开启或备份进行中 |
 | 422 | `TASK_DEPTH_EXCEEDED`、`ASSIGNMENT_ROLE_CONFLICT`、`LAN_INTERFACE_INVALID` | 业务或网络配置校验失败 |
 | 429 | `SHARE_EXCHANGE_RATE_LIMITED` | 令牌交换过频 |
 | 500 | `INTERNAL_ERROR` | 已脱敏的内部异常 |

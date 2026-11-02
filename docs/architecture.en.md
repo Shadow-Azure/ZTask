@@ -19,6 +19,14 @@ The CLI parses configuration and calls the server's `serve()`. Startup is fixed 
 
 The server treats the data directory as its persistence boundary. Tasks, folders, members, revisions, and the manifest are stored separately; recovery and indexes complete before listening. Later requests use the storage facade. The web client calls `/api/v1` through its HTTP layer, while the shared package pins request, response, and error shapes.
 
+## Backup, restore and diagnostics
+
+- Online backup runs inside the live service (`POST /api/v1/admin/maintenance/backup`, local admin only): pause the write queue and wait for in-flight writes, copy the data directory to a temp directory (excluding `locks/`, `tmp/`, `backups/`), validate manifest, JSON, JSONL checksums, revision tips and references, write a report, then atomically publish under `backups/<timestamp>-<uuid>/`.
+- `ztask backup` calls that endpoint over loopback; a concurrent backup returns 409.
+- `ztask restore --backup <dir> --data-dir <dir>` validates the backup in an independent temp directory and runs `initStore` there before atomically switching to the target; the target must be absent or empty and a failure leaves no half-restored directory.
+- `ztask doctor` scans read-only and separates "a restart can auto-fix this" (JSONL trailing partial line) from "restore from backup" (mid-file checksum, current disagreeing with the revision tip, broken references, corrupt manifest).
+- Backups are full directory snapshots (including revisions, network.json and auth sessions); they are neither compressed nor pruned.
+
 ## Documentation engineering
 
 Documentation is a first-class artifact with three layers:

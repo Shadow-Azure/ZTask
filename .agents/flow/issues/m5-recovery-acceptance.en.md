@@ -6,7 +6,7 @@ English | [中文](m5-recovery-acceptance.md)
 kind: issue
 milestone: m5
 priority: P0
-status: backlog
+status: in-progress
 scope:
   - apps/cli/**
   - apps/server/src/modules/maintenance/**
@@ -14,6 +14,12 @@ scope:
   - docs/**
   - tests/e2e/**
   - tests/recovery/**
+  - tests/storage/**
+  - .agents/notes/implemented/feature/2026-11-02-*
+  - packages/shared/**
+  - plan/fullstack-design/05-api-design.md
+  - apps/server/src/index.ts
+  - apps/server/src/app.ts
   - package.json
   - .agents/flow/issues/m5-recovery-acceptance*
 adr: []

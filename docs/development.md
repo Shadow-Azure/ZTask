@@ -26,6 +26,17 @@ pnpm record:i18n -- docs/foo.md
 
 配对记录是“确认两侧一致”的动作，重录前先审阅两侧 diff。契约见 [i18n/README.md](i18n/README.md)。
 
+## 备份、恢复与诊断
+
+```sh
+pnpm serve
+node apps/cli/dist/cli.js backup
+node apps/cli/dist/cli.js doctor
+node apps/cli/dist/cli.js restore --backup <backup-dir> --data-dir <data-dir>
+```
+
+`restore` 要求服务已停止、目标目录不存在或为空；恢复完成后用同一 `--data-dir` 启动即可。新用户建议先 `serve` 建目录，备份目录在 `<data-dir>/backups/`。
+
 ## 本地钩子
 
 `pnpm install:hooks` 安装三条窄钩子：
