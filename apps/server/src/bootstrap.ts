@@ -33,7 +33,7 @@ export async function serve(config: ServerConfig, options: BuildAppOptions = {})
       dataDir: config.dataDir,
       applicationVersion: options.version ?? "0.0.0",
     });
-    const app = await buildApp(config, { listenerKind: "loopback", ...options });
+    const app = await buildApp(config, { listenerKind: "loopback", store, ...options });
     await app.listen({ host: config.host, port: config.port });
 
     return {
