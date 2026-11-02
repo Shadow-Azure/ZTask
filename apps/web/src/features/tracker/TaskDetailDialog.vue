@@ -115,7 +115,7 @@ const roleLabel = computed(() => (detail.value?.memberRole === "owner" ? "负责
           </dd>
         </div>
         <div class="field">
-          <dt>你在本任务中的角色</dt>
+          <dt>我的角色</dt>
           <dd>{{ roleLabel }}</dd>
         </div>
       </dl>
@@ -176,6 +176,7 @@ const roleLabel = computed(() => (detail.value?.memberRole === "owner" ? "负责
 
 .field dt {
   flex: none;
+  white-space: nowrap;
   width: 96px;
   color: var(--text-faint);
 }

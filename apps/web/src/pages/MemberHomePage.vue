@@ -210,14 +210,11 @@ function folderPathOf(task: Task): string | undefined {
   margin: 4px 0 10px;
 }
 
+/* 原型 1903/1908：空态是普通文本块（.empty-tip 在原型里没有额外描边），不套管理端虚线卡。 */
 .empty-tip {
-  padding: 18px 12px;
-  text-align: center;
+  padding: 16px 4px;
   font-size: 12px;
   color: var(--text-faint);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--bg-panel);
 }
 
 .session-expired {
