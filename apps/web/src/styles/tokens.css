@@ -1,0 +1,58 @@
+/* 原型设计令牌（plan/m1-01-ui-prototype/ztask-prototype.html :root），完整设计系统迁移在 m2-frontend-shell。 */
+:root {
+  --bg: #f4f5f7;
+  --bg-panel: #fafbfc;
+  --bg-card: #ffffff;
+  --bg-inset: #f1f3f6;
+  --border: #e2e5ea;
+  --border-strong: #c9cfd8;
+  --text: #212832;
+  --text-dim: #5a6372;
+  --text-faint: #9aa2ae;
+  --blue: #2f6fe0;
+  --green: #1f9d6b;
+  --orange: #d97b1c;
+  --red: #d63c3c;
+  --purple: #8a55c9;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(30, 40, 60, 0.07);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  font-family: -apple-system, "SF Pro Text", "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+button {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #ccd2db;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}

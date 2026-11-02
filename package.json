@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "test:gates": "node --test scripts/gates.spec.mjs && vitest run scripts/flow-new-issue.spec.mjs scripts/flow-sync.spec.mjs scripts/verify-flow.spec.mjs scripts/verify-flow-online.spec.mjs",
     "lint:docs": "node scripts/run-gates.mjs --mode doc-quick",
@@ -16,10 +19,18 @@
     "install:hooks": "node scripts/install-git-hooks.mjs",
     "install-merge-driver": "node scripts/install-merge-driver.mjs",
     "test:prototype": "node --test scripts/prototype-tracker.spec.mjs",
-    "test": "pnpm test:gates && pnpm test:prototype"
+    "test": "pnpm build && pnpm test:gates && pnpm test:prototype && vitest run apps tests",
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel --stream dev",
+    "typecheck": "pnpm -r typecheck",
+    "serve": "node apps/cli/dist/cli.js serve"
   },
   "devDependencies": {
     "@redocly/ajv": "8.11.2",
+    "@types/node": "^22.19.3",
+    "@ztask/cli": "workspace:*",
+    "@ztask/server": "workspace:*",
+    "@ztask/shared": "workspace:*",
     "typescript": "^5.9.3",
     "vitest": "^5.0.5"
   }

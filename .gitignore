@@ -4,3 +4,9 @@ node_modules/
 # Local prototype walkthrough report (generated; not versioned)
 /plan/m1-01-ui-prototype/review/product-guide/
 /output/pdf/
+
+# Workspace build outputs
+**/dist/
+
+# PR review working docs (kept local; not versioned)
+/plans/
