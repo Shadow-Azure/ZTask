@@ -89,7 +89,9 @@ describe("JSONL 尾部半行：可自动修复", () => {
     expect(afterAppend).toBe(before + Buffer.byteLength(half, "utf8"));
 
     const validation = await validateDataDir(dataDir);
-    expect(validation.ok).toBe(false);
+    // ok 表示「无阻塞问题」：尾半行可被启动恢复自愈，因此不阻止备份/恢复；
+    // 是否真正干净仍由 issues.length 判断，doctor 会单独列入 autoFixable。
+    expect(validation.ok).toBe(true);
     expect(validation.issues).toHaveLength(1);
     expect(validation.issues[0]).toMatchObject({
       path: `tasks/${TASK_ID}/revisions.jsonl`,

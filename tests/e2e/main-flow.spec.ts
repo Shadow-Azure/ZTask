@@ -392,8 +392,11 @@ describe("首版主流程（真实端口 + fetch）", () => {
       version = subtaskUpdated.task.version;
 
       // 成员只读事项跟踪：tracker 可读，但成员不能改任务夹/成员。
-      const memberAdminProbe = await send<unknown>(shareBase, "/api/v1/admin/members");
-      expect(memberAdminProbe.status).toBe(403);
+      // 只有在真实 LAN 入口上才能证明「成员访问 Admin 被拒」；loopback 回退分支上本机就是管理员。
+      if (lanEnabled) {
+        const memberAdminProbe = await send<unknown>(shareBase, "/api/v1/admin/members");
+        expect(memberAdminProbe.status).toBe(403);
+      }
 
       // ---- 6. 看板与历史（管理员 + 成员裁剪）----
       const adminSummary = await call<DashboardSummary>(
@@ -443,12 +446,14 @@ describe("首版主流程（真实端口 + fetch）", () => {
       expect(new Set(memberChanges.items.map((entry) => entry.taskId))).toEqual(new Set([task.id]));
 
       // 成员请求管理端看板：Admin 守卫在 LAN 入口直接 403（成员没有管理权限）。
-      const memberAdminDashboard = await send<unknown>(
-        shareBase,
-        `/api/v1/admin/dashboard/changes?folderId=${rootFolder.id}&mode=default`,
-        { cookie: cookieB },
-      );
-      expect(memberAdminDashboard.status).toBe(403);
+      if (lanEnabled) {
+        const memberAdminDashboard = await send<unknown>(
+          shareBase,
+          `/api/v1/admin/dashboard/changes?folderId=${rootFolder.id}&mode=default`,
+          { cookie: cookieB },
+        );
+        expect(memberAdminDashboard.status).toBe(403);
+      }
 
       // ---- 7. 链接重置与吊销：旧会话立即失效 ----
       let currentCookieA = cookieA;
@@ -474,6 +479,13 @@ describe("首版主流程（真实端口 + fetch）", () => {
       // ---- 8. 在线备份 API ----
       const backup = await call<BackupResult>(base, "/api/v1/admin/maintenance/backup", { method: "POST" });
       expect(backup.report.validation.ok).toBe(true);
+      // 备份后再写一次：用于验证恢复回滚到备份时间点，而不是「恢复=当前」。
+      const afterBackupTask = await call<Task>(base, `/api/v1/admin/tasks/${task.id}`);
+      const afterBackupWrite = await call<Task>(base, `/api/v1/admin/tasks/${task.id}`, {
+        method: "PATCH",
+        body: { version: afterBackupTask.version, progress: 80, detail: "备份之后的写入" },
+      });
+      expect(afterBackupWrite.progress).toBe(80);
       expect(backup.report.appVersion).toBe("0.1.0");
       expect(backup.report.dataDir).toBe(dataDir);
       await expect(stat(path.join(backup.backupDir, "backup.json"))).resolves.toBeTruthy();
@@ -488,8 +500,8 @@ describe("首版主流程（真实端口 + fetch）", () => {
       const afterRestart = await call<{ items: Task[] }>(base, `/api/v1/admin/tasks?folderId=${rootFolder.id}`);
       const restoredTask = afterRestart.items.find((entry) => entry.id === task.id);
       expect(restoredTask).toBeDefined();
-      expect(restoredTask!.progress).toBe(60);
-      expect(restoredTask!.detail).toContain("成员改后的完整详情");
+      expect(restoredTask!.progress).toBe(80);
+      expect(restoredTask!.detail).toContain("备份之后的写入");
       expect(afterRestart.items.find((entry) => entry.id === privateTask.id)).toBeDefined();
 
       // 成员会话与链接在重启后仍有效（session 文件持久化）。
@@ -523,6 +535,7 @@ describe("首版主流程（真实端口 + fetch）", () => {
           restoredBase,
           `/api/v1/admin/tasks?folderId=${rootFolder.id}`,
         );
+        // 恢复目录回到备份时间点（60），备份后的 80 不应出现。
         expect(restoredList.items.find((entry) => entry.id === task.id)?.progress).toBe(60);
         expect(restoredList.items.map((entry) => entry.id)).toContain(privateTask.id);
       } finally {

@@ -63,7 +63,7 @@ export async function doctor(options: { dataDir: string }): Promise<DoctorReport
 
   return {
     dataDir,
-    ok: validation.ok,
+    ok: validation.issues.length === 0,
     fileCount: validation.stats.fileCount,
     byteCount: validation.stats.byteCount,
     manifest:

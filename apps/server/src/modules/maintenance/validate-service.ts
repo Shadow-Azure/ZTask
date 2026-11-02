@@ -37,14 +37,15 @@ export type ValidationIssueKind =
   | "jsonl-sequence"
   | "revision-tip"
   | "reference"
-  | "network";
+  | "network"
+  | "shape";
 
 /** 一条校验问题。 */
 export interface ValidationIssue {
   /** 相对数据目录的 POSIX 路径。 */
   path: string;
   kind: ValidationIssueKind;
-  /** 仅 JSONL 末尾未完成写入为 true；其余问题都必须从备份恢复。 */
+  /** true 表示重启恢复可自愈（JSONL 尾部半行、current 落后 revision）；其余问题必须从备份恢复。 */
   fixable: boolean;
   /** 可读的诊断信息（不含敏感内容）。 */
   detail: string;
@@ -475,8 +476,16 @@ export async function validateDataDir(dataDir: string): Promise<ValidationResult
       addIssue(state.currentPath, "reference", false, `任务所属任务夹 ${folderId} 不存在`);
     }
 
+    if (!Array.isArray(current.subtasks)) {
+      addIssue(state.currentPath, "shape", false, "subtasks 不是数组（文件结构损坏，需从备份恢复）");
+      return;
+    }
     const subtasks = current.subtasks as Array<Record<string, unknown>>;
     for (const subtask of subtasks) {
+      if (subtask === null || typeof subtask !== "object") {
+        addIssue(state.currentPath, "shape", false, "subtasks 含非对象元素（文件结构损坏，需从备份恢复）");
+        continue;
+      }
       const subFolderId = subtask.folderId;
       if (typeof subFolderId === "string" && !folderIds.has(subFolderId)) {
         addIssue(state.currentPath, "reference", false, `小任务 ${String(subtask.id)} 所属任务夹 ${subFolderId} 不存在`);
@@ -487,8 +496,16 @@ export async function validateDataDir(dataDir: string): Promise<ValidationResult
     for (const subtask of subtasks) {
       if (typeof subtask.id === "string") knownTaskIds.add(subtask.id);
     }
+    if (!Array.isArray(current.assignments)) {
+      addIssue(state.currentPath, "shape", false, "assignments 不是数组（文件结构损坏，需从备份恢复）");
+      return;
+    }
     const assignments = current.assignments as Array<Record<string, unknown>>;
     for (const assignment of assignments) {
+      if (assignment === null || typeof assignment !== "object") {
+        addIssue(state.currentPath, "shape", false, "assignments 含非对象元素（文件结构损坏，需从备份恢复）");
+        continue;
+      }
       const memberId = assignment.memberId;
       if (typeof memberId !== "string" || !memberIds.has(memberId)) {
         addIssue(state.currentPath, "reference", false, `分配引用的成员 ${String(memberId)} 不存在`);
@@ -500,5 +517,7 @@ export async function validateDataDir(dataDir: string): Promise<ValidationResult
     }
   }
 
-  return { ok: issues.length === 0, issues, stats, files, manifest };
+  // ok = 无阻塞问题：可自动修复的问题（JSONL 尾半行、current 落后）不阻止备份/恢复，
+  // 但 issues 仍会完整上报给 doctor；真正干净由 issues.length === 0 判断。
+  return { ok: !issues.some((issue) => !issue.fixable), issues, stats, files, manifest };
 }

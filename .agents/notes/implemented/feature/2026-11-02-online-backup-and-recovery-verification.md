@@ -14,7 +14,7 @@ Status: implemented
 - **快照流程**：`pauseWrites()`（暂停新 mutation，等待在途队列）→ 复制数据目录到 `tmp/backup-*`（排除 `locks/`、`tmp/`、`backups/`）→ 校验 manifest、JSON 解析、JSONL checksum 与 revision tip、引用关系 → 写 `backup.json` 报告 → `rename` 到 `backups/<UTC 时间戳>-<uuid>/` 原子发布 → 释放队列。任何一步失败都清理临时目录并恢复写入。
 - **备份报告**：记录格式版本、应用版本、创建时间、团队时区、文件数/字节数、校验结果与问题列表；`backup.json` 与数据一起存放，供恢复/诊断复核。
 - **恢复不原地覆盖**：`restoreFromBackup` 先对备份目录做完整校验，再复制到目标旁边临时目录、对临时目录执行 `initStore`（manifest/恢复/索引）验证，最后原子 `rename` 到目标目录；目标必须不存在或为空，失败不留下半恢复目录。
-- **doctor 只读分级**：`doctor(dataDir)` 只扫描不写；问题分 `fixable`（JSONL 末尾半行，可由启动恢复修复）与需要备份介入（中间 checksum、current 与 revisionTip 不一致、引用缺失、manifest 损坏）。CLI 发现问题退出码 1，帮助新用户判断「重启即可」还是「从备份恢复」。
+- **doctor 只读分级**：`doctor(dataDir)` 只扫描不写；问题分 `fixable`（JSONL 末尾半行、current 落后 revision——启动恢复会重建）与需要备份介入（current 领先/checksum 不一致、中间 checksum、引用缺失、manifest/network 损坏、文件结构损坏）。`validate.ok` 表示「无阻塞问题」，可自动修复的快照仍可备份与恢复，`issues` 完整上报。CLI 发现问题退出码 1，帮助新用户判断「重启即可」还是「从备份恢复」。
 - **备份包含所有业务状态**：manifest、任务聚合与 revisions、folders/members、network.json、auth-sessions 一并复制（会话策略与分享链接随数据一致）；不包含锁文件与临时文件。
 
 ## Alternatives considered
@@ -31,3 +31,4 @@ Status: implemented
 - 备份期间 mutation 会短暂排队，HTTP 请求可能变慢；超时由客户端重试，不丢写。
 - 恢复后的服务沿用备份中的会话与分享链接（未过期仍可用）；若需要「恢复即吊销」，必须另立安全策略。
 - doctor 只报告不修复；「可自动修复」的判定必须在重启实际修复后复核，不能替代备份。
+- 已知边界：暂停的是任务写队列，实体文件（members/folders/network/session）不在闸门内；备份可能包含「任务快照 + 稍新的实体文件」。
