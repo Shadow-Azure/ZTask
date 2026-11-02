@@ -6,7 +6,7 @@ English | [中文](m3-folders-members.md)
 kind: issue
 milestone: m3
 priority: P0
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/modules/folders/**
   - apps/server/src/modules/members/**
@@ -14,6 +14,11 @@ scope:
   - apps/web/src/features/members/**
   - packages/shared/**
   - tests/admin-members/**
+  - apps/server/src/app.ts
+  - apps/server/src/bootstrap.ts
+  - apps/web/src/pages/TrackerPage.vue
+  - apps/web/src/pages/MembersPage.vue
+  - apps/web/src/App.vue
   - .agents/flow/issues/m3-folders-members*
 adr: []
 github:

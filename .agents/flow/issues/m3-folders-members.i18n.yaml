@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/issues/m3-folders-members.md
-m3-folders-members.md: e135f086fad46bc09aca192bceb1963085c61490
-m3-folders-members.en.md: 70d0332978e1c4c147e0a38185ffe1940071ee6e
+m3-folders-members.md: 776f641136b7f4cae6a19d0ded44ef03d9b1b76e
+m3-folders-members.en.md: f52d6871552fa6a76da33eb6783e7d73cf407d6d
