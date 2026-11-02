@@ -10,9 +10,10 @@ milestones:
   - m3
   - m4
   - m5
+  - m6
 ```
 
-ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; `plan/fullstack-design/` and the approved prototype are the baseline.
+ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; `plan/fullstack-design/` is the baseline.
 
 ## Delivery sequence
 
@@ -21,6 +22,7 @@ ZTask provides task collaboration through a local CLI, web service, and file sto
 - m3: Folder, member, and task management with a real tracker.
 - m4: LAN sharing, secure sessions, and minimal owner writes.
 - m5: Dashboard, two-column diffs, backup recovery, and end-to-end acceptance.
+- m6: Screen-by-screen parity with the prototype and a clean difference ledger.
 
 ## Progression principles
 
