@@ -6,16 +6,29 @@
 kind: issue
 milestone: m4
 priority: P0
-status: backlog
+status: in-progress
 scope:
   - apps/cli/**
   - apps/server/src/modules/network/**
-  - apps/server/src/modules/shares/**
+  - apps/server/src/modules/share/**
+  - apps/server/src/modules/members/**
+  - apps/server/src/bootstrap.ts
+  - apps/server/src/app.ts
+  - apps/server/src/config.ts
+  - apps/server/src/index.ts
   - apps/web/src/features/members/**
+  - apps/web/src/pages/MembersPage.vue
+  - apps/web/src/layouts/AdminLayout.vue
+  - apps/web/src/api/admin.ts
+  - apps/web/src/api/network.ts
+  - apps/web/src/router/index.ts
   - packages/shared/**
   - tests/sharing/**
+  - tests/admin-members/**
+  - .agents/notes/implemented/feature/2026-11-02-*
   - .agents/flow/issues/m4-network-share-links*
-adr: []
+adr:
+  - ../../notes/implemented/feature/2026-11-02-lan-share-listener-and-link-lifecycle.md
 github:
   number: 20
   url: https://github.com/Shadow-Azure/ZTask/issues/20

@@ -1,0 +1,326 @@
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import { useMutation, useQueryClient } from "@tanstack/vue-query";
+import { ApiError, type AdminMember, type AdminMemberShareLink, type AdminShareLinkState } from "@ztask/shared";
+import { shareLinkApi } from "../../api/network";
+import { useToast } from "../../components/ui/toast";
+import BaseDialog from "../../components/ui/BaseDialog.vue";
+
+/**
+ * 成员分享链接单元格（08 §5，原型 .link-cell/.link-box，ztask-prototype.html:1786–1794）：
+ * 只渲染脱敏状态（member.shareLink）；raw URL 只在本次生成/重置后交给表格下方的
+ * 受控结果区展示，刷新后不伪称能复制旧链接，而提示「重新生成以复制」。
+ * 重置/吊销复用统一确认 Dialog；LAN 未开启时引导到网络面板。
+ */
+const props = defineProps<{
+  /** 成员行（含脱敏链接态与计数）。 */
+  member: AdminMember;
+}>();
+
+const emit = defineEmits<{
+  /** 生成/重置成功：把这一次的完整 URL 交给受控结果区。 */
+  issued: [payload: { member: AdminMember; url: string }];
+  /** 吊销成功：清掉该成员可能残留的旧 URL 结果区。 */
+  cleared: [memberId: string];
+  /** LAN 未开启：父级聚焦/滚动到局域网分享面板。 */
+  "needs-network": [];
+}>();
+
+const queryClient = useQueryClient();
+const toast = useToast();
+
+/** 409/链路错误后用 GET share-link 纠正过期列表态；列表刷新后以服务端为准。 */
+const reconciled = ref<AdminMemberShareLink | null>(null);
+/** 本次挂载内是否已拿到 raw URL：决定 active 行是否显示「重新生成以复制」。 */
+const hasIssuedUrl = ref(false);
+const confirmRotateOpen = ref(false);
+const confirmRevokeOpen = ref(false);
+
+const state = computed<AdminMemberShareLink | null>(() => reconciled.value ?? props.member.shareLink);
+
+const lastUsedText = computed(() => {
+  const used = state.value?.lastUsedAt;
+  return used ? `最近使用 ${formatShort(used)}` : "尚未使用";
+});
+
+const revokedText = computed(() => {
+  const revoked = state.value?.revokedAt;
+  return revoked ? `吊销于 ${formatShort(revoked)}` : "已吊销";
+});
+
+const busy = computed(
+  () =>
+    generateMutation.isPending.value || rotateMutation.isPending.value || revokeMutation.isPending.value,
+);
+
+/**
+ * 把 ISO 时间渲染为原型的 `MM-DD HH:mm`（本地时区）。
+ * @param iso UTC RFC 3339 时间串。
+ * @returns 短格式时间；非法输入原样返回。
+ */
+function formatShort(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  const pad = (value: number): string => String(value).padStart(2, "0");
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
+ * 统一错误面（08 §5）：LAN 未开启引导到网络面板，已有 active 链接提示改用重置，
+ * 其余错误 toast；绝不把失败显示成成功。
+ * @param cause useMutation 抛出的错误。
+ */
+function handleError(cause: unknown): void {
+  if (cause instanceof ApiError && cause.code === "LAN_SHARE_DISABLED") {
+    toast.show("请先开启局域网分享");
+    emit("needs-network");
+    return;
+  }
+  if (cause instanceof ApiError && cause.code === "ACTIVE_SHARE_LINK_EXISTS") {
+    toast.show("该成员已有有效链接，请改用「重置」");
+    void reconcile();
+    return;
+  }
+  toast.show(cause instanceof Error ? cause.message : "链接操作失败");
+}
+
+/** 用 GET share-link 纠正本行脱敏态（成员列表 15s 轮询之外的即时兜底）。 */
+async function reconcile(): Promise<void> {
+  try {
+    const latest: AdminShareLinkState = await shareLinkApi.shareLink(props.member.id);
+    reconciled.value =
+      latest.status === "none"
+        ? null
+        : {
+            status: latest.status,
+            createdAt: latest.createdAt,
+            revokedAt: latest.revokedAt,
+            lastUsedAt: latest.lastUsedAt,
+          };
+  } catch {
+    // 纠正失败不覆盖错误提示：保持列表当前值，等轮询自然刷新。
+  }
+}
+
+const generateMutation = useMutation({
+  mutationFn: () => shareLinkApi.generateShareLink(props.member.id),
+  onSuccess: (issued) => {
+    hasIssuedUrl.value = true;
+    toast.show(`已为「${props.member.name}」生成分享链接`);
+    emit("issued", { member: props.member, url: issued.url });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
+  },
+  onError: handleError,
+});
+
+const rotateMutation = useMutation({
+  mutationFn: () => shareLinkApi.rotateShareLink(props.member.id),
+  onSuccess: (issued) => {
+    confirmRotateOpen.value = false;
+    hasIssuedUrl.value = true;
+    toast.show(`已重置「${props.member.name}」的链接，旧链接已失效`);
+    emit("issued", { member: props.member, url: issued.url });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
+  },
+  onError: (cause: unknown) => {
+    confirmRotateOpen.value = false;
+    handleError(cause);
+  },
+});
+
+const revokeMutation = useMutation({
+  mutationFn: () => shareLinkApi.revokeShareLink(props.member.id),
+  onSuccess: () => {
+    confirmRevokeOpen.value = false;
+    hasIssuedUrl.value = false;
+    toast.show(`已吊销「${props.member.name}」的链接`);
+    emit("cleared", props.member.id);
+    void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
+  },
+  onError: (cause: unknown) => {
+    confirmRevokeOpen.value = false;
+    handleError(cause);
+  },
+});
+
+/** 生成或重新生成（revoked 状态的「重新生成」复用同一 POST 端点）。 */
+function generate(): void {
+  if (busy.value) return;
+  generateMutation.mutate();
+}
+</script>
+
+<template>
+  <div class="link-box">
+    <template v-if="!state">
+      <span class="link-none">未生成</span>
+      <button class="mini-btn blue" type="button" :disabled="busy" @click="generate">生成链接</button>
+    </template>
+
+    <template v-else-if="state.status === 'active'">
+      <span class="link-state">已生成</span>
+      <span class="link-meta">{{ lastUsedText }}</span>
+      <span v-if="!hasIssuedUrl" class="link-meta faint">重新生成以复制</span>
+      <button class="mini-btn" type="button" :disabled="busy" @click="confirmRotateOpen = true">重置</button>
+      <button class="mini-btn red" type="button" :disabled="busy" @click="confirmRevokeOpen = true">吊销</button>
+    </template>
+
+    <template v-else>
+      <span class="link-state revoked">已吊销</span>
+      <span class="link-meta">{{ revokedText }}</span>
+      <button class="mini-btn blue" type="button" :disabled="busy" @click="generate">重新生成</button>
+    </template>
+
+    <BaseDialog :open="confirmRotateOpen" title="重置分享链接" @close="confirmRotateOpen = false">
+      <p class="confirm-text">
+        重置后「{{ member.name }}」的旧链接将立即失效，需要重新分发新链接。
+      </p>
+      <template #foot>
+        <span class="sp" />
+        <button class="btn ghost" type="button" @click="confirmRotateOpen = false">取消</button>
+        <button
+          class="btn primary"
+          type="button"
+          :disabled="rotateMutation.isPending.value"
+          @click="rotateMutation.mutate()"
+        >
+          {{ rotateMutation.isPending.value ? "重置中…" : "重置" }}
+        </button>
+      </template>
+    </BaseDialog>
+
+    <BaseDialog :open="confirmRevokeOpen" title="吊销分享链接" @close="confirmRevokeOpen = false">
+      <p class="confirm-text">
+        吊销后「{{ member.name }}」将无法再访问成员视图，可随时重新生成。
+      </p>
+      <template #foot>
+        <span class="sp" />
+        <button class="btn ghost" type="button" @click="confirmRevokeOpen = false">取消</button>
+        <button
+          class="btn danger-btn"
+          type="button"
+          :disabled="revokeMutation.isPending.value"
+          @click="revokeMutation.mutate()"
+        >
+          {{ revokeMutation.isPending.value ? "吊销中…" : "吊销" }}
+        </button>
+      </template>
+    </BaseDialog>
+  </div>
+</template>
+
+<style scoped>
+.link-box {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.link-state {
+  font-size: 11.5px;
+  color: var(--green);
+}
+
+.link-state.revoked {
+  color: var(--red);
+}
+
+.link-meta {
+  font-size: 11px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
+.link-meta.faint {
+  color: var(--text-faint);
+  font-family: inherit;
+}
+
+.link-none {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+
+.mini-btn {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 2.5px 9px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mini-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-inset);
+}
+
+.mini-btn.blue {
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 45%, transparent);
+}
+
+.mini-btn.blue:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+}
+
+.mini-btn.red {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+}
+
+.mini-btn.red:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 7%, transparent);
+}
+
+.mini-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.confirm-text {
+  font-size: 12.5px;
+  color: var(--text-dim);
+}
+
+.btn {
+  font: inherit;
+  font-size: 12.5px;
+  border-radius: 7px;
+  padding: 6px 14px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+}
+
+.btn.ghost {
+  border-color: transparent;
+  color: var(--text-dim);
+}
+
+.btn.primary {
+  background: var(--blue);
+  border-color: var(--blue);
+  color: #fff;
+}
+
+.btn.danger-btn {
+  background: var(--red);
+  border-color: var(--red);
+  color: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sp {
+  flex: 1;
+}
+</style>
