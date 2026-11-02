@@ -6,12 +6,13 @@
 kind: issue
 milestone: m3
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - apps/web/src/features/tracker/**
   - apps/web/src/features/tasks/**
   - apps/web/src/components/**
   - tests/tracker/**
+  - apps/web/src/pages/TrackerPage.vue
   - .agents/flow/issues/m3-tracker-experience*
 adr: []
 github:
