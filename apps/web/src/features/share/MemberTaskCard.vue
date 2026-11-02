@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { ApiError, type Importance, type ShareTaskMutation, type Subtask, type Task } from "@ztask/shared";
 import { isOverdue } from "../../components/task-card-model";
@@ -46,8 +46,16 @@ const detailText = computed(() => props.task.detail || "（暂无进展记录）
 const progressDraft = ref(props.task.progress);
 /** 完整详情草稿：独立保存，保存成功前不覆盖父级。 */
 const detailDraft = ref(props.task.detail);
-/** 409 冲突提示：保留草稿，等用户刷新。 */
+/** 409 冲突提示：保留草稿，等用户选择放弃草稿后刷新。 */
 const conflict = ref<string | null>(null);
+/** 冲突横幅节点：出现时把焦点移过去，屏幕阅读器与键盘用户都能立刻感知。 */
+const conflictEl = ref<HTMLElement | null>(null);
+/**
+ * 草稿基线版本：第一次编辑时锁定当时的聚合 version。
+ * 若提交时才读 props.task.version，「旧草稿 + 新版本号」会绕过 409 静默覆盖别人的新内容。
+ */
+const progressBaseVersion = ref<number | null>(null);
+const detailBaseVersion = ref<number | null>(null);
 /** 小任务行内编辑器；null 表示未打开。id 为 null 表示新建。 */
 const subtaskEditor = ref<{
   id: string | null;
@@ -55,6 +63,7 @@ const subtaskEditor = ref<{
   progress: number;
   importance: Importance;
   dueDate: string;
+  baseVersion: number;
 } | null>(null);
 /** 待确认删除的小任务。 */
 const deletingSubtask = ref<Subtask | null>(null);
@@ -80,6 +89,22 @@ watch(
 const progressDirty = computed(() => progressDraft.value !== props.task.progress);
 const detailDirty = computed(() => detailDraft.value !== props.task.detail);
 
+watch(conflict, async (value) => {
+  if (value === null) return;
+  await nextTick();
+  conflictEl.value?.focus();
+});
+
+/** 用户开始改进度：锁定当前聚合版本作为提交基线。 */
+function onProgressInput(): void {
+  if (progressBaseVersion.value === null) progressBaseVersion.value = props.task.version;
+}
+
+/** 用户开始改详情：锁定当前聚合版本作为提交基线。 */
+function onDetailInput(): void {
+  if (detailBaseVersion.value === null) detailBaseVersion.value = props.task.version;
+}
+
 /** 写后刷新：home 与 tracker 都从同一组 share 缓存派生。 */
 function invalidateShareTasks(): void {
   void queryClient.invalidateQueries({ queryKey: ["share", "tasks"] });
@@ -89,40 +114,59 @@ function invalidateShareTasks(): void {
  * 写操作统一错误面：409 保留草稿并提示刷新；其余错误直接 toast。
  * @param cause useMutation 抛出的错误。
  */
-function handleWriteError(cause: unknown): void {
+function handleWriteError(cause: unknown, operation: string): void {
   if (cause instanceof ApiError && cause.code === "TASK_VERSION_CONFLICT") {
-    conflict.value = "服务器已有新版本；你的草稿已保留，请刷新后重试。";
+    const current = (cause.details as { current?: { version?: number; progress?: number } } | null)?.current;
+    const serverFact =
+      current?.version !== undefined
+        ? `服务器当前是 v${current.version}${current.progress !== undefined ? ` · 进度 ${current.progress}%` : ""}`
+        : "服务器已有新版本";
+    conflict.value = `${operation}保存冲突：${serverFact}；你的草稿已保留，可选择放弃草稿并刷新。`;
     return;
+  }
+  if (cause instanceof ApiError && cause.code === "TASK_NOT_FOUND" && subtaskEditor.value !== null) {
+    // 编辑期间小任务被管理员删除：关闭编辑器，避免对着已不存在的对象继续保存。
+    subtaskEditor.value = null;
   }
   toast.show(cause instanceof Error ? cause.message : "保存失败");
 }
 
 const progressMutation = useMutation({
-  mutationFn: () => shareApi.saveProgress(props.task.id, { progress: progressDraft.value, version: props.task.version }),
+  mutationFn: () =>
+    shareApi.saveProgress(props.task.id, {
+      progress: progressDraft.value,
+      version: progressBaseVersion.value ?? props.task.version,
+    }),
   onSuccess: (result: ShareTaskMutation) => {
     conflict.value = null;
+    progressBaseVersion.value = null;
     progressDraft.value = result.task.progress;
     toast.show("进度已保存");
     invalidateShareTasks();
   },
-  onError: handleWriteError,
+  onError: (cause: unknown) => handleWriteError(cause, "进度"),
 });
 
 const detailMutation = useMutation({
-  mutationFn: () => shareApi.saveDetail(props.task.id, { detail: detailDraft.value, version: props.task.version }),
+  mutationFn: () =>
+    shareApi.saveDetail(props.task.id, {
+      detail: detailDraft.value,
+      version: detailBaseVersion.value ?? props.task.version,
+    }),
   onSuccess: (result: ShareTaskMutation) => {
     conflict.value = null;
+    detailBaseVersion.value = null;
     detailDraft.value = result.task.detail;
     toast.show("进展详情已保存");
     invalidateShareTasks();
   },
-  onError: handleWriteError,
+  onError: (cause: unknown) => handleWriteError(cause, "详情"),
 });
 
 const saveSubtaskMutation = useMutation({
   mutationFn: async (draft: NonNullable<typeof subtaskEditor.value>) => {
     const body = {
-      version: props.task.version,
+      version: draft.baseVersion,
       description: draft.description,
       progress: draft.progress,
       importance: draft.importance,
@@ -138,7 +182,7 @@ const saveSubtaskMutation = useMutation({
     toast.show("小任务已保存");
     invalidateShareTasks();
   },
-  onError: handleWriteError,
+  onError: (cause: unknown) => handleWriteError(cause, "小任务"),
 });
 
 const deleteSubtaskMutation = useMutation({
@@ -151,7 +195,7 @@ const deleteSubtaskMutation = useMutation({
   },
   onError: (cause: unknown) => {
     deletingSubtask.value = null;
-    handleWriteError(cause);
+    handleWriteError(cause, "小任务");
   },
 });
 
@@ -166,7 +210,14 @@ function isDone(progress: number): boolean {
 
 function openCreateSubtask(): void {
   conflict.value = null;
-  subtaskEditor.value = { id: null, description: "", progress: 0, importance: "mid", dueDate: "" };
+  subtaskEditor.value = {
+    id: null,
+    description: "",
+    progress: 0,
+    importance: "mid",
+    dueDate: "",
+    baseVersion: props.task.version,
+  };
 }
 
 function openEditSubtask(subtask: Subtask): void {
@@ -177,6 +228,7 @@ function openEditSubtask(subtask: Subtask): void {
     progress: subtask.progress,
     importance: subtask.importance,
     dueDate: subtask.dueDate ?? "",
+    baseVersion: props.task.version,
   };
 }
 
@@ -194,9 +246,14 @@ function confirmDeleteSubtask(): void {
   deleteSubtaskMutation.mutate(deletingSubtask.value.id);
 }
 
-/** 冲突后刷新：重新拉取 home/tracker；草稿保留，由用户决定是否重新提交。 */
-function refreshAfterConflict(): void {
+/** 冲突后放弃草稿并刷新：清空所有草稿与基线，避免用旧草稿覆盖服务端新版本。 */
+function discardDraftsAndRefresh(): void {
   conflict.value = null;
+  progressDraft.value = props.task.progress;
+  detailDraft.value = props.task.detail;
+  subtaskEditor.value = null;
+  progressBaseVersion.value = null;
+  detailBaseVersion.value = null;
   void queryClient.refetchQueries({ queryKey: ["share", "tasks"] });
 }
 </script>
@@ -235,9 +292,9 @@ function refreshAfterConflict(): void {
 
     <!-- 可编辑形态：进度只改草稿，详情独立保存（02 §4.2、08 §6.2）。 -->
     <template v-if="editable">
-      <p v-if="conflict" class="conflict" role="alert">
+      <p v-if="conflict" ref="conflictEl" class="conflict" role="alert" tabindex="-1">
         <span>{{ conflict }}</span>
-        <button class="mini-btn" type="button" @click="refreshAfterConflict">刷新</button>
+        <button class="mini-btn" type="button" @click="discardDraftsAndRefresh">放弃草稿并刷新</button>
       </p>
 
       <div class="edit-row">
@@ -251,6 +308,7 @@ function refreshAfterConflict(): void {
               min="0"
               max="100"
               step="5"
+              @input="onProgressInput"
             >
             <button
               class="btn primary"
@@ -269,10 +327,12 @@ function refreshAfterConflict(): void {
             :id="`detail-${task.id}`"
             v-model="detailDraft"
             class="detail-input"
+            :aria-describedby="`detail-hint-${task.id}`"
             placeholder="记录当前进展、阻塞点、下一步计划…（保存会追加一份新的完整快照）"
+            @input="onDetailInput"
           />
           <div class="detail-foot">
-            <span class="edit-hint">历史 revision 不可修改；保存会追加一份完整快照。</span>
+            <span :id="`detail-hint-${task.id}`" class="edit-hint">历史 revision 不可修改；保存会追加一份完整快照。</span>
             <button
               class="btn primary"
               type="button"

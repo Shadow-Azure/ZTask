@@ -16,6 +16,9 @@ scope:
   - tests/member-authoring/**
   - tests/member-access/**
   - apps/web/src/api/share.ts
+  - apps/web/src/api/http.ts
+  - apps/server/src/modules/tasks/**
+  - apps/server/src/app.ts
   - .agents/notes/implemented/feature/2026-11-02-*
   - .agents/flow/issues/m4-member-authoring*
 adr: []

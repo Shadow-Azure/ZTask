@@ -343,6 +343,14 @@ describe("草稿与服务端更新（08 §6.2）", () => {
 
     expect((wrapper.find("input[type='range']").element as HTMLInputElement).value).toBe("90");
     expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("我的未保存草稿");
+
+    // 基线版本在第一次编辑时锁定为 1；即使 props 前进到 v2，提交仍带 v1 → 服务端能判出 409。
+    calls = [];
+    await wrapper.findAll("button").find((button) => button.text() === "保存进度")!.trigger("click");
+    await vi.waitFor(() => {
+      const patch = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/progress"));
+      expect(patch?.body).toEqual({ progress: 90, version: 1 });
+    });
     wrapper.unmount();
   });
 });

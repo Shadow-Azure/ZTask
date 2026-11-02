@@ -744,3 +744,72 @@ describe("归档成员会话不能写（#18 会话校验先于写路径）", () 
     expect((await revisionLines(taskD)).length).toBe(beforeLines);
   });
 });
+
+describe("共享写队列与严格 schema（06 §8.2、05 §6.6–6.7）", () => {
+  it("管理端与成员并发写同一 version：共享队列保证一个 200、一个 409", async () => {
+    const before = await currentTask(mainTask);
+    const linesBefore = (await revisionLines(mainTask)).length;
+    const [adminResponse, memberResponse] = await Promise.all([
+      app.inject({
+        method: "PATCH",
+        url: `/api/v1/admin/tasks/${mainTask}`,
+        payload: { progress: 44, version: before.version },
+      }),
+      shareWrite("PATCH", `/api/v1/share/tasks/${mainTask}/progress`, cookieA, {
+        progress: 66,
+        version: before.version,
+      }),
+    ]);
+
+    expect([adminResponse.statusCode, memberResponse.statusCode].sort()).toEqual([200, 409]);
+    const conflict = adminResponse.statusCode === 409 ? adminResponse : memberResponse;
+    expect(conflict.json().error.code).toBe("TASK_VERSION_CONFLICT");
+
+    // 只允许一次提交：revision 只增加一条，且版本号恰好推进一次（不出现重复版本）。
+    const revisions = await revisionLines(mainTask);
+    expect(revisions.length).toBe(linesBefore + 1);
+    expect(revisions.at(-1)!.taskVersion).toBe(before.version + 1);
+  });
+
+  it("同一成员两个并发写：一个成功、一个 409，不产生重复 revision", async () => {
+    const before = await currentTask(mainTask);
+    const linesBefore = (await revisionLines(mainTask)).length;
+    const [first, second] = await Promise.all([
+      shareWrite("PATCH", `/api/v1/share/tasks/${mainTask}/progress`, cookieA, {
+        progress: 10,
+        version: before.version,
+      }),
+      shareWrite("PATCH", `/api/v1/share/tasks/${mainTask}/detail`, cookieA, {
+        detail: "并发详情",
+        version: before.version,
+      }),
+    ]);
+
+    expect([first.statusCode, second.statusCode].sort()).toEqual([200, 409]);
+    const revisions = await revisionLines(mainTask);
+    expect(revisions.length).toBe(linesBefore + 1);
+    expect(revisions.at(-1)!.taskVersion).toBe(before.version + 1);
+  });
+
+  it("progress/detail 未声明字段、越界值与非法日期一律 400，不追加 revision", async () => {
+    const before = await currentTask(mainTask);
+    const linesBefore = (await revisionLines(mainTask)).length;
+
+    const cases: Array<{ url: string; payload: Record<string, unknown>; method: "PATCH" | "POST" }> = [
+      { method: "PATCH", url: `/api/v1/share/tasks/${mainTask}/progress`, payload: { progress: 10, version: before.version, extra: "x" } },
+      { method: "PATCH", url: `/api/v1/share/tasks/${mainTask}/progress`, payload: { progress: 150, version: before.version } },
+      { method: "PATCH", url: `/api/v1/share/tasks/${mainTask}/detail`, payload: { detail: { bad: true }, version: before.version } },
+      { method: "POST", url: `/api/v1/share/tasks/${mainTask}/subtasks`, payload: { version: before.version, description: "x", dueDate: "2026-1-1" } },
+      { method: "POST", url: `/api/v1/share/tasks/${mainTask}/subtasks`, payload: { version: before.version, description: "x", ownerId: memberC } },
+    ];
+
+    for (const item of cases) {
+      const response = await shareWrite(item.method, item.url, cookieA, item.payload);
+      expect(response.statusCode, `${item.method} ${item.url} ${JSON.stringify(item.payload)}`).toBe(400);
+      expect(response.json().error.code).toBe("INVALID_REQUEST");
+    }
+
+    expect((await revisionLines(mainTask)).length).toBe(linesBefore);
+    expect((await currentAggregate(mainTask)).task.progress).toBe(before.progress);
+  });
+});

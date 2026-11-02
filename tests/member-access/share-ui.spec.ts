@@ -301,6 +301,13 @@ describe("MemberHomePage（成员个人页只读）", () => {
 
     expect(wrapper.text()).not.toContain("暂无你负责的任务");
     expect(wrapper.text()).not.toContain("暂无你协作的任务");
+
+    // 最小写面：整页不出现主任务分配/重要度/预计完成/任务夹的编辑控件，
+    // 也不出现管理员专属的「分配」入口（小任务编辑器未打开时不应有 select）。
+    expect(wrapper.findAll(".share-page select")).toHaveLength(0);
+    expect(wrapper.findAll(".share-page input[type='date']")).toHaveLength(0);
+    expect(wrapper.text()).not.toContain("分配");
+    expect(wrapper.text()).not.toContain("删除任务");
     wrapper.unmount();
   });
 

@@ -34,6 +34,7 @@ import { createMemberService, type MemberFile } from "../members/member-service.
 import { createFolderService } from "../folders/folder-service.js";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
+import type { TaskStore } from "../../storage/task-store.js";
 
 /** 分享域根路径（05 §6）；插件内全部路由都在此作用域下。 */
 const SHARE_BASE_PATH = "/api/v1/share";
@@ -170,11 +171,11 @@ function isAfterCursor(aggregate: TaskAggregate, cursor: CursorPosition): boolea
  */
 export async function shareRoutes(
   app: FastifyInstance,
-  options: { dataDir: string },
+  options: { dataDir: string; taskStore?: TaskStore },
 ): Promise<void> {
   const { store: memberStore } = createMemberService({ dataDir: options.dataDir });
   // 写路径复用同一 dataDir 与提交协议（06 §8.2）；成员身份由 preHandler 解析的 principal 提供。
-  const { service: shareTaskWrites } = createShareTaskWriteService({ dataDir: options.dataDir });
+  const { service: shareTaskWrites } = createShareTaskWriteService({ dataDir: options.dataDir, taskStore: options.taskStore });
   const exchangeLimiter = createExchangeRateLimiter(() => Date.now());
 
   app.decorateRequest("sharePrincipal", null);

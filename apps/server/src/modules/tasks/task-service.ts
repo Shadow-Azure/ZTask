@@ -17,6 +17,12 @@ type ChangeKind = "progress" | "detail" | "update" | "delete" | "subtask";
 export interface TaskServiceDeps {
   dataDir: string;
   clock?: () => Date;
+  /**
+   * 共享任务存储（含进程内串行队列）。管理端与成员写必须共用同一个 TaskStore，
+   * 否则两条队列各自认为自己是唯一写者，并发提交会出现「双成功 + revision 重复」；
+   * 缺省时自建（独立测试装配）。
+   */
+  taskStore?: TaskStore;
 }
 
 /** 任务服务：列表/创建/读取/更新/编辑器/软删除（05 §3.4–3.9、07 §5）。 */
@@ -82,7 +88,7 @@ function prepare(aggregate: TaskAggregate, apply: (draft: Draft) => void): { dra
  */
 export function createTaskService(deps: TaskServiceDeps): { service: TaskService; store: TaskStore } {
   const clock = deps.clock ?? (() => new Date());
-  const taskStore = createTaskStore({ dataDir: deps.dataDir, clock });
+  const taskStore = deps.taskStore ?? createTaskStore({ dataDir: deps.dataDir, clock });
   const { service: memberService, store: memberStore } = createMemberService({ dataDir: deps.dataDir, clock });
   const { service: folderService } = createFolderService({ dataDir: deps.dataDir, clock });
 

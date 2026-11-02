@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/notes/implemented/feature/2026-11-02-member-owner-write-boundary.md
-2026-11-02-member-owner-write-boundary.md: 0d3a636bfc2cce72b5da0d41f0951e7f8e204af3
-2026-11-02-member-owner-write-boundary.en.md: 37bdaf91b15bc1ceed0846ada80364c727e37038
+2026-11-02-member-owner-write-boundary.md: e1ae6a313c79537f4365faa147bbae50f00cb27c
+2026-11-02-member-owner-write-boundary.en.md: 78241c710e5a1f34b2ee7709f642bfeaf2de5bbb

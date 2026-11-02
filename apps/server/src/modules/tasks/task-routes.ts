@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { randomUUID } from "node:crypto";
 import { VersionConflictError } from "../../storage/errors.js";
+import type { TaskStore } from "../../storage/task-store.js";
 import { createTaskService } from "./task-service.js";
 
 /** 409 冲突的内部标记（携带最新可见任务，05 §7 details.current）。 */
@@ -22,9 +23,9 @@ function isConflict409(cause: unknown): cause is Conflict409 {
  */
 export async function taskRoutes(
   app: FastifyInstance,
-  options: { dataDir: string },
+  options: { dataDir: string; taskStore?: TaskStore },
 ): Promise<void> {
-  const { service } = createTaskService({ dataDir: options.dataDir });
+  const { service } = createTaskService({ dataDir: options.dataDir, taskStore: options.taskStore });
 
   /** 把 VersionConflictError 转成带标记的 409 载荷。 */
   async function withConflict409(taskId: string, operation: () => Promise<unknown>): Promise<unknown> {

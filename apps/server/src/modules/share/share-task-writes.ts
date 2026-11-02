@@ -47,6 +47,11 @@ export interface ShareSubtaskUpdateInput {
 export interface ShareTaskWriteServiceDeps {
   dataDir: string;
   clock?: () => Date;
+  /**
+   * 共享任务存储（含进程内串行队列）。必须由 `buildApp` 注入 `store.tasks`，
+   * 与管理端写共用同一条队列；缺省时自建仅用于独立测试装配。
+   */
+  taskStore?: TaskStore;
 }
 
 /**
@@ -143,7 +148,7 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
   store: TaskStore;
 } {
   const clock = deps.clock ?? (() => new Date());
-  const taskStore = createTaskStore({ dataDir: deps.dataDir, clock });
+  const taskStore = deps.taskStore ?? createTaskStore({ dataDir: deps.dataDir, clock });
   const { store: memberStore } = createMemberService({ dataDir: deps.dataDir });
 
   /** 成员档案映射：`toMemberTask` 的 owner 摘要来源，与 GET 端点同一口径。 */
@@ -180,11 +185,9 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
     }
     // 05 §1/§8：成员不可见任务统一 404，不泄露资源存在性；可见但非 owner
     // （collaborator / 仅小任务被分配者）才是 403 OWNER_REQUIRED（05 §6.6）。
-    if (!isRelated(current, memberId).related) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
-    const isOwner = current.assignments.some(
-      (assignment) => assignment.taskId === current.taskId && assignment.memberId === memberId && assignment.kind === "owner",
-    );
-    if (!isOwner) throw new ApiError(403, "OWNER_REQUIRED", "只有任务负责人可以修改");
+    const relation = isRelated(current, memberId);
+    if (!relation.related) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
+    if (relation.role !== "owner") throw new ApiError(403, "OWNER_REQUIRED", "只有任务负责人可以修改");
     return current;
   }
 
@@ -259,6 +262,12 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
         changeKind,
         actor: { kind: "member", memberId, name },
         mutate: (mutable) => {
+          // 07 §2.3：在队列内、拿到最新 current 后再复查一次 owner，
+          // 防止预检之后管理员把该成员移除 owner（跨写者并发最终由共享队列串行化）。
+          const stillOwner = mutable.assignments.some(
+            (assignment) => assignment.taskId === aggregate.taskId && assignment.memberId === memberId && assignment.kind === "owner",
+          );
+          if (!stillOwner) throw new ApiError(403, "OWNER_REQUIRED", "只有任务负责人可以修改");
           mutable.task = draft.task;
           mutable.subtasks = draft.subtasks;
           mutable.assignments = draft.assignments;
@@ -285,8 +294,9 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
   const service: ShareTaskWriteService = {
     async saveProgress(memberId, name, taskId, input) {
       const aggregate = await requireOwnedMain(memberId, taskId);
-      const version = await assertVersion(memberId, aggregate, input.version);
+      // 先校验字段（400）再校验版本（409）：非法字段不应被当成并发冲突引导用户刷新。
       const progress = assertProgress(input.progress);
+      const version = await assertVersion(memberId, aggregate, input.version);
       return await commitMutation({
         aggregate,
         memberId,
@@ -301,8 +311,8 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
 
     async saveDetail(memberId, name, taskId, input) {
       const aggregate = await requireOwnedMain(memberId, taskId);
-      const version = await assertVersion(memberId, aggregate, input.version);
       if (typeof input.detail !== "string") throw new ApiError(400, "INVALID_REQUEST", "detail 须为字符串");
+      const version = await assertVersion(memberId, aggregate, input.version);
       // 05 §6.7：详情是全量替换（不是追加）；内容原样保存，允许空串。
       return await commitMutation({
         aggregate,
@@ -318,12 +328,12 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
 
     async createSubtask(memberId, name, taskId, input) {
       const aggregate = await requireOwnedMain(memberId, taskId);
-      const version = await assertVersion(memberId, aggregate, input.version);
       rejectUnknownKeys(input, ["version", "description", "progress", "importance", "dueDate"], "小任务");
       const description = assertDescription(input.description);
       const progress = input.progress === undefined ? 0 : assertProgress(input.progress);
       const importance = input.importance === undefined ? "mid" : assertImportance(input.importance);
       const dueDate = assertDueDate(input.dueDate);
+      const version = await assertVersion(memberId, aggregate, input.version);
       const subtaskId = randomUUID();
       const createdAt = clock().toISOString();
 
@@ -354,7 +364,6 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
 
     async updateSubtask(memberId, name, taskId, subtaskId, input) {
       const aggregate = await requireOwnedMain(memberId, taskId);
-      const version = await assertVersion(memberId, aggregate, input.version);
       rejectUnknownKeys(input, ["version", "description", "progress", "importance", "dueDate"], "小任务");
       const subtask = requireSubtask(aggregate, subtaskId);
       // 先校验全部字段再进 draft：任一非法都 400 且不产生 revision。
@@ -362,6 +371,7 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
       const progress = input.progress === undefined ? undefined : assertProgress(input.progress);
       const importance = input.importance === undefined ? undefined : assertImportance(input.importance);
       const dueDate = input.dueDate === undefined ? undefined : assertDueDate(input.dueDate);
+      const version = await assertVersion(memberId, aggregate, input.version);
 
       return await commitMutation({
         aggregate,

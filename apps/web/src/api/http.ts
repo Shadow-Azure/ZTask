@@ -66,10 +66,16 @@ export async function requestJson<T = unknown>(path: string, options: RequestOpt
     } catch {
       parsed = null;
     }
-    const body = (parsed as { error?: { code?: string; message?: string; requestId?: string } } | null)?.error;
+    const body = (parsed as {
+      error?: { code?: string; message?: string; requestId?: string; details?: unknown };
+    } | null)?.error;
     if (body && typeof body.code === "string" && isApiErrorCode(body.code)) {
+      // details 是 05 §7 契约的一部分（如 409 的 details.current），不能丢；
+      // 其余错误没有 details 时保持 { requestId }，与既有断言兼容。
+      const details = body.details !== null && typeof body.details === "object" ? body.details : {};
       throw new ApiError(response.status, body.code, body.message ?? response.statusText, {
         requestId: body.requestId,
+        ...details,
       });
     }
     throw new ApiError(response.status, errorFromStatus(response.status), response.statusText || "请求失败");
