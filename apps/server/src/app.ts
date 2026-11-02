@@ -53,16 +53,21 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     request.listenerKind = listenerKind;
   });
 
-  await app.register(cookie);
+  // 安全响应头（04 §8）：token 只在 fragment 里是浏览器语义，不是服务端保证；
+  // 这里给所有响应（含静态、404、错误体）补上兜底，避免来源 URL 进入 Referer。
+  // 必须早于任何路由注册，才能被之后注册的插件（静态/管理端/share）继承；
+  // CSP 依赖内联样式收敛，按 §6.4 留到 #20 LAN 上线前再做。
+  app.addHook("onSend", async (_request, reply) => {
+    reply.header("referrer-policy", "no-referrer");
+    reply.header("x-content-type-options", "nosniff");
+  });
 
-  if (config.staticRoot) {
-    // wildcard:false：只精确服务真实文件，未命中路径统一交给下方 notFoundHandler 做 SPA 回退。
-    await app.register(fastifyStatic, { root: config.staticRoot, wildcard: false });
-  }
-
-  // 错误与 404 序列化器必须在任何路由注册之前安装：Fastify 在注册路由时把当时的
-  // errorHandler 固化进路由上下文，之后再 setErrorHandler 不会回溯已注册的路由，
-  // 插件作用域会退化为 Fastify 默认错误体（05 §7 要求统一的嵌套 error 结构）。
+  // 错误与 404 序列化器必须在任何 `await app.register(...)` 之前安装（§6.3）。
+  // 真实机制不是「注册路由那一刻快照」，而是：`await app.register()` 会推进 avvio 的
+  // boot，插件路由所在上下文在该实例 boot 完成时就已把当时的 errorHandler 固化进
+  // 路由上下文（fastify `lib/route.js` 的 after 回调）；之后再 setErrorHandler
+  // 不会回溯已注册路由，插件作用域会退化为 Fastify 默认错误体
+  // （05 §7 要求统一的嵌套 error 结构，管理端抛出的 ApiError 同样走这里）。
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof ApiError) {
       void reply.status(error.statusCode).send({
@@ -101,6 +106,13 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     }
     void reply.status(404).type("text/plain; charset=utf-8").send("not found");
   });
+
+  await app.register(cookie);
+
+  if (config.staticRoot) {
+    // wildcard:false：只精确服务真实文件，未命中路径统一交给下方 notFoundHandler 做 SPA 回退。
+    await app.register(fastifyStatic, { root: config.staticRoot, wildcard: false });
+  }
 
   if (options.store) {
     // 管理端业务路由（#15/#16）；Admin 本机专用守卫仍由下方 preHandler 统一执行。

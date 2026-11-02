@@ -163,6 +163,40 @@ describe("ShareLayout（成员壳）", () => {
     wrapper.unmount();
   });
 
+  it("恢复瞬时失败（500）：壳内显示可重试错误、不进入失效页；重试成功后渲染成员内容", async () => {
+    let restoreCalls = 0;
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/api/v1/share/session")) {
+        restoreCalls += 1;
+        if (restoreCalls === 1) {
+          return jsonResponse(500, { error: { code: "INTERNAL_ERROR", message: "服务暂不可用", requestId: "r-6" } });
+        }
+        return jsonResponse(200, { member: MEMBER });
+      }
+      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [] });
+      return jsonResponse(200, emptyTree());
+    }) as typeof fetch;
+
+    const { wrapper, router } = await mountApp("/s/home");
+    await vi.waitFor(() => expect(wrapper.text()).toContain("无法连接 ZTask 服务"));
+    expect(router.currentRoute.value.path).toBe("/s/home");
+    expect(wrapper.text()).not.toContain("链接已失效");
+    // 会话未确认：导航与成员内容都不渲染，home 查询也还没发。
+    expect(wrapper.find('[aria-label="成员导航"]').exists()).toBe(false);
+    expect(wrapper.find(".share-user").exists()).toBe(false);
+
+    const retry = wrapper.findAll("button").find((button) => button.text() === "重试");
+    expect(retry).toBeTruthy();
+    await retry!.trigger("click");
+
+    await vi.waitFor(() => expect(wrapper.text()).toContain("你好，陈晨"));
+    expect(restoreCalls).toBe(2);
+    expect(router.currentRoute.value.path).toBe("/s/home");
+    expect(wrapper.find('[aria-label="成员导航"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it("会话未确认前不渲染 RouterView：恢复完成前不请求 home", async () => {
     let releaseRestore: () => void = () => undefined;
     const restoreGate = new Promise<void>((resolve) => {
@@ -311,6 +345,51 @@ describe("MemberHomePage（成员个人页只读）", () => {
     await vi.waitFor(() => expect(wrapper.text()).toContain("链接已失效"));
     expect(removeSpy).toHaveBeenCalledWith({ queryKey: ["share"] });
     expect(wrapper.find('[aria-label="成员导航"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+});
+
+describe("成员只读事项跟踪（续页失败）", () => {
+  it("续页 400：保留已加载内容、显示「加载更多失败」并可重试，不跳失效页（§6.2）", async () => {
+    const pageTask = makeTask({ id: "t-page-1", description: "第一页任务" });
+    const cursorRequests: string[] = [];
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), window.location.origin);
+      if (url.pathname === "/api/v1/share/session") return jsonResponse(200, { member: MEMBER });
+      if (url.pathname === "/api/v1/share/folders/tree") return jsonResponse(200, { tree: FOLDER_TREE });
+      if (url.pathname === "/api/v1/share/tasks") {
+        const cursor = url.searchParams.get("cursor");
+        if (cursor === null) return jsonResponse(200, { items: [pageTask], nextCursor: "cursor-stale" });
+        cursorRequests.push(cursor);
+        return jsonResponse(400, { error: { code: "INVALID_REQUEST", message: "cursor 非法", requestId: "r-7" } });
+      }
+      return jsonResponse(404, { error: { code: "NOT_FOUND", message: "未找到", requestId: "r-7" } });
+    }) as typeof fetch;
+
+    const { wrapper, router } = await mountApp("/s/tracker");
+    await vi.waitFor(() => expect(wrapper.find('[data-task-card="t-page-1"]').exists()).toBe(true));
+
+    const loadMore = wrapper.findAll("button").find((button) => button.text().includes("加载更多"));
+    expect(loadMore).toBeTruthy();
+    await loadMore!.trigger("click");
+
+    // 续页失败不再静默：列表保留，紧跟「加载更多」给出可见错误与重试。
+    await vi.waitFor(() => expect(wrapper.text()).toContain("加载更多失败"));
+    expect(wrapper.find('[data-task-card="t-page-1"]').exists()).toBe(true);
+    expect(router.currentRoute.value.path).toBe("/s/tracker");
+    expect(wrapper.text()).not.toContain("链接已失效");
+    expect(cursorRequests).toEqual(["cursor-stale"]);
+
+    // 重试即重新触发当前 cursor 查询（不清空已加载的第一页）。
+    const retry = wrapper.findAll("button").find((button) => button.text() === "重试");
+    expect(retry).toBeTruthy();
+    await retry!.trigger("click");
+    await vi.waitFor(() => expect(cursorRequests).toHaveLength(2));
+    // 再次失败后仍保留第一页并继续给出可见错误（重试期间的加载态是既有行为）。
+    await vi.waitFor(() => expect(wrapper.find('[data-task-card="t-page-1"]').exists()).toBe(true));
+    expect(wrapper.text()).toContain("加载更多失败");
+    expect(cursorRequests).toEqual(["cursor-stale", "cursor-stale"]);
+    expect(router.currentRoute.value.path).toBe("/s/tracker");
     wrapper.unmount();
   });
 });

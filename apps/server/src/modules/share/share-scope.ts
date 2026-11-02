@@ -47,15 +47,34 @@ export function memberVisibleAggregates(aggregates: TaskAggregate[], memberId: s
 }
 
 /**
- * 判定聚合是否与成员相关（主任务 owner/collaborator 或可见小任务被分配者）。
+ * 主任务分配角色（07 §5.1「个人页分组按主任务分配」）。
+ *
+ * 这是「主任务维度」的唯一判定：只有主任务 owner/collaborator 返回角色，
+ * 仅被分配小任务的成员返回 null（subtask-only）。个人页分组必须用它，
+ * 不能把 isRelated 的「相关」当成「归组依据」——否则 subtask-only 会出现在
+ * 个人页，与 07 §5.1「subtask-only 只出现在只读事项跟踪」相左。
  * @param aggregate 任务聚合。
  * @param memberId 成员 ID。
- * @returns related 与主任务角色。
+ * @returns 主任务角色；无主任务分配为 null。
+ */
+export function mainAssignmentRole(aggregate: TaskAggregate, memberId: string): "owner" | "collaborator" | null {
+  const mainAssignments = aggregate.assignments.filter((a) => a.taskId === aggregate.taskId);
+  if (mainAssignments.some((a) => a.memberId === memberId && a.kind === "owner")) return "owner";
+  if (mainAssignments.some((a) => a.memberId === memberId && a.kind === "collaborator")) return "collaborator";
+  return null;
+}
+
+/**
+ * 判定聚合是否与成员相关（07 §5.1「读取范围」）：主任务 owner/collaborator
+ * 或任一未删除小任务的被分配者。这里只回答「能不能看」；
+ * 分组与 detail 裁剪用的是 mainAssignmentRole，两者不可混用。
+ * @param aggregate 任务聚合。
+ * @param memberId 成员 ID。
+ * @returns related 与主任务角色（subtask-only 记为 collaborator）。
  */
 export function isRelated(aggregate: TaskAggregate, memberId: string): { related: boolean; role: "owner" | "collaborator" } {
-  const mainAssignments = aggregate.assignments.filter((a) => a.taskId === aggregate.taskId);
-  if (mainAssignments.some((a) => a.memberId === memberId && a.kind === "owner")) return { related: true, role: "owner" };
-  if (mainAssignments.some((a) => a.memberId === memberId && a.kind === "collaborator")) return { related: true, role: "collaborator" };
+  const mainRole = mainAssignmentRole(aggregate, memberId);
+  if (mainRole !== null) return { related: true, role: mainRole };
   const subtaskAssignment = aggregate.assignments.find(
     (a) => a.memberId === memberId && a.taskId !== aggregate.taskId &&
       aggregate.subtasks.some((sub) => sub.id === a.taskId && sub.deletedAt === null),
@@ -66,20 +85,12 @@ export function isRelated(aggregate: TaskAggregate, memberId: string): { related
 
 /** 主任务 owner/collaborator 成员可见全部小任务；仅小任务被分配者只看自己的小任务。 */
 function visibleSubtasks(aggregate: TaskAggregate, memberId: string): TaskAggregate["subtasks"] {
-  if (mainOwnerOf(aggregate, memberId) || isMainCollaborator(aggregate, memberId)) {
+  if (mainAssignmentRole(aggregate, memberId) !== null) {
     return aggregate.subtasks.filter((sub) => sub.deletedAt === null);
   }
   return aggregate.subtasks.filter(
     (sub) => sub.deletedAt === null && aggregate.assignments.some((a) => a.taskId === sub.id && a.memberId === memberId),
   );
-}
-
-function mainOwnerOf(aggregate: TaskAggregate, memberId: string): boolean {
-  return aggregate.assignments.some((a) => a.taskId === aggregate.taskId && a.memberId === memberId && a.kind === "owner");
-}
-
-function isMainCollaborator(aggregate: TaskAggregate, memberId: string): boolean {
-  return aggregate.assignments.some((a) => a.taskId === aggregate.taskId && a.memberId === memberId && a.kind === "collaborator");
 }
 
 function summary(members: Map<string, MemberFile>, id: string) {
@@ -101,6 +112,10 @@ function subtaskOwner(aggregate: TaskAggregate, subtaskId: string, members: Map<
 
 /**
  * 成员视角的任务 DTO：小任务按可见性过滤，owner 摘要来自成员档案（待分配兜底）。
+ *
+ * detail 按 07 §5.1 裁剪：仅被分配小任务的成员「只看父任务上下文和被分配的小任务，
+ * 不看主任务 detail」，因此 subtask-only 的 detail 一律空串；其余字段
+ * （描述、负责人/协作、重要度、预计完成、进度、可见小任务）保留。
  * @param aggregate 任务聚合。
  * @param memberId 成员 ID。
  * @param members 成员档案映射。
@@ -115,7 +130,7 @@ export function toMemberTask(aggregate: TaskAggregate, memberId: string, members
     owners: aggregate.assignments.filter((a) => a.taskId === aggregate.taskId && a.kind === "owner").map((a) => summary(members, a.memberId)),
     collaborators: aggregate.assignments.filter((a) => a.taskId === aggregate.taskId && a.kind === "collaborator").map((a) => summary(members, a.memberId)),
     progress: aggregate.task.progress,
-    detail: aggregate.task.detailText,
+    detail: mainAssignmentRole(aggregate, memberId) === null ? "" : aggregate.task.detailText,
     importance: aggregate.task.importance,
     dueDate: aggregate.task.dueDate,
     version: aggregate.taskVersion,

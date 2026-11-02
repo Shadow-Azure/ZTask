@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ApiError } from "@ztask/shared";
+import { ApiError, type FolderTreeNode } from "@ztask/shared";
 import { createEntityStore, type EntityStore } from "../../storage/entity-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
 
@@ -28,16 +28,11 @@ export interface FolderService {
   create(input: { name: string; parentId: string | null }): Promise<FolderFile>;
   rename(id: string, name: string): Promise<FolderFile>;
   list(): Promise<FolderFile[]>;
-  /** 用新鲜聚合构建 FolderTreeNode[]（05 §3.1；counts 主任务口径）。 */
-  tree(aggregates: TaskAggregate[]): Promise<Array<{
-    id: string;
-    parentId: string | null;
-    name: string;
-    position: number;
-    children: unknown[];
-    tasks: Array<{ id: string; description: string; progress: number; importance: string }>;
-    counts: { done: number; todo: number };
-  }>>;
+  /**
+   * 用新鲜聚合构建 FolderTreeNode[]（05 §3.1；counts 主任务口径）。
+   * 返回 shared DTO 的精确类型，调用方（管理端与分享域）无需再做结构转换（§6.8）。
+   */
+  tree(aggregates: TaskAggregate[]): Promise<FolderTreeNode[]>;
 }
 
 /**
@@ -107,16 +102,6 @@ export function createFolderService(deps: FolderServiceDeps): { service: FolderS
         byParent.set(folder.parentId, list);
       }
 
-      type TreeNode = {
-        id: string;
-        parentId: string | null;
-        name: string;
-        position: number;
-        children: TreeNode[];
-        tasks: Array<{ id: string; description: string; progress: number; importance: string }>;
-        counts: { done: number; todo: number };
-      };
-
       const tasksByFolder = new Map<string, TaskAggregate[]>();
       for (const aggregate of aggregates) {
         if (aggregate.task.deletedAt !== null) continue;
@@ -125,7 +110,7 @@ export function createFolderService(deps: FolderServiceDeps): { service: FolderS
         tasksByFolder.set(aggregate.task.folderId, list);
       }
 
-      function buildNode(folder: FolderFile): TreeNode {
+      function buildNode(folder: FolderFile): FolderTreeNode {
         const children = (byParent.get(folder.id) ?? [])
           .sort((a, b) => a.position - b.position)
           .map(buildNode);

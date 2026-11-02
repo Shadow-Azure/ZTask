@@ -45,7 +45,6 @@ export { buildIndexes } from "./storage/indexes.js";
 export type { DerivedIndexes } from "./storage/indexes.js";
 export { initStore } from "./storage/store.js";
 export type { FolderFile, MemberFile, StoreInitOptions, ZtaskStore } from "./storage/store.js";
-export { shareRoutes } from "./modules/share/share-routes.js";
 export {
   EntryNotFoundError,
   StorageCorruptionError,

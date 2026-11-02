@@ -1,7 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import {
   ApiError,
-  type FolderTreeNode,
   type Importance,
   type ShareHomeTasks,
   type ShareSessionResponse,
@@ -18,6 +17,7 @@ import {
 import {
   isRelated,
   listTaskAggregates,
+  mainAssignmentRole,
   memberVisibleAggregates,
   pruneMemberTree,
   toMemberTask,
@@ -40,6 +40,9 @@ const TRACKER_PAGE_LIMIT = 50;
 const EXCHANGE_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const EXCHANGE_RATE_LIMIT_MAX = 10;
 
+/** 限流 windows Map 的清扫阈值：达到后先清掉全部过期窗口，避免长期只增不减（§6.5）。 */
+const EXCHANGE_RATE_LIMIT_SWEEP_THRESHOLD = 256;
+
 const IMPORTANCES: readonly Importance[] = ["high", "mid", "low"];
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -58,18 +61,33 @@ interface ExchangeWindow {
 
 /**
  * 令牌交换限流器（05 §6.1）：插件实例内存态，按 request.ip 计固定窗口。
+ *
+ * Map 清理（§6.5）：命中过期窗口时就地删除；条目数达到阈值时清扫全部过期项。
+ * 阈值只是防长期增长的上限，不改变「60s / 10 次 + 429」的判定行为。
  * @param now 可注入时钟（毫秒）；缺省系统时间。
  * @returns hit() 记录一次尝试，超限返回 Retry-After 秒数。
  */
 function createExchangeRateLimiter(now: () => number) {
   const windows = new Map<string, ExchangeWindow>();
+
+  /** 删除所有已过期窗口；只在达到阈值时调用，均摊成本可忽略。 */
+  function sweepExpired(current: number): void {
+    for (const [ip, window] of windows) {
+      if (window.resetAt <= current) windows.delete(ip);
+    }
+  }
+
   return {
     hit(ip: string): { retryAfterSeconds: number } | null {
       const current = now();
-      const existing = windows.get(ip);
-      const window = existing && existing.resetAt > current
-        ? existing
-        : { count: 0, resetAt: current + EXCHANGE_RATE_LIMIT_WINDOW_MS };
+      if (windows.size >= EXCHANGE_RATE_LIMIT_SWEEP_THRESHOLD) sweepExpired(current);
+      let window = windows.get(ip);
+      if (window !== undefined && window.resetAt <= current) {
+        // 过期即删（而不是原地复用）：唯一 IP 越多时 Map 不会只增不减。
+        windows.delete(ip);
+        window = undefined;
+      }
+      window ??= { count: 0, resetAt: current + EXCHANGE_RATE_LIMIT_WINDOW_MS };
       window.count += 1;
       windows.set(ip, window);
       if (window.count <= EXCHANGE_RATE_LIMIT_MAX) return null;
@@ -83,6 +101,57 @@ function compareAggregates(a: TaskAggregate, b: TaskAggregate): number {
   if (a.task.createdAt !== b.task.createdAt) return a.task.createdAt < b.task.createdAt ? -1 : 1;
   if (a.taskId === b.taskId) return 0;
   return a.taskId < b.taskId ? -1 : 1;
+}
+
+/** 游标位置：最后一项的 (createdAt, taskId)（05 §1 / 07 §5.1）。 */
+interface CursorPosition {
+  createdAt: string;
+  taskId: string;
+}
+
+/**
+ * 编码位置游标：base64url(JSON)，对前端保持 opaque（05 §1；前端只透传字符串）。
+ * @param position 本页最后一项的排序位置。
+ * @returns 不透明游标字符串。
+ */
+function encodeCursor(position: CursorPosition): string {
+  return Buffer.from(JSON.stringify({ createdAt: position.createdAt, taskId: position.taskId }), "utf8").toString("base64url");
+}
+
+/**
+ * 解码位置游标（05 §6.4）：必须是 base64url 的 JSON 对象，含可解析的
+ * createdAt 与 UUID 形态的 taskId；其余一律 400，不向客户端暴露内部结构。
+ *
+ * 与旧实现的区别：游标只描述「位置」，不要求在结果集中存在
+ * （07 §5.1「以最后一项的 createdAt/id 生成 opaque cursor」），
+ * 因此游标项被管理员删除/改字段后仍能续页。
+ * @param cursor 查询参数原值。
+ * @returns 校验后的位置。
+ */
+function decodeCursor(cursor: string): CursorPosition {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+  } catch {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  const { createdAt, taskId } = parsed as { createdAt?: unknown; taskId?: unknown };
+  if (typeof createdAt !== "string" || typeof taskId !== "string") {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  if (!UUID_PATTERN.test(taskId) || !Number.isFinite(Date.parse(createdAt))) {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  return { createdAt, taskId };
+}
+
+/** 聚合是否严格排在游标位置之后（createdAt, taskId 升序）。 */
+function isAfterCursor(aggregate: TaskAggregate, cursor: CursorPosition): boolean {
+  if (aggregate.task.createdAt !== cursor.createdAt) return aggregate.task.createdAt > cursor.createdAt;
+  return aggregate.taskId > cursor.taskId;
 }
 
 /**
@@ -149,13 +218,6 @@ export async function shareRoutes(
     if (value === undefined || value === "all") return null;
     if (IMPORTANCES.includes(value as Importance)) return value as Importance;
     throw new ApiError(400, "INVALID_REQUEST", "importance 非法");
-  }
-
-  /** 解码 cursor（base64url taskId）；非法 base64/UUID 400（05 §6.4）。 */
-  function decodeCursor(cursor: string): string {
-    const decoded = Buffer.from(cursor, "base64url").toString("utf8");
-    if (!UUID_PATTERN.test(decoded)) throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
-    return decoded;
   }
 
   /** folderId + 全部后代任务夹集合；folderId 无效时只含自身（结果为空集）。 */
@@ -225,13 +287,15 @@ export async function shareRoutes(
     const aggregates = memberVisibleAggregates(await listTaskAggregates(options.dataDir), principal.memberId);
 
     if (view === "home") {
-      // 05 §6.4：owned = 主任务 owner；collaborated = 主任务 collaborator 或仅小任务被分配者；
-      // 两者互斥（角色取首次命中的 owner/collaborator），不会重复出现。
+      // 05 §6.4 + 07 §5.1：owned = 主任务 owner；collaborated = 主任务 collaborator。
+      // 分组只看主任务分配（mainAssignmentRole），仅小任务被分配者两组都不出现
+      // ——「subtask-only 只出现在只读事项跟踪」。
       const owned: TaskAggregate[] = [];
       const collaborated: TaskAggregate[] = [];
       for (const aggregate of aggregates) {
-        if (isRelated(aggregate, principal.memberId).role === "owner") owned.push(aggregate);
-        else collaborated.push(aggregate);
+        const role = mainAssignmentRole(aggregate, principal.memberId);
+        if (role === "owner") owned.push(aggregate);
+        else if (role === "collaborator") collaborated.push(aggregate);
       }
       return {
         // 05 §1 的稳定顺序同样适用于个人页：createdAt, id 升序，避免 readdir 序造成卡片跳动。
@@ -253,21 +317,23 @@ export async function shareRoutes(
     if (query.q) items = items.filter((aggregate) => aggregate.task.description.includes(query.q!));
 
     const sorted = [...items].sort(compareAggregates);
+    // 位置游标（05 §1 / 07 §5.1）：取第一个严格大于游标位置的项续页。
+    // 删掉「游标 taskId 必须仍在当前结果集」的成员资格校验——游标描述位置，
+    // 不描述成员资格，游标项被管理员软删除/改字段后仍应正常续页。
     let start = 0;
     if (query.cursor !== undefined) {
-      const cursorTaskId = decodeCursor(query.cursor);
-      if (!aggregates.some((aggregate) => aggregate.taskId === cursorTaskId)) {
-        throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
-      }
-      const index = sorted.findIndex((aggregate) => aggregate.taskId === cursorTaskId);
-      if (index < 0) throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
-      start = index + 1;
+      const cursor = decodeCursor(query.cursor);
+      const index = sorted.findIndex((aggregate) => isAfterCursor(aggregate, cursor));
+      start = index < 0 ? sorted.length : index;
     }
 
     const page = sorted.slice(start, start + TRACKER_PAGE_LIMIT);
     const hasMore = start + page.length < sorted.length;
     const nextCursor = hasMore && page.length > 0
-      ? Buffer.from(page[page.length - 1]!.taskId, "utf8").toString("base64url")
+      ? encodeCursor({
+        createdAt: page[page.length - 1]!.task.createdAt,
+        taskId: page[page.length - 1]!.taskId,
+      })
       : null;
     return {
       items: page.map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
@@ -286,8 +352,11 @@ export async function shareRoutes(
 
     const members = await memberMap();
     if (resolved.isMain) {
+      // 07 §5.1：subtask-only 读父任务上下文时 detail 由 toMemberTask 抹成空串。
       return { ...toMemberTask(resolved.aggregate, principal.memberId, members), memberRole: relation.role };
     }
+    // 小任务详情（05 §6.5）：parent 是同口径成员 DTO，因此同样不含主任务 detail，
+    // 且只含当前成员可见的小任务。
     const parent = toMemberTask(resolved.aggregate, principal.memberId, members);
     const subtask = parent.subtasks.find((entry) => entry.id === id);
     if (!subtask) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
@@ -298,8 +367,9 @@ export async function shareRoutes(
     const principal = requirePrincipal(request);
     const aggregates = memberVisibleAggregates(await listTaskAggregates(options.dataDir), principal.memberId);
     // 05 §6.11：复用管理端 folder-service.tree 产出同构 FolderTreeNode[]，再按成员范围裁剪空任务夹。
+    // FolderService.tree 的返回类型已是 FolderTreeNode[]（§6.8），此处不再需要双重转换。
     const { service: folderService } = createFolderService({ dataDir: options.dataDir });
-    const tree = (await folderService.tree(aggregates)) as unknown as FolderTreeNode[];
+    const tree = await folderService.tree(aggregates);
     return { tree: pruneMemberTree(tree) };
   });
 }

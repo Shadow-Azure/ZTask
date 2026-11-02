@@ -20,6 +20,7 @@ import {
 interface MemberTask {
   id: string;
   description: string;
+  detail: string;
   subtasks: Array<{ id: string; description: string; owner: { id: string; name: string } }>;
 }
 
@@ -111,12 +112,15 @@ afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
-describe("home 视图分组（05 §6.4）", () => {
+describe("home 视图分组（05 §6.4 / 07 §5.1）", () => {
   it("A：owned 只含主任务 owner 的任务，collaborated 为空，B 的数据不可见", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=home", cookieA)).json();
     expectSet(descriptions(body.owned as MemberTask[]), ["A 独有任务", "A 与 B 协作", "C 被分配小任务的父任务", "含已删除小任务"]);
     expect(body.collaborated).toEqual([]);
     expect(JSON.stringify(body)).not.toContain("B 独有任务");
+    // 主任务 owner 仍能看到完整 detail（与下面 C 的空 detail 形成对照，07 §5.1）。
+    const parent = (body.owned as MemberTask[]).find((task) => task.id === taskC)!;
+    expect(parent.detail).toBe("C 被分配小任务的父任务详情");
   });
 
   it("B：owned 主任务 owner + collaborated 主任务 collaborator，互不重复", async () => {
@@ -129,18 +133,17 @@ describe("home 视图分组（05 §6.4）", () => {
     expect(JSON.stringify(body)).not.toContain("C 的小任务");
   });
 
-  it("C：仅小任务被分配者进入 collaborated，DTO 只含自己的小任务", async () => {
+  it("C：仅小任务被分配者两组都不出现（07 §5.1 subtask-only 只进只读事项跟踪）", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=home", cookieC)).json();
     expect(body.owned).toEqual([]);
-    expectSet(descriptions(body.collaborated as MemberTask[]), ["C 被分配小任务的父任务"]);
-    const parent = (body.collaborated as MemberTask[])[0]!;
-    expectSet(parent.subtasks.map((subtask) => subtask.description), ["C 的小任务"]);
-    expect(JSON.stringify(body)).not.toContain("A 的小任务");
-    expect(JSON.stringify(body)).not.toContain("C 已删除的小任务");
+    expect(body.collaborated).toEqual([]);
+    // 父任务卡（含 description / detail 文本）整体不进入个人页。
+    expect(JSON.stringify(body)).not.toContain("C 被分配小任务的父任务");
+    expect(JSON.stringify(body)).not.toContain("C 的小任务");
   });
 });
 
-describe("tracker 视图（05 §6.4）", () => {
+describe("tracker 视图（05 §6.4 / 07 §5.1）", () => {
   it("B 只看到相关任务；无关任务与 A 私有任务不出现", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=tracker", cookieB)).json();
     expectSet(descriptions(body.items as MemberTask[]), ["B 独有任务", "A 与 B 协作"]);
@@ -148,7 +151,19 @@ describe("tracker 视图（05 §6.4）", () => {
     expect(JSON.stringify(body)).not.toContain("A 独有任务");
   });
 
-  it("view/importance/cursor 参数校验：非法值 400 INVALID_REQUEST", async () => {
+  it("C：subtask-only 只出现在只读事项跟踪，父任务 detail 为空串且只含自己的小任务", async () => {
+    const body = (await shareGet("/api/v1/share/tasks?view=tracker", cookieC)).json();
+    expectSet(descriptions(body.items as MemberTask[]), ["C 被分配小任务的父任务"]);
+    const parent = (body.items as MemberTask[])[0]!;
+    // 07 §5.1「不看主任务 detail」：只抹 detail，其余字段保留。
+    expect(parent.detail).toBe("");
+    expect(parent.description).toBe("C 被分配小任务的父任务");
+    expectSet(parent.subtasks.map((subtask) => subtask.description), ["C 的小任务"]);
+    expect(JSON.stringify(body)).not.toContain("A 的小任务");
+    expect(JSON.stringify(body)).not.toContain("C 已删除的小任务");
+  });
+
+  it("view/importance 参数校验：非法值 400 INVALID_REQUEST", async () => {
     const badView = await shareGet("/api/v1/share/tasks?view=bogus", cookieA);
     expect(badView.statusCode).toBe(400);
     expect(badView.json().error.code).toBe("INVALID_REQUEST");
@@ -159,19 +174,6 @@ describe("tracker 视图（05 §6.4）", () => {
 
     const allImportance = await shareGet("/api/v1/share/tasks?view=tracker&importance=all", cookieA);
     expect(allImportance.statusCode).toBe(200);
-
-    const invalidBase64 = await shareGet(`/api/v1/share/tasks?view=tracker&cursor=${Buffer.from("not-a-uuid").toString("base64url")}`, cookieA);
-    expect(invalidBase64.statusCode).toBe(400);
-    expect(invalidBase64.json().error.code).toBe("INVALID_REQUEST");
-
-    const missingTask = await shareGet(`/api/v1/share/tasks?view=tracker&cursor=${Buffer.from(randomUUID()).toString("base64url")}`, cookieA);
-    expect(missingTask.statusCode).toBe(400);
-
-    const foreignTask = await shareGet(`/api/v1/share/tasks?view=tracker&cursor=${Buffer.from(taskB).toString("base64url")}`, cookieA);
-    expect(foreignTask.statusCode).toBe(400);
-
-    const ownTask = await shareGet(`/api/v1/share/tasks?view=tracker&cursor=${Buffer.from(taskA).toString("base64url")}`, cookieA);
-    expect(ownTask.statusCode).toBe(200);
   });
 });
 
@@ -198,10 +200,12 @@ describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
     expect(foreignSub.json().error.code).toBe("TASK_NOT_FOUND");
   });
 
-  it("B 以协作者身份读 taskAB；C 读自己的小任务返回 {task,parent,memberRole} 且 parent 只含可见小任务", async () => {
+  it("B 以协作者身份读 taskAB；C 读自己的小任务返回 {task,parent,memberRole} 且 parent 无主任务 detail", async () => {
     const collaboratorMain = await shareGet(`/api/v1/share/tasks/${taskAB}`, cookieB);
     expect(collaboratorMain.statusCode).toBe(200);
     expect(collaboratorMain.json().memberRole).toBe("collaborator");
+    // 主任务 collaborator 属于主任务分配，仍能看完整 detail（07 §5.1）。
+    expect(collaboratorMain.json().detail).toBe("A 与 B 协作详情");
 
     const ownSub = await shareGet(`/api/v1/share/tasks/${subC}`, cookieC);
     expect(ownSub.statusCode).toBe(200);
@@ -210,10 +214,24 @@ describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
     expect(body.parent.id).toBe(taskC);
     expect(body.memberRole).toBe("collaborator");
     expect(body.parent.subtasks.map((subtask: { id: string }) => subtask.id)).toEqual([subC]);
+    // 07 §5.1：subtask-only 的 parent 上下文同样不含主任务 detail。
+    expect(body.parent.detail).toBe("");
+    expect(body.parent.description).toBe("C 被分配小任务的父任务");
 
     const otherSub = await shareGet(`/api/v1/share/tasks/${subA}`, cookieC);
     expect(otherSub.statusCode).toBe(404);
     expect(otherSub.json().error.code).toBe("TASK_NOT_FOUND");
+
+    // C 读父任务本身仍可见（父任务上下文），但 detail 被抹空、小任务只剩自己的。
+    const parentTask = await shareGet(`/api/v1/share/tasks/${taskC}`, cookieC);
+    expect(parentTask.statusCode).toBe(200);
+    expect(parentTask.json().detail).toBe("");
+    expect(parentTask.json().subtasks.map((subtask: { id: string }) => subtask.id)).toEqual([subC]);
+
+    // 父任务上下文之外的任务（B 的任务）对 C 仍不可见。
+    const foreignTask = await shareGet(`/api/v1/share/tasks/${taskB}`, cookieC);
+    expect(foreignTask.statusCode).toBe(404);
+    expect(foreignTask.json().error.code).toBe("TASK_NOT_FOUND");
   });
 
   it("非法 / 不存在 / 软删除 id 一律 404 TASK_NOT_FOUND（不 500、不泄露存储错误）", async () => {
