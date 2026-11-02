@@ -22,6 +22,11 @@ describe("initManifest", () => {
     expect(manifest.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
   });
 
+  it("首次创建默认使用服务主机时区（#21 看板「今天」依赖它）", async () => {
+    const manifest = await initManifest(dir, { applicationVersion: "0.1.0" });
+    expect(manifest.timeZone).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  });
+
   it("重复初始化幂等：返回已存在内容", async () => {
     const first = await initManifest(dir, { applicationVersion: "0.1.0" });
     const second = await initManifest(dir, { applicationVersion: "0.2.0" });

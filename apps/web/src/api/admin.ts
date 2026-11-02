@@ -1,4 +1,13 @@
-import { API_PREFIX, type AdminMember, type Folder, type FolderTreeNode, type Subtask, type Task } from "@ztask/shared";
+import {
+  API_PREFIX,
+  type AdminMember,
+  type DashboardDueDistribution,
+  type DashboardSummary,
+  type Folder,
+  type FolderTreeNode,
+  type Subtask,
+  type Task,
+} from "@ztask/shared";
 import { requestJson } from "./http";
 
 /** 管理端资源函数（03 §3 api/admin）：全部走同源 /api/v1/admin。 */
@@ -28,6 +37,25 @@ export const adminApi = {
   /** 归档成员（DELETE 语义：历史任务保留并显示待分配）。 */
   archiveMember: (id: string) =>
     requestJson<void>(`${API_PREFIX}/admin/members/${id}`, { method: "DELETE" }),
+
+  /** 看板三统计卡（05 §5.1）：folderId 必填，memberIds 为空表示全部成员。 */
+  dashboardSummary: (params: { folderId: string; memberIds?: string[] }) =>
+    requestJson<DashboardSummary>(`${API_PREFIX}/admin/dashboard/summary`, {
+      query: {
+        folderId: params.folderId,
+        memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+      },
+    }),
+
+  /** 指定统计桶的预计完成时间分布（05 §5.2）。 */
+  dashboardDueDistribution: (params: { folderId: string; bucket: string; memberIds?: string[] }) =>
+    requestJson<DashboardDueDistribution>(`${API_PREFIX}/admin/dashboard/due-distribution`, {
+      query: {
+        folderId: params.folderId,
+        bucket: params.bucket,
+        memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+      },
+    }),
 };
 
 /** 任务列表查询参数（05 §3.4）。 */

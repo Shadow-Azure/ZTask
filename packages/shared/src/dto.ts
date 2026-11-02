@@ -64,6 +64,51 @@ export interface FolderTreeNode extends Folder {
   counts: { done: number; todo: number };
 }
 
+/** 看板单桶内的高/中/低重要度计数（05 §2.2）。 */
+export interface ImportanceCount {
+  high: number;
+  mid: number;
+  low: number;
+}
+
+/** 看板进度桶：total 与按重要度拆分的计数（05 §2.2）。 */
+export interface ProgressBucket {
+  total: number;
+  importance: ImportanceCount;
+}
+
+/**
+ * `GET /admin/dashboard/summary` 与 `GET /share/dashboard/summary` 的响应（05 §2.2/§5.1/§6.12）。
+ * 三桶互斥：done=100、gt50=51–99、lt50=0–50。
+ */
+export interface DashboardSummary {
+  scope: { folderId: string; memberIds: string[] };
+  /** UTC RFC 3339。 */
+  asOf: string;
+  buckets: { done: ProgressBucket; gt50: ProgressBucket; lt50: ProgressBucket };
+}
+
+/** 预计完成分布的时间桶键；顺序即响应固定顺序（05 §5.2）。 */
+export type DueBucketKey = "overdue" | "week" | "month" | "later" | "unscheduled";
+
+/** 预计完成分布的单个时间桶（05 §2.2）。 */
+export interface DueBucket {
+  key: DueBucketKey;
+  total: number;
+  importance: ImportanceCount;
+}
+
+/**
+ * 指定统计桶内的预计完成分布（05 §5.2/§6.13）：固定返回 overdue/week/month/later 四桶，
+ * dueDate 为 null 的主任务不进入分布。
+ */
+export interface DashboardDueDistribution {
+  bucket: "done" | "gt50" | "lt50";
+  /** UTC RFC 3339。 */
+  asOf: string;
+  buckets: DueBucket[];
+}
+
 /** 成员在相关任务中的角色（05 §6.5）；决定个人页写权限，只读跟踪忽略它。 */
 export type ShareMemberRole = "owner" | "collaborator";
 

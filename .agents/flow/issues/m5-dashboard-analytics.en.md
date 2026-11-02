@@ -6,13 +6,25 @@ English | [中文](m5-dashboard-analytics.md)
 kind: issue
 milestone: m5
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/modules/dashboard/**
   - apps/server/src/modules/share/**
+  - apps/server/src/modules/tasks/**
+  - apps/server/src/app.ts
+  - apps/server/src/storage/manifest-store.ts
+  - apps/server/src/index.ts
+  - tests/member-access/**
   - apps/web/src/features/dashboard/**
+  - .agents/notes/implemented/feature/2026-11-02-*
+  - apps/web/src/api/share.ts
+  - apps/web/src/api/admin.ts
+  - apps/web/src/features/tracker/**
   - packages/shared/**
+  - plan/fullstack-design/05-api-design.md
   - tests/dashboard/**
+  - tests/storage/**
+  - tests/web-shell/**
   - .agents/flow/issues/m5-dashboard-analytics*
 adr: []
 github:

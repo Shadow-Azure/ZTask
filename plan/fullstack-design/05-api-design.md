@@ -60,7 +60,7 @@ DashboardSummary = {
 }
 
 DueBucket = {
-  key: "overdue" | "week" | "month" | "later",
+  key: "overdue" | "week" | "month" | "later" | "unscheduled",
   total,
   importance: ImportanceCount
 }

@@ -12,6 +12,8 @@ import { taskRoutes } from "./modules/tasks/task-routes.js";
 import { shareRoutes } from "./modules/share/share-routes.js";
 import { networkRoutes } from "./modules/network/network-routes.js";
 import { shareLinkRoutes } from "./modules/share/share-link-routes.js";
+import { createDashboardService } from "./modules/dashboard/dashboard-service.js";
+import { dashboardRoutes } from "./modules/dashboard/dashboard-routes.js";
 import type { NetworkService } from "./modules/network/network-service.js";
 import type { ShareLinkService } from "./modules/share/share-links.js";
 
@@ -297,13 +299,24 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   }
 
   if (options.store) {
+    // 看板服务按 manifest 时区求「今天」（05 §5.2）；管理员与分享域共享同一实例，
+    // 保证两边口径一致（LAN app 与 loopback app 各自 buildApp，但同 dataDir/timeZone）。
+    const dashboardService = createDashboardService({
+      dataDir: config.dataDir,
+      timeZone: options.store.manifest.timeZone,
+    });
     // 管理端业务路由（#15/#16）；Admin 本机专用守卫已在路由注册前安装。
     await app.register(folderRoutes, { dataDir: config.dataDir });
     await app.register(memberRoutes, { dataDir: config.dataDir, shareLinkService: options.shareLinkService });
     // 管理端与成员写共用同一 TaskStore/串行队列（06 §8.2）：否则两条队列会把
     // 同 expectedVersion 的并发提交都判成功，造成丢写甚至 revisionTip 损坏。
     await app.register(taskRoutes, { dataDir: config.dataDir, taskStore: options.store.tasks });
-    await app.register(shareRoutes, { dataDir: config.dataDir, taskStore: options.store.tasks });
+    await app.register(dashboardRoutes, { service: dashboardService });
+    await app.register(shareRoutes, {
+      dataDir: config.dataDir,
+      taskStore: options.store.tasks,
+      dashboardService,
+    });
   }
 
   // 网络与分享链接管理（#20）：两个服务由 bootstrap 创建，loopback 与 LAN app 共享同一实例；

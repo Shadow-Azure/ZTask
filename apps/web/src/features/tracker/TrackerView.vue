@@ -10,6 +10,7 @@ import TaskCard from "../../components/TaskCard.vue";
 import TaskEditorDialog from "../tasks/TaskEditorDialog.vue";
 import TaskDetailDialog from "./TaskDetailDialog.vue";
 import FolderTree from "../folders/FolderTree.vue";
+import DashboardPanel from "../dashboard/DashboardPanel.vue";
 import PaneResizer from "../../components/ui/PaneResizer.vue";
 import EmptyState from "../../components/ui/EmptyState.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
@@ -22,7 +23,7 @@ import { readPreference, writePreference } from "../../lib/preferences";
  * 查询参数驱动服务端筛选（folder 深链、importance/q 服务端查询），统一只读任务卡。
  * 管理端经 TaskEditorDialog 编辑；成员域（scope=share）只发 `GET /share/**`（05 §6.4–6.5/§6.11），
  * 不注册任何编辑 mutation，点击卡片打开只读 TaskDetailDialog。
- * deleted/current 的看板与历史展示接口留给 m5。
+ * 看板（情况看板 tab）由 DashboardPanel 复用同一组统计 DTO；历史 diff 仍属后续 issue。
  */
 const props = defineProps<{ access?: "admin" | "readonly"; scope?: "admin" | "share" }>();
 
@@ -372,12 +373,7 @@ function onTreeDrag(clientX: number): void {
       </div>
 
       <div v-else class="board-body">
-        <EmptyState
-          :title="isShareScope ? '情况看板暂未开放' : undefined"
-          :hint="isShareScope
-            ? '当前版本可在成员个人页与任务管理中查看你的相关事项；统计与历史将在后续版本提供。'
-            : '情况看板统计与历史变化将在 m5 接入'"
-        />
+        <DashboardPanel :access="isShareScope ? 'share' : 'admin'" :folder-id="selectedFolderId" />
       </div>
     </main>
 
