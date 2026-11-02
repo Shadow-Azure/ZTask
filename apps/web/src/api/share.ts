@@ -4,6 +4,8 @@ import {
   type ShareHomeTasks,
   type ShareSessionResponse,
   type ShareTaskDetail,
+  type DashboardDueDistribution,
+  type DashboardSummary,
   type ShareTaskMutation,
   type ShareTrackerTasks,
 } from "@ztask/shared";
@@ -77,6 +79,18 @@ export const shareApi = {
     requestJson<ShareTaskMutation>(`${API_PREFIX}/share/tasks/${taskId}/subtasks/${subtaskId}`, {
       method: "PATCH",
       body,
+    }),
+
+  /** 成员看板三统计卡（05 §6.12）：只看当前成员相关任务，不能传 memberIds。 */
+  dashboardSummary: (params: { folderId: string }) =>
+    requestJson<DashboardSummary>(`${API_PREFIX}/share/dashboard/summary`, {
+      query: { folderId: params.folderId },
+    }),
+
+  /** 成员看板预计完成分布（05 §6.13）。 */
+  dashboardDueDistribution: (params: { folderId: string; bucket: string }) =>
+    requestJson<DashboardDueDistribution>(`${API_PREFIX}/share/dashboard/due-distribution`, {
+      query: { folderId: params.folderId, bucket: params.bucket },
     }),
 
   /** 负责人删除自己主任务下的小任务（05 §6.10），软删除并递增父聚合 version。 */

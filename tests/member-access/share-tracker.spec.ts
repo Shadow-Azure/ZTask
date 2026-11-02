@@ -356,12 +356,12 @@ describe("成员只读事项跟踪（/s/tracker）", () => {
     expectNoAdminRequest();
   });
 
-  it("成员域「情况看板」不暴露内部 issue 文案（02 §5）", async () => {
+  it("成员域「情况看板」：未选任务夹时提示先选择，不请求成员目录也不暴露内部 issue 文案", async () => {
     mockShareFetch(defaultResponder({ tasks: () => ({ items: [], nextCursor: null }) }));
     const { wrapper } = await mountTracker("/s/tracker?tab=dash");
 
     await vi.waitFor(() => {
-      expect(wrapper.text()).toContain("情况看板暂未开放");
+      expect(wrapper.text()).toContain("先选择任务夹");
     });
     expect(wrapper.text()).not.toContain("m5");
     expectNoAdminRequest();

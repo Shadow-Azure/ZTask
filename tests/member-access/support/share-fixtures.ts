@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, createHash } from "node:crypto";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
+import type { Importance } from "@ztask/shared";
 import { buildApp, initStore, writeJsonAtomic } from "@ztask/server";
 
 /**
@@ -53,11 +54,19 @@ export function tmpDataDir(): string {
 /**
  * 启动带 store 的测试 app（与管理端共享同一装配）。
  * @param dataDir 临时数据目录。
+ * @param options timeZone 仅在 manifest 首建时生效（#21 看板时区用例）。
  * @returns 未监听的 Fastify 实例。
  */
-export async function createMemberAccessApp(dataDir: string): Promise<FastifyInstance> {
+export async function createMemberAccessApp(
+  dataDir: string,
+  options: { timeZone?: string } = {},
+): Promise<FastifyInstance> {
   await mkdir(dataDir, { recursive: true });
-  const store = await initStore({ dataDir, applicationVersion: "0.1.0" });
+  const store = await initStore({
+    dataDir,
+    applicationVersion: "0.1.0",
+    ...(options.timeZone !== undefined ? { timeZone: options.timeZone } : {}),
+  });
   return await buildApp({ host: "127.0.0.1", port: 0, dataDir, staticRoot: null }, { store });
 }
 
@@ -159,7 +168,15 @@ export async function createMember(app: FastifyInstance, name: string): Promise<
 /** 管理端：创建主任务，返回 id 与 version。 */
 export async function createTask(
   app: FastifyInstance,
-  input: { folderId: string; description: string; ownerIds: string[]; collaboratorIds?: string[]; progress?: number },
+  input: {
+    folderId: string;
+    description: string;
+    ownerIds: string[];
+    collaboratorIds?: string[];
+    progress?: number;
+    importance?: Importance;
+    dueDate?: string | null;
+  },
 ): Promise<{ id: string; version: number }> {
   const response = await app.inject({
     method: "POST",
@@ -172,8 +189,8 @@ export async function createTask(
       collaboratorIds: input.collaboratorIds ?? [],
       progress: input.progress ?? 0,
       detail: `${input.description}详情`,
-      importance: "mid",
-      dueDate: null,
+      importance: input.importance ?? "mid",
+      dueDate: input.dueDate ?? null,
     },
   });
   if (response.statusCode !== 201) throw new Error(`createTask failed: ${response.statusCode} ${response.body}`);

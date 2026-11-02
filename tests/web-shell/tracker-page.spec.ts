@@ -92,7 +92,8 @@ describe("TrackerPage 结构与权限体验", () => {
 
   it("tab 深链：?tab=dash 切到看板占位", async () => {
     const { wrapper } = await mountTracker({ access: "admin" }, { tab: "dash" });
-    expect(wrapper.text()).toContain("情况看板统计与历史变化将在 m5 接入");
+    // m5 #21：看板 tab 已接入真实统计面板；未选任务夹时提示先选择。
+    expect(wrapper.text()).toContain("先选择任务夹");
     expect(wrapper.find('[role="tab"][aria-selected="true"]').text()).toBe("情况看板");
     wrapper.unmount();
   });

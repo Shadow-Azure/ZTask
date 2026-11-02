@@ -32,6 +32,8 @@ import {
 } from "./share-task-writes.js";
 import { createMemberService, type MemberFile } from "../members/member-service.js";
 import { createFolderService } from "../folders/folder-service.js";
+import type { DashboardService } from "../dashboard/dashboard-service.js";
+import { assertNoMemberIds, parseBucket, parseFolderId } from "../dashboard/dashboard-query.js";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
 import type { TaskStore } from "../../storage/task-store.js";
@@ -166,12 +168,13 @@ function isAfterCursor(aggregate: TaskAggregate, cursor: CursorPosition): boolea
 /**
  * 成员分享域路由（05 §6.1–6.11）：会话交换/恢复/注销、相关任务视图/详情、
  * 只读任务夹树，以及 #19 的成员写端点（进度/详情/小任务，§6.6–6.10）。
+ * #21 追加看板两路由（§6.12–6.13），复用注入的看板服务。
  * @param app Fastify 实例。
- * @param options 装配项（dataDir）。
+ * @param options 装配项（dataDir、共享任务队列与看板服务）。
  */
 export async function shareRoutes(
   app: FastifyInstance,
-  options: { dataDir: string; taskStore?: TaskStore },
+  options: { dataDir: string; taskStore?: TaskStore; dashboardService: DashboardService },
 ): Promise<void> {
   const { store: memberStore } = createMemberService({ dataDir: options.dataDir });
   // 写路径复用同一 dataDir 与提交协议（06 §8.2）；成员身份由 preHandler 解析的 principal 提供。
@@ -350,6 +353,30 @@ export async function shareRoutes(
       items: page.map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
       nextCursor,
     } satisfies ShareTrackerTasks;
+  });
+
+  // ---- 看板（05 §6.12–6.13 / #21） ----
+  // 会话 preHandler 已覆盖本插件全部非 session 路径；这里只按会话成员取相关任务，
+  // 任何 memberIds 参数都拒绝，避免成员借此探测其他成员的范围。
+  app.get(`${SHARE_BASE_PATH}/dashboard/summary`, async (request) => {
+    const principal = requirePrincipal(request);
+    const query = request.query as Record<string, unknown>;
+    assertNoMemberIds(query);
+    return await options.dashboardService.summary({
+      folderId: parseFolderId(query),
+      shareMemberId: principal.memberId,
+    });
+  });
+
+  app.get(`${SHARE_BASE_PATH}/dashboard/due-distribution`, async (request) => {
+    const principal = requirePrincipal(request);
+    const query = request.query as Record<string, unknown>;
+    assertNoMemberIds(query);
+    return await options.dashboardService.dueDistribution({
+      folderId: parseFolderId(query),
+      bucket: parseBucket(query),
+      shareMemberId: principal.memberId,
+    });
   });
 
   app.get(`${SHARE_BASE_PATH}/tasks/:id`, async (request): Promise<ShareTaskDetail> => {
