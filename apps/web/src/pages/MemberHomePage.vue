@@ -9,9 +9,9 @@ import LoadingState from "../components/ui/LoadingState.vue";
 import ErrorState from "../components/ui/ErrorState.vue";
 
 /**
- * 成员个人页（08 §6.2，原型 1892–1910）：身份区 + 「我负责的 / 我协作的」两组只读任务卡。
- * 本 issue 的成员个人页只有读取路径；owner 的进度/详情/小任务编辑在后续 issue 接入，
- * 因此页面不渲染任何 input/button，也不暗示存在编辑入口（03 §5）。
+ * 成员个人页（08 §6.2，原型 1892–1910）：身份区 + 「我负责的 / 我协作的」两组任务卡。
+ * 「我负责的」开放受限编辑（进度、完整详情、一层小任务），「我协作的」保持只读；
+ * 编辑控件只在 owner 卡渲染，写权限最终由服务端 owner 校验决定（02 §4.2–4.3）。
  */
 const { member, handleAuthError } = useShareSession();
 
@@ -105,12 +105,13 @@ function folderPathOf(task: Task): string | undefined {
         <template v-else>
           <section class="share-group" aria-labelledby="share-owned-title">
             <h3 id="share-owned-title">我负责的任务 <span class="cnt">{{ owned.length }}</span></h3>
-            <p class="gdesc">你负责的事项在此汇总展示，进度与进展详情为只读。</p>
+            <p class="gdesc">可以更新进度（需保存）、编辑完整进展详情（保存会追加快照）并管理一层小任务。</p>
             <MemberTaskCard
               v-for="task in owned"
               :key="task.id"
               :task="task"
               :folder-path="folderPathOf(task)"
+              editable
             />
             <div v-if="owned.length === 0" class="empty-tip">暂无你负责的任务</div>
           </section>

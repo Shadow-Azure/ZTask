@@ -289,27 +289,39 @@ describe("软删除不可见", () => {
   });
 });
 
-describe("只读性（#19 之前无写端点）", () => {
-  it("PATCH/POST/DELETE/PUT /share/tasks/** 均 404 NOT_FOUND", async () => {
-    const attempts: Array<{ method: string; url: string; payload?: unknown }> = [
+describe("写端点边界（#19 起只开放 §6.6–6.10 五条写路由）", () => {
+  it("未注册的写路径仍 404 NOT_FOUND；跨父任务 subtaskId 是 404 TASK_NOT_FOUND", async () => {
+    // 主任务整体编辑/删除与编辑器端点不随 #19 开放，保持 404。
+    const unregistered: Array<{ method: "PATCH" | "PUT" | "DELETE"; url: string; payload?: unknown }> = [
       { method: "PATCH", url: `/api/v1/share/tasks/${taskA}`, payload: { version: 1, progress: 50 } },
-      { method: "PATCH", url: `/api/v1/share/tasks/${taskA}/progress`, payload: { version: 1, progress: 50 } },
-      { method: "PATCH", url: `/api/v1/share/tasks/${taskA}/detail`, payload: { version: 1, detail: "x" } },
-      { method: "POST", url: `/api/v1/share/tasks/${taskA}/subtasks`, payload: { version: 1, description: "x" } },
-      { method: "PATCH", url: `/api/v1/share/tasks/${taskA}/subtasks/${subA}`, payload: { version: 1 } },
-      { method: "DELETE", url: `/api/v1/share/tasks/${taskA}/subtasks/${subA}?version=1` },
-      { method: "DELETE", url: `/api/v1/share/tasks/${taskA}?version=1` },
       { method: "PUT", url: `/api/v1/share/tasks/${taskA}/editor`, payload: { version: 1 } },
+      { method: "DELETE", url: `/api/v1/share/tasks/${taskA}?version=1` },
     ];
-    for (const attempt of attempts) {
+    for (const attempt of unregistered) {
       const response = await app.inject({
-        method: attempt.method as "PATCH",
+        method: attempt.method,
         url: attempt.url,
         headers: { cookie: cookieA },
         ...(attempt.payload === undefined ? {} : { payload: attempt.payload }),
       });
       expect(response.statusCode, `${attempt.method} ${attempt.url}`).toBe(404);
       expect(response.json().error.code).toBe("NOT_FOUND");
+    }
+
+    // 小任务写端点只认路径上的父任务：subC 属于 taskC，对 taskA 一律 404。
+    const crossParent: Array<{ method: "PATCH" | "DELETE"; url: string; payload?: unknown }> = [
+      { method: "PATCH", url: `/api/v1/share/tasks/${taskA}/subtasks/${subC}`, payload: { version: 1, description: "x" } },
+      { method: "DELETE", url: `/api/v1/share/tasks/${taskA}/subtasks/${subC}?version=1` },
+    ];
+    for (const attempt of crossParent) {
+      const response = await app.inject({
+        method: attempt.method,
+        url: attempt.url,
+        headers: { cookie: cookieA },
+        ...(attempt.payload === undefined ? {} : { payload: attempt.payload }),
+      });
+      expect(response.statusCode, `${attempt.method} ${attempt.url}`).toBe(404);
+      expect(response.json().error.code).toBe("TASK_NOT_FOUND");
     }
   });
 });

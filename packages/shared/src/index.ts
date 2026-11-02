@@ -22,6 +22,7 @@ export type {
   ShareMemberRole,
   ShareSessionResponse,
   ShareTaskDetail,
+  ShareTaskMutation,
   ShareTrackerTasks,
   Subtask,
   Task,

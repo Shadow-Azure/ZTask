@@ -4,6 +4,7 @@ import {
   type ShareHomeTasks,
   type ShareSessionResponse,
   type ShareTaskDetail,
+  type ShareTaskMutation,
   type ShareTrackerTasks,
 } from "@ztask/shared";
 import { requestJson } from "./http";
@@ -51,4 +52,37 @@ export const shareApi = {
 
   /** 成员可见任务夹树（相关任务及祖先）。 */
   foldersTree: () => requestJson<{ tree: FolderTreeNode[] }>(`${API_PREFIX}/share/folders/tree`),
+
+  /** 负责人保存主任务进度（05 §6.6）：progress 0–100 + 聚合 version。 */
+  saveProgress: (taskId: string, body: { progress: number; version: number }) =>
+    requestJson<ShareTaskMutation>(`${API_PREFIX}/share/tasks/${taskId}/progress`, { method: "PATCH", body }),
+
+  /** 负责人保存完整进展详情（05 §6.7）：替换当前文本并追加快照。 */
+  saveDetail: (taskId: string, body: { detail: string; version: number }) =>
+    requestJson<ShareTaskMutation>(`${API_PREFIX}/share/tasks/${taskId}/detail`, { method: "PATCH", body }),
+
+  /** 负责人在自己主任务下新建一层小任务（05 §6.8）；owner 恒为当前成员。 */
+  createSubtask: (
+    taskId: string,
+    body: { version: number; description: string; progress?: number; importance?: string; dueDate?: string | null },
+  ) =>
+    requestJson<ShareTaskMutation>(`${API_PREFIX}/share/tasks/${taskId}/subtasks`, { method: "POST", body }),
+
+  /** 负责人编辑自己主任务下的小任务（05 §6.9）；不能改 owner。 */
+  updateSubtask: (
+    taskId: string,
+    subtaskId: string,
+    body: { version: number; description?: string; progress?: number; importance?: string; dueDate?: string | null },
+  ) =>
+    requestJson<ShareTaskMutation>(`${API_PREFIX}/share/tasks/${taskId}/subtasks/${subtaskId}`, {
+      method: "PATCH",
+      body,
+    }),
+
+  /** 负责人删除自己主任务下的小任务（05 §6.10），软删除并递增父聚合 version。 */
+  deleteSubtask: (taskId: string, subtaskId: string, version: number) =>
+    requestJson<ShareTaskMutation>(`${API_PREFIX}/share/tasks/${taskId}/subtasks/${subtaskId}`, {
+      method: "DELETE",
+      query: { version },
+    }),
 };

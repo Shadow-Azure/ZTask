@@ -6,13 +6,16 @@
 kind: issue
 milestone: m4
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/modules/share/**
   - apps/web/src/features/share/**
   - apps/web/src/features/tasks/**
   - packages/shared/**
   - tests/member-authoring/**
+  - tests/member-access/**
+  - apps/web/src/api/share.ts
+  - .agents/notes/implemented/feature/2026-11-02-*
   - .agents/flow/issues/m4-member-authoring*
 adr: []
 github:
