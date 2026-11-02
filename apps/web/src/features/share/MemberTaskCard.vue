@@ -61,10 +61,19 @@ const deletingSubtask = ref<Subtask | null>(null);
 
 watch(
   () => props.task.progress,
-  (value) => {
-    // 只有草稿已经落盘（不再 dirty）时才跟随服务端，避免轮询覆盖用户输入。
-    if (progressDraft.value === value) return;
+  (value, oldValue) => {
+    // 用户草稿未保存（draft 仍等于旧基线 → false；已改动 → 不覆盖）时不被轮询/他人保存覆盖。
+    if (progressDraft.value !== oldValue) return;
     progressDraft.value = value;
+  },
+);
+
+watch(
+  () => props.task.detail,
+  (value, oldValue) => {
+    // 同上：只有用户没有改动详情时才跟随服务端事实。
+    if (detailDraft.value !== oldValue) return;
+    detailDraft.value = value;
   },
 );
 

@@ -6,6 +6,7 @@ import { VueQueryPlugin } from "@tanstack/vue-query";
 import { createAppRouter } from "../../apps/web/src/router";
 import { createAppQueryClient } from "../../apps/web/src/api/queryClient";
 import App from "../../apps/web/src/App.vue";
+import MemberTaskCard from "../../apps/web/src/features/share/MemberTaskCard.vue";
 import { clearToasts } from "../../apps/web/src/components/ui/toast";
 import type { FolderTreeNode, MemberSummary, ShareHomeTasks, Task } from "@ztask/shared";
 
@@ -324,6 +325,24 @@ describe("成员个人页 owner 写入（08 §6.2）", () => {
     await vi.waitFor(() => expect(ownerCard.text()).toContain("服务器已有新版本"));
     expect((ownerCard.find("input[type='range']").element as HTMLInputElement).value).toBe("80");
     expect(document.body.textContent).not.toContain("进度已保存");
+    wrapper.unmount();
+  });
+});
+
+describe("草稿与服务端更新（08 §6.2）", () => {
+  it("未保存的进度/详情草稿不会被轮询或他人更新覆盖", async () => {
+    const task = makeTask({ id: "t-owner", description: "我负责的任务" });
+    const wrapper = mount(MemberTaskCard, {
+      props: { task, editable: true },
+      global: { plugins: [[VueQueryPlugin, { queryClient: createAppQueryClient() }]] },
+    });
+
+    await wrapper.find("input[type='range']").setValue(90);
+    await wrapper.find("textarea").setValue("我的未保存草稿");
+    await wrapper.setProps({ task: { ...task, progress: 55, detail: "他人保存的新详情", version: 2 } });
+
+    expect((wrapper.find("input[type='range']").element as HTMLInputElement).value).toBe("90");
+    expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("我的未保存草稿");
     wrapper.unmount();
   });
 });
