@@ -1,0 +1,163 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { nextTick } from "vue";
+import { mount } from "@vue/test-utils";
+import { VueQueryPlugin } from "@tanstack/vue-query";
+import TaskEditorDialog from "../../apps/web/src/features/tasks/TaskEditorDialog.vue";
+import { createAppQueryClient } from "../../apps/web/src/api/queryClient";
+import type { Task } from "@ztask/shared";
+
+const MEMBERS = [
+  { id: "m-1", name: "陈晨", role: "前端", color: "#2f6fe0", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+  { id: "m-2", name: "林悦", role: "后端", color: "#1f9d6b", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+];
+
+function taskFixture(): Task {
+  return {
+    id: "t-1",
+    folderId: "f-1",
+    parentId: null,
+    description: "任务树组件重构",
+    owners: [{ id: "m-1", name: "陈晨", role: "前端", color: "#2f6fe0" }],
+    collaborators: [],
+    progress: 40,
+    detail: "当前详情",
+    importance: "high",
+    dueDate: "2026-11-10",
+    version: 3,
+    createdAt: "2026-11-01T01:00:00.000Z",
+    updatedAt: "2026-11-01T02:00:00.000Z",
+    subtasks: [
+      { id: "s-1", parentId: "t-1", description: "已有小任务", owner: { id: "m-1", name: "陈晨", role: "前端", color: "#2f6fe0" }, progress: 50, importance: "mid", dueDate: null, version: 3 },
+    ],
+  };
+}
+
+let fetchCalls: Array<{ url: string; init?: RequestInit }> = [];
+
+function mockFetch(response: { status: number; body?: unknown }): void {
+  fetchCalls = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    fetchCalls.push({ url: String(input), init });
+    if (response.status === 409) {
+      return new Response(JSON.stringify({ error: { code: "TASK_VERSION_CONFLICT", message: "任务已被其他人更新", requestId: "r-1" } }), {
+        status: 409,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    return new Response(JSON.stringify(response.body ?? {}), { status: response.status, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.body.innerHTML = "";
+});
+
+async function mountEditor(task: Task | null) {
+  const wrapper = mount(TaskEditorDialog, {
+    props: { open: true, folderId: "f-1", task, members: MEMBERS },
+    global: { plugins: [[VueQueryPlugin, { queryClient: createAppQueryClient() }]] },
+    attachTo: document.body,
+  });
+  await nextTick();
+  return wrapper;
+}
+
+function dialog(): HTMLElement {
+  return document.body.querySelectorAll('[role="dialog"]')[0] as HTMLElement;
+}
+
+function clickByText(container: HTMLElement, text: string, selector = "button"): void {
+  const button = [...container.querySelectorAll(selector)].find((el) => el.textContent?.includes(text));
+  if (!button) throw new Error(`button ${text} not found`);
+  (button as HTMLButtonElement).click();
+}
+
+async function setInput(input: HTMLInputElement | HTMLTextAreaElement, value: string): Promise<void> {
+  input.value = value;
+  input.dispatchEvent(new Event("input"));
+  await nextTick();
+}
+
+describe("TaskEditorDialog（08 §3 编辑器）", () => {
+  it("编辑模式：草稿字段来自任务；保存发送 PUT（含 update 小任务与 version）", async () => {
+    mockFetch({ status: 200, body: taskFixture() });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    expect((root.querySelector(".desc-input") as HTMLInputElement).value).toBe("任务树组件重构");
+
+    await setInput(root.querySelector(".desc-input") as HTMLInputElement, "编辑后标题");
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const put = fetchCalls.find((call) => call.init?.method === "PUT");
+    expect(put?.url).toContain("/admin/tasks/t-1/editor");
+    const body = JSON.parse(String(put?.init?.body));
+    expect(body.version).toBe(3);
+    expect(body.task.description).toBe("编辑后标题");
+    expect(body.task.ownerIds).toEqual(["m-1"]);
+    expect(body.subtasks.update[0].id).toBe("s-1");
+    wrapper.unmount();
+  });
+
+  it("空描述在字段旁报错且不发送请求", async () => {
+    mockFetch({ status: 200, body: taskFixture() });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    await setInput(root.querySelector(".desc-input") as HTMLInputElement, "");
+    clickByText(root, "保存");
+    await nextTick();
+    expect(root.textContent).toContain("任务描述不能为空");
+    expect(fetchCalls.find((call) => call.init?.method === "PUT")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("新增小任务以 clientId 进入 create 数组", async () => {
+    mockFetch({ status: 200, body: taskFixture() });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    clickByText(root, "＋ 添加小任务");
+    await nextTick();
+    const row = root.querySelectorAll(".sub-row")[0] as HTMLElement;
+    await setInput(row.querySelector(".sub-desc") as HTMLInputElement, "新小任务");
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const body = JSON.parse(String(fetchCalls.find((call) => call.init?.method === "PUT")?.init?.body));
+    expect(body.subtasks.create.length).toBe(1);
+    expect(body.subtasks.create[0].clientId).toMatch(/^client-/);
+    wrapper.unmount();
+  });
+
+  it("409：保留草稿、显示冲突提示与重试入口，不发新请求即不清空", async () => {
+    mockFetch({ status: 409 });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    await setInput(root.querySelector(".desc-input") as HTMLInputElement, "我的草稿标题");
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    expect(root.textContent).toContain("服务器已有新版本");
+    expect(root.textContent).toContain("基于最新版本重试");
+    expect((root.querySelector(".desc-input") as HTMLInputElement).value).toBe("我的草稿标题");
+    const puts = fetchCalls.filter((call) => call.init?.method === "PUT");
+    expect(puts.length).toBe(1);
+    wrapper.unmount();
+  });
+
+  it("删除：确认后发送 DELETE", async () => {
+    mockFetch({ status: 204 });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    clickByText(root, "删除任务");
+    await nextTick();
+    const dialogs = document.body.querySelectorAll('[role="dialog"]');
+    const confirmDialog = dialogs[dialogs.length - 1] as HTMLElement;
+    expect(confirmDialog.textContent).toContain("软删除");
+    clickByText(confirmDialog, "确认删除");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const removed = fetchCalls.find((call) => call.init?.method === "DELETE");
+    expect(removed?.url).toContain("/admin/tasks/t-1?version=3");
+    wrapper.unmount();
+  });
+});
