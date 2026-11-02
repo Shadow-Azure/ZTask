@@ -11,6 +11,7 @@ scope:
   - apps/server/src/modules/tasks/**
   - apps/server/src/modules/revisions/**
   - apps/web/src/features/tasks/**
+  - apps/web/src/api/admin.ts
   - packages/shared/**
   - tests/admin-tasks/**
   - apps/server/src/app.ts
