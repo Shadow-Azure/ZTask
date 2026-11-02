@@ -15,6 +15,30 @@ export type { TailRecoveryResult } from "./storage/jsonl.js";
 export { DATA_SUBDIRS, TEMP_PREFIX, ensureDataDirLayout } from "./storage/paths.js";
 export { initManifest, readManifest, SUPPORTED_FORMAT_VERSION } from "./storage/manifest-store.js";
 export type { Manifest } from "./storage/manifest-store.js";
+export { createWriteQueue } from "./storage/write-queue.js";
+export type { WriteQueue } from "./storage/write-queue.js";
+export {
+  createTaskStore,
+  readTaskAggregate,
+  taskCurrentPath,
+  taskDir,
+  taskRevisionsPath,
+} from "./storage/task-store.js";
+export type {
+  CommitInput,
+  CreateAggregateInput,
+  TaskStore,
+  TaskStoreHooks,
+  TaskStoreOptions,
+} from "./storage/task-store.js";
+export type {
+  AssignmentRecord,
+  RevisionLine,
+  RevisionTip,
+  SubtaskRecord,
+  TaskAggregate,
+  TaskRecord,
+} from "./storage/task-types.js";
 export {
   EntryNotFoundError,
   StorageCorruptionError,

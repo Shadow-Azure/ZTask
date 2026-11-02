@@ -9,10 +9,12 @@ import { StorageCorruptionError } from "./errors.js";
  * 行内容为规范化 JSON，checksum 对剔除 checksum 字段后的记录计算后并入行内。
  * @param filePath JSONL 文件路径（不存在则创建）。
  * @param record 不含 checksum 的记录对象。
+ * @returns 本次写入记录的 checksum（供 current.revisionTip 与行内值保持一致）。
  */
-export async function appendJsonlLine(filePath: string, record: Record<string, unknown>): Promise<void> {
+export async function appendJsonlLine(filePath: string, record: Record<string, unknown>): Promise<string> {
   const { appendFile, open } = await import("node:fs/promises");
-  const withChecksum = { ...record, checksum: checksumOf(record) };
+  const checksum = checksumOf(record);
+  const withChecksum = { ...record, checksum };
   await appendFile(filePath, `${JSON.stringify(withChecksum)}\n`, "utf8");
   const handle = await open(filePath, "r");
   try {
@@ -20,6 +22,7 @@ export async function appendJsonlLine(filePath: string, record: Record<string, u
   } finally {
     await handle.close();
   }
+  return checksum;
 }
 
 /**
