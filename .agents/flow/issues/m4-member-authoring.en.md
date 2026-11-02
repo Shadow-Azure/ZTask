@@ -6,7 +6,7 @@ English | [中文](m4-member-authoring.md)
 kind: issue
 milestone: m4
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/share/**
   - apps/web/src/features/share/**
