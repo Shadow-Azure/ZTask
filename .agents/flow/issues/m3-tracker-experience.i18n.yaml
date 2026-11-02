@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/issues/m3-tracker-experience.md
-m3-tracker-experience.md: 1f1c796814cf83d232fafce4c51e3d90a463e568
-m3-tracker-experience.en.md: aeb6d17c8e83b80b72ea92369a5865e96447fed5
+m3-tracker-experience.md: edaaebee384a3a2048d414c1ddee6e73e70fd094
+m3-tracker-experience.en.md: 96ba4da207284c845cf25693fb4579e1fc581468
