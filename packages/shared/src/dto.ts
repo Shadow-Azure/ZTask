@@ -78,6 +78,12 @@ export interface ShareHomeTasks {
   collaborated: Task[];
 }
 
+/** 成员写操作响应（05 §6.6–6.10）：更新后的成员可见任务与本次 revision。 */
+export interface ShareTaskMutation {
+  task: Task;
+  revision: RevisionResult | null;
+}
+
 /** `GET /share/tasks?view=tracker` 的响应（05 §6.4）：分页游标为不透明字符串。 */
 export interface ShareTrackerTasks {
   items: Task[];

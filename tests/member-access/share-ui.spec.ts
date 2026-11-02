@@ -258,7 +258,7 @@ describe("MemberHomePage（成员个人页只读）", () => {
     }) as typeof fetch;
   }
 
-  it("两组分组+计数+只读卡：负责人/协作、任务夹路径、协作徽标与零控件", async () => {
+  it("两组分组+计数：负责人卡有受限编辑控件、协作卡零控件、任务夹路径与协作徽标", async () => {
     installHomeFetch({ owned: [ownedTask], collaborated: [collabTask] });
     const { wrapper } = await mountApp("/s/home");
     await vi.waitFor(() => expect(wrapper.text()).toContain("更新登录页"));
@@ -279,6 +279,13 @@ describe("MemberHomePage（成员个人页只读）", () => {
     expect(ownedCard.find(".ro-tag").exists()).toBe(false);
     expect(ownedCard.text()).toContain("📁 迭代 / 子夹");
     expect(ownedCard.text()).toContain("重要度 · 高");
+    // #19：owner 卡开放受限编辑（进度/详情/小任务），但不含分配、主任务描述或删除入口。
+    expect(ownedCard.find("input[type='range']").exists()).toBe(true);
+    expect(ownedCard.find("textarea").exists()).toBe(true);
+    expect(ownedCard.text()).toContain("保存进度");
+    expect(ownedCard.text()).toContain("保存详情");
+    expect(ownedCard.text()).toContain("添加小任务");
+    expect(ownedCard.text()).not.toContain("删除任务");
 
     const collabCard = groups[1].find(".stask");
     expect(collabCard.exists()).toBe(true);
@@ -287,15 +294,20 @@ describe("MemberHomePage（成员个人页只读）", () => {
     expect(collabCard.text()).toContain("李雷");
     expect(collabCard.text()).toContain("韩梅梅");
     expect(collabCard.text()).toContain("（暂无进展记录）");
+    // 协作卡必须零控件，不能依赖前端隐藏来兜底服务端权限。
+    expect(collabCard.findAll("input")).toHaveLength(0);
+    expect(collabCard.findAll("button")).toHaveLength(0);
+    expect(collabCard.text()).not.toContain("保存");
 
-    const page = wrapper.find(".share-page");
-    expect(page.findAll("input")).toHaveLength(0);
-    expect(page.findAll("button")).toHaveLength(0);
-    expect(page.text()).not.toContain("保存");
-    expect(page.text()).not.toContain("追加");
-    expect(page.text()).not.toContain("编辑");
-    expect(page.text()).not.toContain("暂无你负责的任务");
-    expect(page.text()).not.toContain("暂无你协作的任务");
+    expect(wrapper.text()).not.toContain("暂无你负责的任务");
+    expect(wrapper.text()).not.toContain("暂无你协作的任务");
+
+    // 最小写面：整页不出现主任务分配/重要度/预计完成/任务夹的编辑控件，
+    // 也不出现管理员专属的「分配」入口（小任务编辑器未打开时不应有 select）。
+    expect(wrapper.findAll(".share-page select")).toHaveLength(0);
+    expect(wrapper.findAll(".share-page input[type='date']")).toHaveLength(0);
+    expect(wrapper.text()).not.toContain("分配");
+    expect(wrapper.text()).not.toContain("删除任务");
     wrapper.unmount();
   });
 

@@ -5,6 +5,7 @@ import {
   type ShareHomeTasks,
   type ShareSessionResponse,
   type ShareTaskDetail,
+  type ShareTaskMutation,
   type ShareTrackerTasks,
 } from "@ztask/shared";
 import {
@@ -22,10 +23,18 @@ import {
   pruneMemberTree,
   toMemberTask,
 } from "./share-scope.js";
+import {
+  createShareTaskWriteService,
+  type ShareDetailInput,
+  type ShareProgressInput,
+  type ShareSubtaskCreateInput,
+  type ShareSubtaskUpdateInput,
+} from "./share-task-writes.js";
 import { createMemberService, type MemberFile } from "../members/member-service.js";
 import { createFolderService } from "../folders/folder-service.js";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
+import type { TaskStore } from "../../storage/task-store.js";
 
 /** 分享域根路径（05 §6）；插件内全部路由都在此作用域下。 */
 const SHARE_BASE_PATH = "/api/v1/share";
@@ -155,16 +164,18 @@ function isAfterCursor(aggregate: TaskAggregate, cursor: CursorPosition): boolea
 }
 
 /**
- * 成员分享域路由（05 §6.1–6.5、§6.11）：会话交换/恢复/注销、
- * 相关任务视图/详情与只读任务夹树。写端点（progress/detail/subtasks）属 #19。
+ * 成员分享域路由（05 §6.1–6.11）：会话交换/恢复/注销、相关任务视图/详情、
+ * 只读任务夹树，以及 #19 的成员写端点（进度/详情/小任务，§6.6–6.10）。
  * @param app Fastify 实例。
  * @param options 装配项（dataDir）。
  */
 export async function shareRoutes(
   app: FastifyInstance,
-  options: { dataDir: string },
+  options: { dataDir: string; taskStore?: TaskStore },
 ): Promise<void> {
   const { store: memberStore } = createMemberService({ dataDir: options.dataDir });
+  // 写路径复用同一 dataDir 与提交协议（06 §8.2）；成员身份由 preHandler 解析的 principal 提供。
+  const { service: shareTaskWrites } = createShareTaskWriteService({ dataDir: options.dataDir, taskStore: options.taskStore });
   const exchangeLimiter = createExchangeRateLimiter(() => Date.now());
 
   app.decorateRequest("sharePrincipal", null);
@@ -362,6 +373,152 @@ export async function shareRoutes(
     if (!subtask) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
     return { task: subtask, parent, memberRole: relation.role };
   });
+
+  // ---- 成员写端点（05 §6.6–6.10） ----
+  // schema 一律 required version + additionalProperties:false：缺失 version 由 ajv 回 400，
+  // 未知字段（例如小任务的 owner）直接拒绝而不是静默剥离（05 §1）。
+  // 409 冲突由服务层抛 ApiError(TASK_VERSION_CONFLICT)，app 级 errorHandler 统一序列化，
+  // 因此这里不需要像管理端那样手工拼错误体。
+  const versionProperty = { type: "integer", minimum: 1 } as const;
+
+  app.patch(
+    `${SHARE_BASE_PATH}/tasks/:id/progress`,
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["progress", "version"],
+          properties: {
+            progress: { type: "integer", minimum: 0, maximum: 100 },
+            version: versionProperty,
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request): Promise<ShareTaskMutation> => {
+      const principal = requirePrincipal(request);
+      const { id } = request.params as { id: string };
+      return await shareTaskWrites.saveProgress(
+        principal.memberId,
+        principal.member.name,
+        id,
+        request.body as ShareProgressInput,
+      );
+    },
+  );
+
+  app.patch(
+    `${SHARE_BASE_PATH}/tasks/:id/detail`,
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["detail", "version"],
+          properties: { detail: { type: "string" }, version: versionProperty },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request): Promise<ShareTaskMutation> => {
+      const principal = requirePrincipal(request);
+      const { id } = request.params as { id: string };
+      return await shareTaskWrites.saveDetail(
+        principal.memberId,
+        principal.member.name,
+        id,
+        request.body as ShareDetailInput,
+      );
+    },
+  );
+
+  app.post(
+    `${SHARE_BASE_PATH}/tasks/:id/subtasks`,
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["version", "description"],
+          properties: {
+            version: versionProperty,
+            description: { type: "string" },
+            progress: { type: "integer", minimum: 0, maximum: 100 },
+            importance: { type: "string", enum: ["high", "mid", "low"] },
+            dueDate: { type: ["string", "null"] },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request, reply) => {
+      const principal = requirePrincipal(request);
+      const { id } = request.params as { id: string };
+      const mutation: ShareTaskMutation = await shareTaskWrites.createSubtask(
+        principal.memberId,
+        principal.member.name,
+        id,
+        request.body as ShareSubtaskCreateInput,
+      );
+      return await reply.status(201).send(mutation);
+    },
+  );
+
+  app.patch(
+    `${SHARE_BASE_PATH}/tasks/:id/subtasks/:subtaskId`,
+    {
+      schema: {
+        body: {
+          type: "object",
+          required: ["version"],
+          properties: {
+            version: versionProperty,
+            description: { type: "string" },
+            progress: { type: "integer", minimum: 0, maximum: 100 },
+            importance: { type: "string", enum: ["high", "mid", "low"] },
+            dueDate: { type: ["string", "null"] },
+          },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request): Promise<ShareTaskMutation> => {
+      const principal = requirePrincipal(request);
+      const { id, subtaskId } = request.params as { id: string; subtaskId: string };
+      return await shareTaskWrites.updateSubtask(
+        principal.memberId,
+        principal.member.name,
+        id,
+        subtaskId,
+        request.body as ShareSubtaskUpdateInput,
+      );
+    },
+  );
+
+  app.delete(
+    `${SHARE_BASE_PATH}/tasks/:id/subtasks/:subtaskId`,
+    {
+      schema: {
+        querystring: {
+          type: "object",
+          required: ["version"],
+          properties: { version: versionProperty },
+          additionalProperties: false,
+        },
+      },
+    },
+    async (request): Promise<ShareTaskMutation> => {
+      const principal = requirePrincipal(request);
+      const { id, subtaskId } = request.params as { id: string; subtaskId: string };
+      const query = request.query as { version?: unknown };
+      return await shareTaskWrites.deleteSubtask(
+        principal.memberId,
+        principal.member.name,
+        id,
+        subtaskId,
+        query.version,
+      );
+    },
+  );
 
   app.get(`${SHARE_BASE_PATH}/folders/tree`, async (request) => {
     const principal = requirePrincipal(request);
