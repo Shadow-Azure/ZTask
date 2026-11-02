@@ -10,6 +10,7 @@ status: in-progress
 scope:
   - apps/server/src/modules/dashboard/**
   - apps/server/src/modules/share/**
+  - apps/server/src/modules/tasks/**
   - apps/server/src/app.ts
   - apps/server/src/index.ts
   - tests/member-access/**
@@ -19,7 +20,9 @@ scope:
   - apps/web/src/api/admin.ts
   - apps/web/src/features/tracker/**
   - packages/shared/**
+  - plan/fullstack-design/05-api-design.md
   - tests/dashboard/**
+  - tests/storage/**
   - tests/web-shell/**
   - .agents/flow/issues/m5-dashboard-analytics*
 adr: []

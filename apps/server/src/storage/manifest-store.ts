@@ -59,7 +59,9 @@ export async function initManifest(
     formatVersion: SUPPORTED_FORMAT_VERSION,
     applicationVersion: options.applicationVersion,
     createdAt: new Date().toISOString(),
-    timeZone: options.timeZone ?? "UTC",
+    // 团队时区默认取服务主机时区（06 §1/§3）：dashboard/history 的「今天」依赖它，
+    // 恒 UTC 会让非 UTC 用户看到错误的分桶。已有 manifest 保留原值。
+    timeZone: options.timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
   };
   await writeJsonAtomic(file, manifest);
   return manifest;

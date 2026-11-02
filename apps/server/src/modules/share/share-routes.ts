@@ -33,7 +33,7 @@ import {
 import { createMemberService, type MemberFile } from "../members/member-service.js";
 import { createFolderService } from "../folders/folder-service.js";
 import type { DashboardService } from "../dashboard/dashboard-service.js";
-import { assertNoMemberIds, parseBucket, parseFolderId } from "../dashboard/dashboard-query.js";
+import { parseBucket, parseFolderId, parseMemberIds } from "../dashboard/dashboard-query.js";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
 import type { TaskStore } from "../../storage/task-store.js";
@@ -361,9 +361,10 @@ export async function shareRoutes(
   app.get(`${SHARE_BASE_PATH}/dashboard/summary`, async (request) => {
     const principal = requirePrincipal(request);
     const query = request.query as Record<string, unknown>;
-    assertNoMemberIds(query);
+    // 05 §6.12：成员筛选只能在「相关任务」范围内进一步缩小，服务层会校验可见 owner 集合。
     return await options.dashboardService.summary({
       folderId: parseFolderId(query),
+      memberIds: parseMemberIds(query),
       shareMemberId: principal.memberId,
     });
   });
@@ -371,10 +372,10 @@ export async function shareRoutes(
   app.get(`${SHARE_BASE_PATH}/dashboard/due-distribution`, async (request) => {
     const principal = requirePrincipal(request);
     const query = request.query as Record<string, unknown>;
-    assertNoMemberIds(query);
     return await options.dashboardService.dueDistribution({
       folderId: parseFolderId(query),
       bucket: parseBucket(query),
+      memberIds: parseMemberIds(query),
       shareMemberId: principal.memberId,
     });
   });

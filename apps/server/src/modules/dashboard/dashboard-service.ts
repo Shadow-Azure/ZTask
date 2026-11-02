@@ -10,6 +10,7 @@ import { createFolderService } from "../folders/folder-service.js";
 import { createMemberService } from "../members/member-service.js";
 import { isRelated, listTaskAggregates } from "../share/share-scope.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
+import { ApiError } from "@ztask/shared";
 
 /** 统计桶键（05 §5.1–5.2）：done=100、gt50=51–99、lt50=0–50。 */
 export type DashboardBucketKey = "done" | "gt50" | "lt50";
@@ -43,7 +44,7 @@ export interface DashboardServiceDeps {
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** 固定分布顺序（05 §5.2）：空桶也必须出现在响应里。 */
-export const DUE_BUCKET_KEYS: readonly DueBucketKey[] = ["overdue", "week", "month", "later"];
+export const DUE_BUCKET_KEYS: readonly DueBucketKey[] = ["overdue", "week", "month", "later", "unscheduled"];
 
 const DUE_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -186,6 +187,19 @@ export function createDashboardService(deps: DashboardServiceDeps): DashboardSer
     if (selected.length > 0) {
       const active = await activeMemberIds();
       const wanted = new Set(selected.filter((memberId) => active.has(memberId)));
+      if (input.shareMemberId !== undefined) {
+        // 05 §6.12：成员域筛选只能缩小范围。可见成员集合来自「该成员相关任务」的
+        // 任意分配（owner/collaborator/小任务 owner），筛选之后再按 owner 口径统计；
+        // 选到可见的协作者会得到空集（合法的缩小），选到不可见成员才 400。
+        const visibleMembers = new Set(
+          items.flatMap((aggregate) => aggregate.assignments.map((assignment) => assignment.memberId)),
+        );
+        for (const memberId of selected) {
+          if (!visibleMembers.has(memberId)) {
+            throw new ApiError(400, "INVALID_REQUEST", "成员筛选超出当前可见范围");
+          }
+        }
+      }
       items = items.filter((aggregate) =>
         aggregate.assignments.some(
           (assignment) =>
@@ -234,7 +248,13 @@ export function createDashboardService(deps: DashboardServiceDeps): DashboardSer
       for (const aggregate of items) {
         if (progressBucketOf(aggregate.task.progress) !== input.bucket) continue;
         const dueDate = aggregate.task.dueDate;
-        if (dueDate === null) continue;
+        // 02 §7.6：dueDate=null 进入独立「未排期」桶，保证三卡总数与柱合计一致。
+        if (dueDate === null) {
+          const bucket = byKey.get("unscheduled")!;
+          bucket.total += 1;
+          bucket.importance[aggregate.task.importance] += 1;
+          continue;
+        }
         const dueDay = utcDayOf(dueDate);
         if (dueDay === null || todayDay === null) continue;
         const bucket = byKey.get(dueBucketOf(Math.round((dueDay - todayDay) / DAY_MS)))!;

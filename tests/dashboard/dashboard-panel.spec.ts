@@ -17,6 +17,8 @@ interface Call {
   query: string;
 }
 
+const MEMBER_A = { id: "m-a", name: "陈晨", role: "前端", color: "#2f6fe0" };
+const MEMBER_B = { id: "m-b", name: "林悦", role: "后端", color: "#e05a2f" };
 const originalFetch = globalThis.fetch;
 let calls: Call[];
 let summary: DashboardSummary;
@@ -26,8 +28,10 @@ function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-function makeDue(overrides: Partial<Record<"overdue" | "week" | "month" | "later", number>> = {}): DueBucket[] {
-  const keys = ["overdue", "week", "month", "later"] as const;
+function makeDue(
+  overrides: Partial<Record<"overdue" | "week" | "month" | "later" | "unscheduled", number>> = {},
+): DueBucket[] {
+  const keys = ["overdue", "week", "month", "later", "unscheduled"] as const;
   return keys.map((key) => ({
     key,
     total: overrides[key] ?? 0,
@@ -58,6 +62,29 @@ beforeEach(() => {
           { id: "m-b", name: "林悦", role: "后端", color: "#e05a2f", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
           { id: "m-c", name: "旧成员", role: "测试", color: "#8a55c9", archivedAt: "2026-10-01T00:00:00.000Z", counts: { owned: 0, collaborated: 0 }, shareLink: null },
         ],
+      });
+    }
+    if (url.pathname === "/api/v1/share/tasks" && url.searchParams.get("view") === "home") {
+      return jsonResponse(200, {
+        owned: [
+          {
+            id: "t-1",
+            folderId: "f-root",
+            parentId: null,
+            description: "相关任务",
+            owners: [MEMBER_A],
+            collaborators: [MEMBER_B],
+            progress: 60,
+            detail: "",
+            importance: "mid",
+            dueDate: null,
+            version: 1,
+            createdAt: "2026-11-01T00:00:00.000Z",
+            updatedAt: "2026-11-01T00:00:00.000Z",
+            subtasks: [],
+          },
+        ],
+        collaborated: [],
       });
     }
     if (url.pathname.endsWith("/dashboard/summary")) return jsonResponse(200, summary);
@@ -112,11 +139,12 @@ describe("情况看板（05 §5.1–5.2）", () => {
     expect(dueCall?.query).toContain("bucket=gt50");
     expect(dueCall?.query).toContain("folderId=f-root");
 
-    expect(wrapper.findAll(".chart-col")).toHaveLength(4);
+    expect(wrapper.findAll(".chart-col")).toHaveLength(5);
     expect(wrapper.find(".chart").text()).toContain("已逾期");
     expect(wrapper.find(".chart").text()).toContain("一周内");
     expect(wrapper.find(".chart").text()).toContain("一月内");
     expect(wrapper.find(".chart").text()).toContain("一月后");
+    expect(wrapper.find(".chart").text()).toContain("未排期");
     expect(wrapper.findAll(".chart-bar .seg.high").length).toBeGreaterThan(0);
 
     // 再点一次收起。
@@ -144,14 +172,23 @@ describe("情况看板（05 §5.1–5.2）", () => {
     wrapper.unmount();
   });
 
-  it("分享域：不渲染成员 chips，只请求 share 端点且不带 memberIds", async () => {
+  it("分享域：chips 来自相关任务的脱敏成员，不请求管理员目录；筛选走 share 端点", async () => {
     const wrapper = await mountPanel({ access: "share", folderId: "f-root" });
     await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
+    await vi.waitFor(() => expect(wrapper.findAll(".mchip").length).toBeGreaterThan(0));
 
-    expect(wrapper.findAll(".mchip")).toHaveLength(0);
-    const summaryCall = calls.find((call) => call.path.endsWith("/share/dashboard/summary"));
-    expect(summaryCall).toBeTruthy();
-    expect(summaryCall?.query).not.toContain("memberIds");
+    // 只从 share/tasks?view=home 汇总可见成员，绝不请求 /admin/members。
+    expect(calls.some((call) => call.path === "/api/v1/admin/members")).toBe(false);
+    expect(calls.some((call) => call.path === "/api/v1/share/tasks")).toBe(true);
+    const chips = wrapper.findAll(".mchip").map((chip) => chip.text());
+    expect(chips.join(" ")).toContain("陈晨");
+    expect(chips.join(" ")).toContain("林悦");
+
+    await wrapper.findAll(".mchip")[0]!.trigger("click");
+    await vi.waitFor(() => {
+      const call = calls.filter((item) => item.path.endsWith("/share/dashboard/summary")).at(-1);
+      expect(call?.query).toContain("memberIds=");
+    });
     wrapper.unmount();
   });
 

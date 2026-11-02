@@ -20,10 +20,16 @@ const props = defineProps<{
 }>();
 
 type BucketKey = "done" | "gt50" | "lt50";
-type DueKey = "overdue" | "week" | "month" | "later";
+type DueKey = "overdue" | "week" | "month" | "later" | "unscheduled";
 
 const IMPORTANCE_NAMES: Record<Importance, string> = { high: "高", mid: "中", low: "低" };
-const DUE_LABELS: Record<DueKey, string> = { overdue: "已逾期", week: "一周内", month: "一月内", later: "一月后" };
+const DUE_LABELS: Record<DueKey, string> = {
+  overdue: "已逾期",
+  week: "一周内",
+  month: "一月内",
+  later: "一月后",
+  unscheduled: "未排期",
+};
 
 const BUCKET_DEFS: ReadonlyArray<{ key: BucketKey; title: string; sub: string }> = [
   { key: "done", title: "已完成", sub: "进度 100%" },
@@ -36,7 +42,7 @@ const selectedMembers = ref<string[]>([]);
 /** 当前展开分布图的统计卡；null = 收起。 */
 const activeBucket = ref<BucketKey | null>(null);
 
-/** 成员 chips 只用于管理员筛选；分享域不请求、也不渲染。 */
+/** 管理员成员目录（chips 来源）。 */
 const membersQuery = useQuery({
   queryKey: ["admin", "members"],
   queryFn: adminApi.members,
@@ -44,23 +50,46 @@ const membersQuery = useQuery({
   staleTime: 15_000,
 });
 
-const memberIds = computed(() => selectedMembers.value);
+/** 分享域没有成员目录端点：从「我的相关任务」的分配里汇总可见成员（08 §4.1 脱敏目录）。 */
+const shareHomeQuery = useQuery({
+  queryKey: ["share", "tasks", "home"],
+  queryFn: shareApi.home,
+  enabled: computed(() => props.access === "share"),
+  staleTime: 15_000,
+});
+
+/** chips 列表：管理员=在册成员；分享域=相关任务里出现过的成员摘要（去重、稳定排序）。 */
+const chipMembers = computed(() => {
+  if (props.access === "admin") {
+    return (membersQuery.data.value?.items ?? [])
+      .filter((member) => member.archivedAt === null)
+      .map((member) => ({ id: member.id, name: member.name, color: member.color }));
+  }
+  const seen = new Map<string, { id: string; name: string; color: string }>();
+  for (const task of [
+    ...(shareHomeQuery.data.value?.owned ?? []),
+    ...(shareHomeQuery.data.value?.collaborated ?? []),
+  ]) {
+    for (const member of [...task.owners, ...task.collaborators, ...task.subtasks.map((subtask) => subtask.owner)]) {
+      if (!seen.has(member.id)) seen.set(member.id, { id: member.id, name: member.name, color: member.color });
+    }
+  }
+  return [...seen.values()].sort((a, b) => (a.name === b.name ? (a.id < b.id ? -1 : 1) : a.name < b.name ? -1 : 1));
+});
+
+/** 稳定排序的成员筛选：URL 语义与 query key 都不受点击顺序影响。 */
+const memberIds = computed(() => [...selectedMembers.value].sort());
 
 const summaryQuery = useQuery({
   queryKey: computed(() => ["dashboard", "summary", props.access, props.folderId, memberIds.value.join(",")]),
   queryFn: () =>
     props.access === "admin"
       ? adminApi.dashboardSummary({ folderId: props.folderId!, memberIds: memberIds.value })
-      : shareApi.dashboardSummary({ folderId: props.folderId! }),
+      : shareApi.dashboardSummary({ folderId: props.folderId!, memberIds: memberIds.value }),
   enabled: computed(() => props.folderId !== null),
   // 03 §7：看板 15s 轮询；切到后台 tab 暂停，回到前台由 focus 失效刷新。
   refetchInterval: () => (document.visibilityState === "hidden" ? false : 15_000),
   refetchOnWindowFocus: true,
-});
-
-// 成员筛选变化后收起分布图，避免把旧集合的柱状图当新结果。
-watch(memberIds, () => {
-  activeBucket.value = null;
 });
 
 const dueQuery = useQuery({
@@ -72,13 +101,18 @@ const dueQuery = useQuery({
           bucket: activeBucket.value!,
           memberIds: memberIds.value,
         })
-      : shareApi.dashboardDueDistribution({ folderId: props.folderId!, bucket: activeBucket.value! }),
+      : shareApi.dashboardDueDistribution({
+          folderId: props.folderId!,
+          bucket: activeBucket.value!,
+          memberIds: memberIds.value,
+        }),
   enabled: computed(() => props.folderId !== null && activeBucket.value !== null),
+  // 08 §4.1：切换筛选后 summary 与展开的 distribution 一起刷新；分布同样 15s 轮询、后台暂停。
+  refetchInterval: () => (document.visibilityState === "hidden" ? false : 15_000),
   refetchOnWindowFocus: true,
 });
 
 const summary = computed<DashboardSummary | null>(() => summaryQuery.data.value ?? null);
-const members = computed(() => (membersQuery.data.value?.items ?? []).filter((member) => member.archivedAt === null));
 
 /**
  * 取某统计桶的 DTO；后端固定返回三个键。
@@ -129,10 +163,10 @@ function dueLabel(key: DueKey): string {
 
 <template>
   <section class="dashboard" aria-label="情况看板">
-    <div v-if="access === 'admin'" class="dash-filter">
+    <div v-if="chipMembers.length > 0" class="dash-filter">
       <span class="flabel">成员筛选</span>
       <button
-        v-for="member in members"
+        v-for="member in chipMembers"
         :key="member.id"
         type="button"
         class="mchip"
@@ -143,7 +177,7 @@ function dueLabel(key: DueKey): string {
         <span class="chip-ava" :style="{ background: member.color }" aria-hidden="true">{{ member.name.slice(0, 1) }}</span>
         {{ member.name }}
       </button>
-      <span class="all-hint">不选 = 全部成员</span>
+      <span class="all-hint">{{ access === "admin" ? "不选 = 全部成员" : "不选 = 我的相关任务整体" }}</span>
     </div>
 
     <div v-if="!folderId" class="dash-empty">
@@ -161,15 +195,18 @@ function dueLabel(key: DueKey): string {
 
     <template v-else>
       <div class="stat-cards">
-        <button
+        <div
           v-for="def in BUCKET_DEFS"
           :key="def.key"
-          type="button"
+          role="button"
+          tabindex="0"
           class="stat-card"
           :class="{ active: activeBucket === def.key }"
           :aria-pressed="activeBucket === def.key"
           :aria-label="`${def.title}，${bucketOf(def.key).total} 项任务，点击${activeBucket === def.key ? '收起' : '查看'}预计完成时间分布`"
           @click="toggleBucket(def.key)"
+          @keydown.enter.prevent="toggleBucket(def.key)"
+          @keydown.space.prevent="toggleBucket(def.key)"
         >
           <div class="sc-title">
             {{ def.title }}
@@ -185,10 +222,10 @@ function dueLabel(key: DueKey): string {
           <div class="sc-hint">
             {{ activeBucket === def.key ? "▾ 再次点击收起分布图" : "▸ 点击查看预计完成时间分布" }}
           </div>
-        </button>
+        </div>
       </div>
 
-      <div v-if="activeBucket" class="chart-panel">
+      <div v-if="activeBucket" class="chart-panel" role="region" :aria-label="chartTitle">
         <h3>{{ chartTitle }}</h3>
         <LoadingState v-if="dueQuery.isLoading.value" label="分布加载中…" />
         <ErrorState
@@ -198,7 +235,7 @@ function dueLabel(key: DueKey): string {
           @retry="dueQuery.refetch()"
         />
         <div v-else-if="(chart?.buckets ?? []).every((bucket) => bucket.total === 0)" class="chart-empty">
-          该集合暂无任务，换个统计卡片或调整成员筛选试试。
+          该集合暂无任务，换个统计卡片{{ access === "admin" ? "或调整成员筛选" : "" }}试试。
         </div>
         <div v-else class="chart">
           <div v-for="bucket in chartBuckets" :key="bucket.key" class="chart-col">

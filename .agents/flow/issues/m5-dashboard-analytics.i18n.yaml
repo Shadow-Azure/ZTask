@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/issues/m5-dashboard-analytics.md
-m5-dashboard-analytics.md: 8f0ca5999cb96ae112de6dc24a78a7bbda5247a0
-m5-dashboard-analytics.en.md: 26ed59af4df046430359626318114ad6e69353c7
+m5-dashboard-analytics.md: bc37677f138bf06906e74cfffd31a18e0586e1ac
+m5-dashboard-analytics.en.md: 640abfdd88c845acb210198b96e6c9ece6ab4814

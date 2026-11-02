@@ -63,14 +63,3 @@ export function parseMemberIds(query: Query): string[] {
   }
   return out;
 }
-
-/**
- * 分享域不接受 memberIds（05 §6.12）：只要请求带了该参数就 400，
- * 避免成员借此探测其他成员的任务范围。
- * @param query 请求 query。
- */
-export function assertNoMemberIds(query: Query): void {
-  if (Object.prototype.hasOwnProperty.call(query, "memberIds")) {
-    throw new ApiError(400, "INVALID_REQUEST", "成员看板不接受 memberIds");
-  }
-}

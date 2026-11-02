@@ -216,7 +216,7 @@ describe("管理员看板 summary：软删除", () => {
 });
 
 describe("分享域看板", () => {
-  it("只统计 isRelated 的相关任务，并与任务夹范围求交；memberIds 一律 400", async () => {
+  it("只统计 isRelated 的相关任务，并与任务夹范围求交；成员筛选只能缩小可见范围", async () => {
     const folderId = await createFolder(app, "分享看板");
     const otherFolder = await createFolder(app, "其他夹");
     const memberA = await createMember(app, "陈晨");
@@ -267,30 +267,64 @@ describe("分享域看板", () => {
     expect(totalOf(await shareSummary(cookieA, otherFolder))).toBe(1);
 
     const dueA = await shareDue(cookieA, folderId, "done");
-    expect(dueTotals(dueA)).toEqual({ overdue: 0, week: 1, month: 0, later: 0 });
+    expect(dueTotals(dueA)).toEqual({ overdue: 0, week: 1, month: 0, later: 0, unscheduled: 0 });
 
-    for (const extra of [`&memberIds=${memberB}`, `&memberIds=${memberA},${memberB}`, `&memberIds=`]) {
-      const summary = await app.inject({
-        method: "GET",
-        url: `/api/v1/share/dashboard/summary?folderId=${folderId}${extra}`,
-        headers: { cookie: cookieA },
-      });
-      expect(summary.statusCode).toBe(400);
-      expect((summary.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+    // 05 §6.12：memberIds 先限定相关任务，再按 owner 口径筛选，不能扩大范围。
+    const onlyA = await shareSummary(cookieA, folderId, `&memberIds=${memberA}`);
+    expect(totalOf(onlyA)).toBe(1); // A 作为 owner 的任务只有「A 负责」（done）
+    expect(onlyA.scope.memberIds).toEqual([memberA]);
 
-      const due = await app.inject({
-        method: "GET",
-        url: `/api/v1/share/dashboard/due-distribution?folderId=${folderId}&bucket=done${extra}`,
-        headers: { cookie: cookieA },
-      });
-      expect(due.statusCode).toBe(400);
-      expect((due.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
-    }
+    const onlyB = await shareSummary(cookieA, folderId, `&memberIds=${memberB}`);
+    expect(totalOf(onlyB)).toBe(2); // A 相关任务里 B 作为 owner 的两项
+
+    const emptySelection = await shareSummary(cookieA, folderId, "&memberIds=");
+    expect(totalOf(emptySelection)).toBe(3);
+    expect(emptySelection.scope.memberIds).toEqual([]);
+
+    // A 不可见的成员（C 与 A 无任何共同任务）用于探测时 400，不泄露其任务量。
+    const memberC = await createMember(app, "赵敏");
+    const probe = await app.inject({
+      method: "GET",
+      url: `/api/v1/share/dashboard/summary?folderId=${folderId}&memberIds=${memberC}`,
+      headers: { cookie: cookieA },
+    });
+    expect(probe.statusCode).toBe(400);
+    expect((probe.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+
+    const probeDue = await app.inject({
+      method: "GET",
+      url: `/api/v1/share/dashboard/due-distribution?folderId=${folderId}&bucket=done&memberIds=${memberC}`,
+      headers: { cookie: cookieA },
+    });
+    expect(probeDue.statusCode).toBe(400);
   });
 });
 
-describe("预计完成分布：四桶与时区", () => {
-  it("按 manifest 时区今天分 overdue/week/month/later，null 排除，空桶仍返回", async () => {
+describe("dueDate 写入校验（05 §1 / 06 §3）", () => {
+  it("形状合法但不存在的日期 2026-02-31 写入 400，不进入统计", async () => {
+    const folderId = await createFolder(app, "非法日期");
+    const memberId = await createMember(app, "陈晨");
+    const invalid = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/tasks",
+      payload: {
+        folderId,
+        parentId: null,
+        description: "非法日期",
+        ownerIds: [memberId],
+        dueDate: "2026-02-31",
+      },
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect((invalid.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+
+    const summary = await adminSummary(folderId);
+    expect(totalOf(summary)).toBe(0);
+  });
+});
+
+describe("预计完成分布：五桶与时区", () => {
+  it("按 manifest 时区今天分 overdue/week/month/later，null 进入未排期桶，空桶仍返回", async () => {
     const folderId = await createFolder(app, "分布");
     const owner = await createMember(app, "陈晨");
 
@@ -305,7 +339,7 @@ describe("预计完成分布：四桶与时区", () => {
     for (const entry of dated) {
       await createTask(app, { folderId, description: entry.dueDate, ownerIds: [owner], dueDate: entry.dueDate, importance: entry.importance });
     }
-    // 未排期不进入分布。
+    // 未排期进入独立 unscheduled 桶（02 §7.6）。
     await createTask(app, { folderId, description: "未排期", ownerIds: [owner], dueDate: null, importance: "high" });
     // 不同统计桶的已排期任务不应混入 lt50 分布。
     await createTask(app, { folderId, description: "已完成逾期", ownerIds: [owner], progress: 100, dueDate: "2026-05-09", importance: "high" });
@@ -313,16 +347,17 @@ describe("预计完成分布：四桶与时区", () => {
     const lt50 = await adminDue(folderId, "lt50");
     expect(lt50.bucket).toBe("lt50");
     expect(lt50.asOf).toBe(FIXED_ISO);
-    // 固定四桶顺序：空桶不省略；null 未排期不计入任何桶。
+    // 固定五桶顺序：空桶不省略；null 进入 unscheduled。
     expect(lt50.buckets).toEqual([
       { key: "overdue", total: 1, importance: { high: 1, mid: 0, low: 0 } },
       { key: "week", total: 2, importance: { high: 0, mid: 1, low: 1 } },
       { key: "month", total: 2, importance: { high: 1, mid: 1, low: 0 } },
       { key: "later", total: 1, importance: { high: 0, mid: 0, low: 1 } },
+      { key: "unscheduled", total: 1, importance: { high: 1, mid: 0, low: 0 } },
     ]);
 
     const done = await adminDue(folderId, "done");
-    expect(dueTotals(done)).toEqual({ overdue: 1, week: 0, month: 0, later: 0 });
+    expect(dueTotals(done)).toEqual({ overdue: 1, week: 0, month: 0, later: 0, unscheduled: 0 });
 
     const gt50 = await adminDue(folderId, "gt50");
     expect(gt50.buckets).toEqual([
@@ -330,6 +365,7 @@ describe("预计完成分布：四桶与时区", () => {
       { key: "week", total: 0, importance: { ...ZERO_IMPORTANCE } },
       { key: "month", total: 0, importance: { ...ZERO_IMPORTANCE } },
       { key: "later", total: 0, importance: { ...ZERO_IMPORTANCE } },
+      { key: "unscheduled", total: 0, importance: { ...ZERO_IMPORTANCE } },
     ]);
   });
 });
@@ -359,10 +395,15 @@ describe("看板响应形状与参数校验", () => {
     const distribution = await adminDue(folderId, "done");
     expect(distribution.bucket).toBe("done");
     expect(distribution.asOf).toBe(FIXED_ISO);
-    expect(distribution.buckets.map((bucket) => bucket.key)).toEqual(["overdue", "week", "month", "later"]);
+    expect(distribution.buckets.map((bucket) => bucket.key)).toEqual(["overdue", "week", "month", "later", "unscheduled"]);
     for (const bucket of distribution.buckets) {
       expect(bucket).toHaveProperty("total");
-      expect(bucket.importance).toEqual(ZERO_IMPORTANCE);
+      // 未排期任务会落在 unscheduled；其余桶保持零计数。
+      expect(bucket.importance).toEqual({
+        high: bucket.key === "unscheduled" ? 1 : 0,
+        mid: 0,
+        low: 0,
+      });
     }
   });
 

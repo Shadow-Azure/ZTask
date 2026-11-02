@@ -105,6 +105,12 @@ function assertDueDate(value: unknown): string | null {
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     throw new ApiError(400, "INVALID_REQUEST", "dueDate 须为 YYYY-MM-DD 或 null");
   }
+  // 05 §1 / 06 §3：dueDate 是日历日期，不接受 2026-02-31 这类形状合法但不存在的日期。
+  const [year, month, day] = value.split("-").map(Number) as [number, number, number];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
+    throw new ApiError(400, "INVALID_REQUEST", "dueDate 不是有效日期");
+  }
   return value;
 }
 

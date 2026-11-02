@@ -89,7 +89,7 @@ export interface DashboardSummary {
 }
 
 /** 预计完成分布的时间桶键；顺序即响应固定顺序（05 §5.2）。 */
-export type DueBucketKey = "overdue" | "week" | "month" | "later";
+export type DueBucketKey = "overdue" | "week" | "month" | "later" | "unscheduled";
 
 /** 预计完成分布的单个时间桶（05 §2.2）。 */
 export interface DueBucket {
