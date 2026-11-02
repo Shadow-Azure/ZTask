@@ -148,6 +148,14 @@ describe("GET /share/session（会话恢复）", () => {
     expect(response.json().error.code).toBe("SHARE_SESSION_REQUIRED");
   });
 
+  it("expiresAt 损坏时 fail-closed：不得让会话永久有效", async () => {
+    const cookieA = await exchangeCookie(app, tokenA);
+    await updateSessionFile(dataDir, sessionIdOf(cookieA), { expiresAt: "not-a-date" });
+    const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
+    expect(response.statusCode).toBe(401);
+    expect(response.json().error.code).toBe("SHARE_SESSION_REQUIRED");
+  });
+
   it("成员归档后既有会话下一请求 401", async () => {
     const cookieB = await exchangeCookie(app, tokenB);
     const archived = await app.inject({ method: "DELETE", url: `/api/v1/admin/members/${memberB}` });

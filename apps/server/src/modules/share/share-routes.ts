@@ -234,8 +234,13 @@ export async function shareRoutes(
         else collaborated.push(aggregate);
       }
       return {
-        owned: owned.map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
-        collaborated: collaborated.map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
+        // 05 §1 的稳定顺序同样适用于个人页：createdAt, id 升序，避免 readdir 序造成卡片跳动。
+        owned: owned
+          .sort(compareAggregates)
+          .map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
+        collaborated: collaborated
+          .sort(compareAggregates)
+          .map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
       } satisfies ShareHomeTasks;
     }
 

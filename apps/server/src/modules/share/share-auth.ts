@@ -204,7 +204,10 @@ export async function resolveShareSession(options: { dataDir: string; cookieHead
   if (!UUID_PATTERN.test(session.memberId)) return null;
 
   const now = (options.clock ?? (() => new Date()))();
-  if (new Date(session.expiresAt).getTime() <= now.getTime()) return null;
+  // 过期判断必须 fail-closed：expiresAt 不可解析时 Date.parse 为 NaN，直接比较会恒 false，
+  // 等于让损坏会话永久有效（07 §3.2 每请求校验过期）。
+  const expiresAtMs = Date.parse(session.expiresAt);
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now.getTime()) return null;
 
   const members = createEntityStore<{ id: string; name: string; role: string; color: string; archivedAt: string | null }>({
     dataDir: options.dataDir,
