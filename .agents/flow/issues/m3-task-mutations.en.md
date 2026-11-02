@@ -6,7 +6,7 @@ English | [中文](m3-task-mutations.md)
 kind: issue
 milestone: m3
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/tasks/**
   - apps/server/src/modules/revisions/**
