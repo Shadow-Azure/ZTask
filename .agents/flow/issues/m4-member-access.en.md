@@ -6,7 +6,7 @@ English | [中文](m4-member-access.md)
 kind: issue
 milestone: m4
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/share/**
   - apps/server/src/plugins/auth*
