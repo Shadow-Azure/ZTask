@@ -6,7 +6,7 @@ English | [中文](m5-dashboard-analytics.md)
 kind: issue
 milestone: m5
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/dashboard/**
   - apps/server/src/modules/share/**
