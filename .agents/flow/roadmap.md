@@ -11,6 +11,7 @@ milestones:
   - m4
   - m5
   - m6
+  - m7
 ```
 
 ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [README](README.md)，依据为 `plan/fullstack-design/`。
@@ -23,6 +24,7 @@ ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [R
 - m4：LAN 分享、安全会话与负责人最小写入。
 - m5：看板、双列 diff、备份恢复与端到端验收。
 - m6：界面与原型逐屏对齐与差异清零。
+- m7：项目展示图与仓库首页介绍。
 
 ## 推进原则
 

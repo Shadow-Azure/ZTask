@@ -1,8 +1,28 @@
+<div align="center">
+
 # ZTask
+
+**A local-first progress tracker for teams**
+
+One shared answer to “where are we now, who owns it, and what comes next.”
 
 English | [中文](README.md)
 
-ZTask is a local-first team progress management tool. The repository currently includes a runnable CLI, Fastify server, Vue admin client, shared contracts, storage-recovery tests, and documentation and development-flow gates treated as first-class code.
+[![CI](https://github.com/Shadow-Azure/ZTask/actions/workflows/ci.yml/badge.svg)](https://github.com/Shadow-Azure/ZTask/actions/workflows/ci.yml)
+
+</div>
+
+![ZTask admin UI: folders, tasks, subtasks, progress, and updates](docs/assets/ztask-admin.png)
+
+ZTask keeps team progress in the team's own hands. A single command starts a local service; the admin UI runs in the browser, where goals, owners, and due dates are organized by folder. When collaboration is needed, turn on LAN sharing so each member sees only the work relevant to them. Data is stored as readable JSON/JSONL files in a local directory, with dedicated commands for backup, restore, and diagnostics.
+
+## What it does
+
+- **Task tree and progress detail**: folders, main tasks, and one level of subtasks; owners, collaborators, importance, due date, and running notes live on the same card.
+- **Dashboard and history diffs**: roll up by completion, importance, and expected finish date, filtered by member; restore before/after snapshots for any time range and compare them side by side.
+- **Members and LAN sharing**: one link per person; owners can update their own work while collaborators stay read-only; links can be reset or revoked, and old sessions expire immediately.
+- **Backup, restore, and diagnostics**: a single-writer file store and write queue keep state consistent; `ztask backup` takes an online snapshot, `restore` validates before an atomic switch, and `doctor` separates fixable issues from backup recovery.
+- **Docs and gates as first-class code**: bilingual doc triplets, dead links, type equivalence, and the development flow are all checked mechanically in CI rather than by convention.
 
 ## Quick start
 
@@ -13,16 +33,12 @@ pnpm build
 pnpm serve
 ```
 
-During development, `pnpm dev` starts the workspace in parallel. The service listens only on loopback by default and stores data in its configured data directory; see the [development guide](docs/development.en.md) for details.
+Node 22 and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for setup and the everyday loop.
 
-## Quality gates
+## Documentation
 
-- `pnpm lint:docs`: quick documentation gate.
-- `pnpm verify:docs`: full documentation gate plus gate self-tests.
-- `pnpm test:gates`: all documentation, flow, and gate-script tests.
-- `pnpm route:gates`: recommend a gate combination for current changes.
-- `pnpm test`: production build, gate tests, and workspace automation tests.
-
-Chinese is the base documentation side; maintain the English side and pair records alongside it under the [bilingual-pairing contract](docs/i18n/README.en.md). Work follows roadmap → milestone → issue as defined in the [development flow](.agents/flow/README.en.md), with decisions recorded in [Agent Notes](.agents/notes/README.en.md).
-
-See the [architecture](docs/architecture.en.md) for module boundaries and the [charter](docs/charter.en.md) for project scope.
+- [Documentation index](docs/README.en.md): the entry point to all resident docs.
+- [Architecture](docs/architecture.en.md): applications, startup order, and data flow.
+- [Charter](docs/charter.en.md): vision and product boundaries.
+- [Development flow](.agents/flow/README.en.md): how roadmap → milestone → issue works.
+- [Agent Notes](.agents/notes/README.en.md): how non-trivial decisions are recorded.
