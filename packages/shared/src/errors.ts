@@ -29,6 +29,8 @@ export const API_ERROR_CODES = [
   "SHARE_EXCHANGE_RATE_LIMITED",
   // 500
   "INTERNAL_ERROR",
+  // 客户端网络/超时（不出现在后端错误体，仅前端统一错误面）
+  "NETWORK_ERROR",
 ] as const;
 
 /** 错误码封闭集合；新增码先改这里并同步 05 §7 文档表，禁止路由私造字符串。 */
