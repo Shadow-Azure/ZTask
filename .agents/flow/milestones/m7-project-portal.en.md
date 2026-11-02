@@ -6,7 +6,7 @@ English | [中文](m7-project-portal.md)
 kind: milestone
 id: m7
 title: 阶段 7：项目门户与开源展示
-status: active
+status: done
 github:
   number: 6
   url: https://github.com/Shadow-Azure/ZTask/milestone/6
