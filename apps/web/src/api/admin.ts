@@ -1,6 +1,7 @@
 import {
   API_PREFIX,
   type AdminMember,
+  type DashboardChanges,
   type DashboardDueDistribution,
   type DashboardSummary,
   type Folder,
@@ -44,6 +45,24 @@ export const adminApi = {
       query: {
         folderId: params.folderId,
         memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+      },
+    }),
+
+  /** 时间段历史变化（05 §5.3）：mode/custom 日期由服务端解析为 [start,end) 并回显边界。 */
+  dashboardChanges: (params: {
+    folderId: string;
+    memberIds?: string[];
+    mode: "default" | "custom";
+    startDate?: string;
+    endDate?: string;
+  }) =>
+    requestJson<DashboardChanges>(`${API_PREFIX}/admin/dashboard/changes`, {
+      query: {
+        folderId: params.folderId,
+        memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+        mode: params.mode,
+        startDate: params.startDate,
+        endDate: params.endDate,
       },
     }),
 

@@ -6,7 +6,7 @@
 kind: issue
 milestone: m5
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/modules/revisions/**
   - apps/server/src/modules/dashboard/**
@@ -15,6 +15,14 @@ scope:
   - apps/web/src/features/dashboard/**
   - packages/shared/**
   - tests/history/**
+  - tests/member-access/**
+  - .agents/notes/implemented/feature/2026-11-02-*
+  - apps/server/src/index.ts
+  - apps/server/src/app.ts
+  - apps/web/src/api/share.ts
+  - apps/web/src/api/admin.ts
+  - pnpm-lock.yaml
+  - apps/web/package.json
   - .agents/flow/issues/m5-history-diff*
 adr: []
 github:

@@ -4,6 +4,7 @@ import {
   type ShareHomeTasks,
   type ShareSessionResponse,
   type ShareTaskDetail,
+  type DashboardChanges,
   type DashboardDueDistribution,
   type DashboardSummary,
   type ShareTaskMutation,
@@ -87,6 +88,24 @@ export const shareApi = {
       query: {
         folderId: params.folderId,
         memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+      },
+    }),
+
+  /** 成员时间段历史变化（05 §6.14）：只能看当前相关任务的历史。 */
+  dashboardChanges: (params: {
+    folderId: string;
+    memberIds?: string[];
+    mode: "default" | "custom";
+    startDate?: string;
+    endDate?: string;
+  }) =>
+    requestJson<DashboardChanges>(`${API_PREFIX}/share/dashboard/changes`, {
+      query: {
+        folderId: params.folderId,
+        memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+        mode: params.mode,
+        startDate: params.startDate,
+        endDate: params.endDate,
       },
     }),
 

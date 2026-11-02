@@ -62,6 +62,15 @@ export type {
   DashboardServiceDeps,
 } from "./modules/dashboard/dashboard-service.js";
 
+// 时间段历史（#22）：管理员与分享域共用同一服务。
+export { createHistoryService } from "./modules/revisions/history-service.js";
+export type {
+  ChangesInput,
+  ChangesMode,
+  HistoryService,
+  HistoryServiceDeps,
+} from "./modules/revisions/history-service.js";
+
 // 网络与分享链接（#20）：LAN 动态监听、network.json、链接生命周期。
 export {
   collectShareInterfaces,
