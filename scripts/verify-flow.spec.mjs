@@ -310,7 +310,7 @@ describe("verifyFlowDiff 端到端", () => {
 
   /** 造两提交仓库：base 上 issue 为 baseStatus，HEAD 提交把它翻成 headStatus 并引用 (#7)。 */
   const repoWithStatusFlip = (baseStatus, headStatus) => {
-    const dir = mkdtempSync(path.join(tmpdir(), "studywiki-flow-diff-"));
+    const dir = mkdtempSync(path.join(tmpdir(), "ztask-flow-diff-"));
     dirs.push(dir);
     const write = (files) => {
       for (const [rel, content] of Object.entries(files)) {

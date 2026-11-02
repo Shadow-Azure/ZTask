@@ -2,12 +2,13 @@
   "name": "ztask",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "test:gates": "node --test scripts/gates.spec.mjs && vitest run scripts/flow-new-issue.spec.mjs scripts/flow-sync.spec.mjs scripts/verify-flow.spec.mjs scripts/verify-flow-online.spec.mjs",
+    "test:gates": "node --test scripts/prototype-tracker.spec.mjs && vitest run scripts --exclude scripts/prototype-tracker.spec.mjs",
     "lint:docs": "node scripts/run-gates.mjs --mode doc-quick",
     "verify:docs": "node scripts/run-gates.mjs --mode doc-sync",
     "verify:flow": "node scripts/verify-flow.mjs",
@@ -16,10 +17,11 @@
     "flow:new-issue": "node scripts/flow-new-issue.mjs",
     "record:i18n": "node scripts/verify-translation-pairing.mjs --write",
     "archive:note": "node scripts/archive-agent-note.mjs",
+    "route:gates": "node scripts/route-gates.mjs",
     "install:hooks": "node scripts/install-git-hooks.mjs",
     "install-merge-driver": "node scripts/install-merge-driver.mjs",
     "test:prototype": "node --test scripts/prototype-tracker.spec.mjs",
-    "test": "pnpm build && pnpm test:gates && pnpm test:prototype && vitest run apps tests",
+    "test": "pnpm build && pnpm test:gates && vitest run apps tests",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel --stream dev",
     "typecheck": "pnpm -r typecheck",

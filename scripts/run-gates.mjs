@@ -6,6 +6,7 @@
 import verifyAgentNotes from "./verify-agent-notes.mjs";
 import verifyFlow from "./verify-flow.mjs";
 import verifyDocIndex from "./verify-doc-index.mjs";
+import verifyPostmortem from "./verify-postmortem.mjs";
 import verifyDocBudgets from "./verify-doc-budgets.mjs";
 import verifyMdWrap from "./verify-md-wrap.mjs";
 import verifyMdLinks from "./verify-md-links.mjs";
@@ -22,6 +23,7 @@ export const LEAVES = {
   "verify-flow": verifyFlow,
   "verify-archived-agent-notes": verifyArchivedAgentNotes,
   "verify-doc-index": verifyDocIndex,
+  "verify-postmortem": verifyPostmortem,
   "verify-doc-budgets": verifyDocBudgets,
   "verify-md-wrap": verifyMdWrap,
   "verify-terminology": verifyTerminology,
@@ -34,8 +36,20 @@ export const LEAVES = {
   "gate-self-tests": async () => {
     const { execFileSync } = await import("node:child_process");
     try {
-      execFileSync(process.execPath, ["--test", "scripts/gates.spec.mjs"], { stdio: "inherit" });
-      execFileSync(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "scripts/flow-new-issue.spec.mjs", "scripts/flow-sync.spec.mjs", "scripts/verify-flow.spec.mjs", "scripts/verify-flow-online.spec.mjs"], { stdio: "inherit" });
+      execFileSync(process.execPath, ["--test", "scripts/prototype-tracker.spec.mjs"], {
+        stdio: "inherit",
+      });
+      execFileSync(
+        process.execPath,
+        [
+          "node_modules/vitest/vitest.mjs",
+          "run",
+          "scripts",
+          "--exclude",
+          "scripts/prototype-tracker.spec.mjs",
+        ],
+        { stdio: "inherit" },
+      );
       return { ok: true, errors: [] };
     } catch {
       return { ok: false, errors: ["门禁自测试退出非零"] };
@@ -48,6 +62,7 @@ const QUICK = [
   "verify-flow",
   "verify-archived-agent-notes",
   "verify-doc-index",
+  "verify-postmortem",
   "verify-doc-budgets",
   "verify-md-wrap",
   "verify-terminology",

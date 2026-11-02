@@ -2,14 +2,27 @@
 
 English | [中文](README.md)
 
-ZTask is a team progress management tool. The project is at an early stage: see the [charter](docs/charter.en.md) for vision and boundaries. The current engineering focus is the documentation system and the development flow gates; product feature planning comes later.
+ZTask is a local-first team progress management tool. The repository currently includes a runnable CLI, Fastify server, Vue admin client, shared contracts, storage-recovery tests, and documentation and development-flow gates treated as first-class code.
 
-## Conventions and gates
+## Quick start
 
-- Resident docs are bilingual (triplet: `X.md` + `X.en.md` + `X.i18n.yaml`); the contract lives in [docs/i18n/README.en.md](docs/i18n/README.en.md).
-- The development flow (roadmap → milestone → issue) rules live in [.agents/flow/README.en.md](.agents/flow/README.en.md); the flow tree is not initialized yet.
-- Doc gates: `pnpm verify:docs` (full) / `pnpm lint:docs` (quick).
-- Flow gate: `pnpm verify:flow` (auto-skipped while the flow tree is uninitialized).
-- Gate self tests: `pnpm test:gates`.
+```sh
+pnpm install
+pnpm install:hooks
+pnpm build
+pnpm serve
+```
 
-After the first clone, run `pnpm install && pnpm install:hooks` to install local hooks and the i18n merge driver.
+During development, `pnpm dev` starts the workspace in parallel. The service listens only on loopback by default and stores data in its configured data directory; see the [development guide](docs/development.en.md) for details.
+
+## Quality gates
+
+- `pnpm lint:docs`: quick documentation gate.
+- `pnpm verify:docs`: full documentation gate plus gate self-tests.
+- `pnpm test:gates`: all documentation, flow, and gate-script tests.
+- `pnpm route:gates`: recommend a gate combination for current changes.
+- `pnpm test`: production build, gate tests, and workspace automation tests.
+
+Chinese is the base documentation side; maintain the English side and pair records alongside it under the [bilingual-pairing contract](docs/i18n/README.en.md). Work follows roadmap → milestone → issue as defined in the [development flow](.agents/flow/README.en.md), with decisions recorded in [Agent Notes](.agents/notes/README.en.md).
+
+See the [architecture](docs/architecture.en.md) for module boundaries and the [charter](docs/charter.en.md) for project scope.

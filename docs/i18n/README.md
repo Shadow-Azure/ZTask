@@ -1,23 +1,34 @@
-# 双语配对契约
+# 双语配对
 
 [English](README.en.md) | 中文
 
-语料范围：根 `README` 三件套、`docs/`、`.agents/notes/`（archived 除外）、`.agents/flow/` 下的全部 markdown。范围内每个中文 base 文档必须是三件套：`X.md`（中文 base）+ `X.en.md`（英文侧）+ `X.i18n.yaml`（配对记录）。唯一豁免通道是 `scripts/translation-pairing.manifest.json`（如 `docs/AGENTS.md`）；豁免件不得携带英文侧或记录。
+语料内每篇文档中英双语成对，"两侧说同一件事"由机器公证：人只做翻译取舍，一致性归门禁。本页是配对契约的唯一 home。
 
-## 一致性规则
+## 三件套
 
-- 记录：`X.i18n.yaml` 记两侧在最后一次确认一致状态下的 git blob hash；改任一侧而不重录即红。
-- 切换行：H1 后第一段是语言切换行，base 侧 `[English](X.en.md) | 中文`，英文侧 `English | [中文](X.md)`。
-- 结构镜像：标题层级序列、围栏（info 与内容逐字）、表格行列、列表形态、链接目标两侧一致；散文措辞各自本地化。
-- 链接 locale：base 侧指向语料内文档用 `.md`，英文侧用 `.en.md`；切换行是唯一跨语言链接。
-- 生成区：`<!-- BEGIN GENERATED slug -->` 围出来的区段两侧除 locale 路径投影外逐字节一致。
-- 英文侧术语执行 [terminology.md](terminology.md) 的禁用替写。
+- 一对是同目录三个文件：中文 base `foo.md` + 英文侧 `foo.en.md` + 一致性记录 `foo.i18n.yaml`。成对合并——PR 永远三件同落，不落单侧。
+- 两种语言同等权威：先写哪侧都合法，另一侧对照翻译，没有哪侧是"译文附庸"。
+- 记录存两侧的 git blob hash（`git hash-object` 语义，未提交内容也能算，故本地即时可校验）。改任一侧 → 对照该侧 diff **最小修补**另一侧（不是重翻）→ `pnpm record:i18n -- docs/foo.md` 重录；yaml 的 diff 就是可评审的"确认一致"动作。
+- 恢复：记录 yaml 的任一历史版本，其两侧 blob 必在 git 对象库中可达，可作重录前的对照原文。
 
-## 操作
+## 语言切换行
 
-- 改 base：同步改 `.en.md`（最小修补，保持结构镜像），然后 `pnpm record:i18n -- docs/foo.md`。
-- 新建文档：写完两侧后 `pnpm record:i18n -- <pair>` 生成记录；先登记 [docs 索引](../README.md) 与预算 manifest。
-- 全库重录：`pnpm record:i18n -- --all`（重录是确认动作，先肉眼过 diff）。
-- 状态报告：`node scripts/verify-translation-pairing.mjs --list`。
+每篇语料都带切换行：base 侧 `[English](foo.en.md) | 中文`，英文侧 `English | [中文](foo.md)`。普通文档放在 H1 后第一个非空行；Agent Note 放在 `Status:` 行之后（前三行格式是另一门禁的固定契约，不占用）。两侧都必须有，门禁校验。
 
-合并冲突时 `.i18n.yaml` 由 fail-closed 合并驱动处理（`pnpm install-merge-driver` 注册）：两侧各自重录过则留在冲突态，人工合并 md 两侧后重录。
+## 结构镜像
+
+两侧结构必须镜像：标题层级与顺序、代码围栏（info 串与内容**逐字相同**——围栏内的注释、图示文字不翻译）、表格行列数、列表种类/有序起点/条数、链接目标（切换行除外）。语料内相对链接：base 侧用 `.md`、英文侧用 `.en.md`；query 与非 md 目标的 fragment 逐字保留；md 目标的 fragment 是标题的 locale 投影，不进镜像，由死锚门禁按侧校验。生成区（`<!-- BEGIN GENERATED -->`）除 locale 投影的文档路径外逐字节一致。
+
+## 术语与提示词
+
+翻译供给链受机械背书：[terminology.md](terminology.md) 数据行两侧逐字一致，登记的禁用替写出现在英文侧散文即红；[translation-prompt.md](translation-prompt.md) 是补英文侧的操作模板，占位符集合由 verify-terminology 校验。
+
+## 门禁与工作流
+
+- `pnpm verify:docs` 含 verify-translation-pairing：三件齐、hash 相符、切换行、链接 locale、生成区、结构签名，任一不符即红。
+- 日常循环：改 A 侧 → 最小修补 B 侧 → `--write` 重录，同一 PR 落地；漂移的 pair 过不了 CI。
+- 门禁的边界：绿只证明"上次确认时的内容没漂移"，不证明翻译是对的——语义忠实与措辞是评审职责。
+
+## 范围与豁免
+
+语料 = 根 `README.md`、`docs/**`、`.agents/notes/**`（`archived/` 除外——冻结件由归档门禁管辖，sha256 冻结强于配对）、`.agents/flow/**`。豁免唯一登记处是 [scripts/translation-pairing.manifest.json](../../scripts/translation-pairing.manifest.json)（只有 excluded 字段）：目前是 `docs/AGENTS.md`（agent 指令层保持单语）。新增豁免须改 manifest 并在 PR 说明理由。

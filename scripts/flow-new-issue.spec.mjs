@@ -17,7 +17,7 @@ afterAll(() => {
 });
 
 function fixtureRoot() {
-  const dir = mkdtempSync(path.join(tmpdir(), "studywiki-new-issue-"));
+  const dir = mkdtempSync(path.join(tmpdir(), "ztask-new-issue-"));
   dirs.push(dir);
   const flow = path.join(dir, ".agents/flow");
   mkdirSync(path.join(flow, "milestones"), { recursive: true });

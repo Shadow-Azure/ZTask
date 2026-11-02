@@ -1,23 +1,34 @@
-# Bilingual pairing contract
+# Bilingual pairing
 
 English | [中文](README.md)
 
-Corpus scope: the root `README` triplet, `docs/`, `.agents/notes/` (except archived) and every markdown under `.agents/flow/`. Every Chinese base document inside the corpus must be a triplet: `X.md` (Chinese base) + `X.en.md` (English side) + `X.i18n.yaml` (pairing record). The only exemption channel is `scripts/translation-pairing.manifest.json` (e.g. `docs/AGENTS.md`); an exempted file must not carry an English side or a record.
+Every in-scope document is maintained as a Chinese/English pair, and "both sides say the same thing" is notarized by machine: humans only make translation judgments; consistency belongs to the gates. This page is the sole home of the pairing contract.
 
-## Consistency rules
+## The triplet
 
-- Record: `X.i18n.yaml` stores both sides' git blob hash at the last confirmed consistent state; editing either side without re-recording turns the pair red.
-- Switcher: the first line after H1 is the language switcher — `[English](X.en.md) | 中文` on the base side, `English | [中文](X.md)` on the English side.
-- Structure mirror: heading levels, fences (info string and content verbatim), table shape, list shape and link targets match on both sides; prose is localized independently.
-- Link locale: links to corpus documents use `.md` on the base side and `.en.md` on the English side; the switcher is the only cross-language link.
-- Generated regions: segments inside `<!-- BEGIN GENERATED slug -->` are byte-identical across sides except locale path projection.
-- The English side obeys the banned alternatives in [terminology.en.md](terminology.en.md).
+- A pair is three sibling files: Chinese base `foo.md`, English side `foo.en.md`, and consistency record `foo.i18n.yaml`. Pairs merge whole — a PR always lands all three, never one side alone.
+- Both languages carry equal authority: either side may be authored first, the other translated against it; neither side is a subordinate translation.
+- The record stores each side's git blob hash (`git hash-object` semantics; uncommitted content also hashes, so it is locally checkable). After editing either side, **minimally patch** the other against the edited side's diff (never re-translate wholesale), then re-record with `pnpm record:i18n -- docs/foo.md`; the yaml diff is the reviewable act of confirming consistency.
+- Recovery: in any historical version of the record yaml, both sides' blobs are reachable in the git object database, usable as the reference text before re-recording.
 
-## Workflow
+## Language switcher
 
-- Editing the base: apply the minimal matching edit to `.en.md`, then `pnpm record:i18n -- docs/foo.md`.
-- New document: write both sides, then `pnpm record:i18n -- <pair>` to create the record; register it in the [docs index](../README.en.md) and the budget manifest first.
-- Full re-record: `pnpm record:i18n -- --all` (recording is an act of confirmation; eyeball the diff first).
-- Status report: `node scripts/verify-translation-pairing.mjs --list`.
+Every corpus document carries a switcher: `[English](foo.en.md) | 中文` on the base side, `English | [中文](foo.md)` on the English side. Ordinary documents place it as the first non-blank line after the H1; Agent Notes place it after the `Status:` line (the first-three-lines format is another gate's fixed contract). Both sides must carry it; the gate checks.
 
-On merge conflicts `.i18n.yaml` is handled by the fail-closed merge driver (registered via `pnpm install-merge-driver`): when both branches re-recorded the pair it stays conflicted — merge the md sides by hand, then re-record.
+## Structural mirroring
+
+Both sides must mirror: heading depths and order, code fences (info string and content **byte-identical** — comments and diagram text inside fences are not translated), table row/column counts, list kinds/ordered starts/item counts, link targets (the switcher excepted). In-scope relative links: the base side uses `.md`, the English side uses `.en.md`; query strings and fragments onto non-Markdown targets are preserved verbatim; a fragment onto a Markdown target is the locale projection of its heading, exempt from mirroring and validated per side by the dead-anchor gate. Generated regions (`<!-- BEGIN GENERATED -->`) are byte-identical apart from locale-projected document paths.
+
+## Terminology and prompt
+
+The translation supply chain is mechanically endorsed: [terminology.en.md](terminology.en.md) keeps data rows byte-identical across both sides, and a registered banned alternate goes red when it appears in English-side prose; [translation-prompt.en.md](translation-prompt.en.md) is the operational template for adding the English side, its placeholder set checked by verify-terminology.
+
+## Gate and workflow
+
+- `pnpm verify:docs` includes verify-translation-pairing: triplet completeness, hash match, switchers, link locale, generated regions, structure signature — any miss goes red.
+- Daily loop: edit side A → minimally patch side B → re-record with `--write`, all in the same PR; a drifted pair cannot pass CI.
+- The gate's limit: green only proves "the content last confirmed has not drifted", not that the translation is right — semantic fidelity and wording are review's responsibility.
+
+## Scope and exclusions
+
+The corpus = root `README.md`, `docs/**`, `.agents/notes/**` (except `archived/` — frozen records governed by the archival gate, whose sha256 freeze is stronger than pairing), `.agents/flow/**`. The sole exclusion registry is [scripts/translation-pairing.manifest.json](../../scripts/translation-pairing.manifest.json) (a single excluded field): currently `docs/AGENTS.md` (the agent-instruction tier stays monolingual). New exclusions must edit the manifest with justification in the PR.

@@ -6,8 +6,8 @@ English | [中文](review.md)
 
 - All gates green is the floor, not the goal: `pnpm verify:docs` only proves the mechanical rules passed; semantics (definition drift, boundary expansion, terminology misuse) belong to humans.
 - Doc changes: both sides in sync, index and budget registered, new terms entered the table first.
-- Gate script changes: rules and docs updated on both sides (a rule change must also touch `docs/AGENTS.md` and other semantic sources), self tests covering the new branches.
-- Flow-related changes: while the flow tree is uninitialized, no roadmap/milestone/issue content may be introduced.
+- Gate script changes: rules and docs updated on both sides (a rule change must also touch `docs/AGENTS.md` and other semantic sources), independent specs covering new branches, and wiring self-protected by `gate-coverage` and `ci-wiring`.
+- Flow-related changes: commits and PR titles reference the owning issue, and changed paths stay within its scope; new issues start as backlog and move only after their number is backfilled.
 
 ## How review works
 

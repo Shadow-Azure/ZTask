@@ -153,7 +153,7 @@ function checkPair(paths, contents, manifest) {
     partitionGeneratedRegions(contents.base).regions,
     partitionGeneratedRegions(contents.en).regions,
   ))
-    errors.push(`${paths.base} ↔ ${paths.en}: 生成区不一致（重新跑 gen:commands 写两侧）`);
+    errors.push(`${paths.base} ↔ ${paths.en}: 生成区不一致（重新运行生成器并写两侧）`);
 
   // 结构签名镜像。
   let baseSig;
