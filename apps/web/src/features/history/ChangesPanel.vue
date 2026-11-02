@@ -7,7 +7,7 @@ import { shareApi } from "../../api/share";
 import ProgressDiff from "./ProgressDiff.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
-import { buildDiffColumns } from "./diff-lines";
+import { buildDiffColumns, type DiffColumns } from "./diff-lines";
 
 /**
  * 时间段历史变化（05 §5.3/§6.14、08 §4.2–4.3，原型 636–660 / 1465–1560）：
@@ -64,6 +64,24 @@ const changesQuery = useQuery({
 });
 
 const items = computed<TaskChange[]>(() => changesQuery.data.value?.items ?? []);
+/** 单条详情超过该字符数就不再计算 diff，避免主线程被超长文本无界阻塞（08 §4.3）。 */
+const MAX_DIFF_CHARS = 50_000;
+/**
+ * 每个任务只计算一次 diff（数据变化时重算），行统计与展开态共用同一结果，
+ * 避免每次渲染重复跑 2–3 次全量 diff。
+ */
+const diffCache = computed(() => {
+  const cache = new Map<string, DiffColumns | null>();
+  for (const item of items.value) {
+    const before = item.before?.detail ?? "";
+    if (before.length > MAX_DIFF_CHARS || item.after.detail.length > MAX_DIFF_CHARS) {
+      cache.set(item.taskId, null);
+      continue;
+    }
+    cache.set(item.taskId, buildDiffColumns(before, item.after.detail));
+  }
+  return cache;
+});
 const timeZone = computed(() => changesQuery.data.value?.timeZone ?? "UTC");
 
 watch(items, () => {
@@ -146,21 +164,30 @@ function ownerNames(item: TaskChange): string {
   return item.owners.map((owner) => owner.name).join("、") || "待分配";
 }
 
+function progressDelta(item: TaskChange): number {
+  return item.before ? item.after.progress - item.before.progress : item.after.progress;
+}
+
 function progressText(item: TaskChange): string {
-  const delta = item.before ? item.after.progress - item.before.progress : item.after.progress;
-  const sign = delta >= 0 ? "▲" : "▼";
+  const delta = progressDelta(item);
+  const sign = delta > 0 ? "▲" : delta < 0 ? "▼" : "•";
   return `${item.before ? `${item.before.progress}% → ` : "新建 → "}${item.after.progress}% ${sign}`;
 }
 
-function progressTone(item: TaskChange): "up" | "down" {
-  const delta = item.before ? item.after.progress - item.before.progress : item.after.progress;
-  return delta >= 0 ? "up" : "down";
+function progressTone(item: TaskChange): "up" | "down" | "flat" {
+  const delta = progressDelta(item);
+  return delta > 0 ? "up" : delta < 0 ? "down" : "flat";
 }
 
-/** 行级增删统计；与 ProgressDiff 使用同一纯函数，避免两处口径漂移。 */
+/** 行级增删统计：复用缓存结果；超长文本返回 0/0。 */
 function lineStats(item: TaskChange): { added: number; removed: number } {
-  const { added, removed } = buildDiffColumns(item.before?.detail ?? "", item.after.detail);
-  return { added, removed };
+  const columns = diffCache.value.get(item.taskId);
+  return columns ? { added: columns.added, removed: columns.removed } : { added: 0, removed: 0 };
+}
+
+/** 展开态的双列数据；null 表示文本过长已跳过。 */
+function columnsOf(item: TaskChange): DiffColumns | null {
+  return diffCache.value.get(item.taskId) ?? null;
 }
 
 function beforeLabel(item: TaskChange): string {
@@ -208,18 +235,19 @@ function afterLabel(item: TaskChange): string {
         : "自定义日期：开始于 00:00，结束于 23:59，包含起止两天" }}
     </p>
 
-    <div class="range-result" aria-live="polite">
+    <div class="range-result">
       <LoadingState v-if="changesQuery.isLoading.value" label="历史变化加载中…" />
       <ErrorState
-        v-else-if="changesQuery.isError.value"
+        v-else-if="changesQuery.isError.value && changesQuery.data.value === undefined"
         message="历史变化加载失败"
         retryable
         @retry="changesQuery.refetch()"
       />
       <template v-else>
+        <p v-if="changesQuery.isError.value" class="stale-banner" role="status">刷新失败，显示上一次结果。</p>
         <div class="range-status">
           <span class="status-dot" aria-hidden="true" />
-          <span class="status-label">{{ submitted.mode === "default" ? "已自动查询 · 昨天至今" : "已查询 · 自定义日期" }}</span>
+          <span class="status-label" aria-live="polite">{{ submitted.mode === "default" ? "已自动查询 · 昨天至今" : "已查询 · 自定义日期" }}</span>
           <time v-if="changesQuery.data.value">
             {{ formatBoundary(changesQuery.data.value.start) }} → {{ formatBoundary(changesQuery.data.value.end) }}
           </time>
@@ -262,6 +290,7 @@ function afterLabel(item: TaskChange): string {
                 :after="item.after.detail"
                 :before-label="beforeLabel(item)"
                 :after-label="afterLabel(item)"
+                :columns="columnsOf(item)"
               />
             </div>
           </div>
@@ -479,6 +508,16 @@ function afterLabel(item: TaskChange): string {
 
 .pchg.down {
   color: var(--red);
+}
+
+.pchg.flat {
+  color: var(--text-faint);
+}
+
+.stale-banner {
+  margin: 6px 0;
+  font-size: 11px;
+  color: var(--orange);
 }
 
 .dstat {

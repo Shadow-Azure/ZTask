@@ -328,6 +328,32 @@ describe("changeKind 与忽略规则", () => {
   });
 });
 
+  it("窗口开始前已删除的任务不出现在后续窗口（before===after 视为无变化）", async () => {
+    const folderId = await createFolder(app, "窗口前删除");
+    const owner = await createMember(app, "陈晨");
+    at(BEFORE_WINDOW);
+    const task = await createTask(app, { folderId, description: "早删任务", ownerIds: [owner], detail: "删前" });
+    at("2026-05-08T02:00:00.000Z");
+    await deleteTask(app, task.id, task.version);
+    at(DEFAULT_NOW);
+
+    // 窗口 A 覆盖删除时刻 → deleted。
+    const windowA = await app.inject({
+      method: "GET",
+      url: changesPath("admin", folderId, { mode: "custom", startDate: "2026-05-08", endDate: "2026-05-08" }),
+    });
+    expect(windowA.statusCode).toBe(200);
+    expect((windowA.json() as DashboardChanges).items.map((item) => item.changeKind)).toEqual(["deleted"]);
+
+    // 窗口 B 完全在删除之后 → before/after 是同一 revision，不应重复出现。
+    const windowB = await app.inject({
+      method: "GET",
+      url: changesPath("admin", folderId, { mode: "custom", startDate: "2026-05-09", endDate: "2026-05-09" }),
+    });
+    expect(windowB.statusCode).toBe(200);
+    expect((windowB.json() as DashboardChanges).items).toEqual([]);
+  });
+
 describe("排序", () => {
   it("currentlyDeleted 置底（updated/deleted 都可置底）；组内 after 降序再按 taskId 升序", async () => {
     const folderId = await createFolder(app, "排序");

@@ -132,8 +132,8 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
 
   // 只创建一次 formatter：每次请求会做数次日历换算，重复构造 Intl 实例没有意义。
   // hourCycle=h23 避免部分区域把午夜格式化成 24 点；en-US 保证公历与拉丁数字。
-  const formatter = new Intl.DateTimeFormat("en-US", {
-    timeZone: deps.timeZone,
+  // manifest 里若被手工写成非法 IANA 值，Intl 会抛 RangeError；回退 UTC 而不是让服务起不来。
+  const formatterOptions = {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -141,7 +141,15 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
     minute: "2-digit",
     second: "2-digit",
     hourCycle: "h23",
-  });
+  } as const;
+  let effectiveTimeZone = deps.timeZone;
+  let formatter: Intl.DateTimeFormat;
+  try {
+    formatter = new Intl.DateTimeFormat("en-US", { timeZone: deps.timeZone, ...formatterOptions });
+  } catch {
+    effectiveTimeZone = "UTC";
+    formatter = new Intl.DateTimeFormat("en-US", { timeZone: "UTC", ...formatterOptions });
+  }
 
   /** 读取某 UTC 瞬间在目标时区的年/月/日。 */
   function calendarDateInZone(instantMs: number): CalendarDate {
@@ -349,6 +357,9 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
    * @returns changeKind 或 null（无有效变化）。
    */
   function changeKindOf(before: RevisionLine | null, after: RevisionLine): TaskChange["changeKind"] | null {
+    // 同一 revision：窗口开始前就已完成（含窗口前删除）的任务在后续窗口里 before===after，
+    // 必须视为「本窗口无变化」，否则已删除任务会出现在之后每一个窗口。
+    if (before !== null && before.taskVersion === after.taskVersion) return null;
     if (after.changeKind === "delete") return "deleted";
     if (before === null) return "created";
     if (
@@ -395,7 +406,7 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
       const result = (items: TaskChange[]): DashboardChanges => ({
         start: new Date(range.start).toISOString(),
         end: new Date(range.end).toISOString(),
-        timeZone: deps.timeZone,
+        timeZone: effectiveTimeZone,
         items,
       });
 

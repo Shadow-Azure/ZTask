@@ -11,11 +11,11 @@ Status: implemented
 ## Decision
 
 - **区间在服务端解析**：`default` = manifest 时区「昨天 00:00」→ now；`custom` = startDate 00:00 → endDate 次日 00:00（包含结束日全天）。响应返回实际 UTC 边界与 manifest 时区；本地 00:00 用 `Intl.DateTimeFormat` 反解 UTC 瞬间，DST 由该函数按目标时区规则处理。
-- **快照选择**：`before` 取 `recordedAt < start` 的最后一条，`after` 取 `recordedAt < end` 的最后一条；同毫秒以 `taskVersion` 决胜。`after = null` 跳过；`before = null` 且 after 是删除 → `deleted`；`before = null` 其他 → `created`（不伪造空起点）；否则比较 progress/detailText，只有两者变化才算 `updated`，分配/重要度变化忽略。
+- **快照选择**：`before` 取 `recordedAt < start` 的最后一条，`after` 取 `recordedAt < end` 的最后一条；同毫秒以 `taskVersion` 决胜。`before` 与 `after` 是同一 revision（窗口开始前已完成的变更，含窗口前删除）→ 本窗口无变化。`after = null` 跳过；`before = null` 且 after 是删除 → `deleted`；`before = null` 其他 → `created`（不伪造空起点）；否则比较 progress/detailText，只有两者变化才算 `updated`，分配/重要度变化忽略。
 - **currentlyDeleted 与 owners**：`currentlyDeleted` 取查询时 current 的 `deletedAt`（updated 也可能为 true）；`owners` 取 after/delete 快照的 owner 分配，成员档案缺失时给「待分配」。
 - **成员可见历史只认主任务分配**：候选 = 当前主任务 owner/collaborator ∪ after/delete 快照中主任务 assignment 命中当前成员的聚合；仅小任务被分配者被排除（否则历史会返回主任务完整 detail，绕过 #18 的脱敏）。`memberIds` 只能选可见任务里出现的成员，否则 400；管理员 `memberIds` 按 after 快照 owner ∩ active 成员过滤。
 - **排序**：非 `currentlyDeleted` 在前，`currentlyDeleted` 固定置底；组内按 `after.recordedAt` 降序、`taskId` 升序，保证分页/刷新稳定。
-- **diff 在前端**：服务端只返回完整快照，不保存 diff。`buildDiffColumns` 是纯函数：CRLF→LF、非空文本补末尾换行后调用 jsdiff `diffLines`，把 removed/added/unchanged 展平为左右两列（blank 占位保持行对齐）。缺失末尾换行若不补齐，jsdiff 会把「追加一行」判成整行删除+新增。
+- **diff 在前端**：服务端只返回完整快照，不保存 diff。`buildDiffColumns` 是纯函数：CRLF→LF、非空文本补末尾换行后调用 jsdiff `diffLines`，把 removed/added/unchanged 展平为左右两列（blank 占位保持行对齐）；相邻 removed+added 逐行配对到同一行。单条详情超过 5 万字符时跳过 diff 并提示，避免主线程被无界阻塞；每个任务只计算一次并由组件缓存。缺失末尾换行若不补齐，jsdiff 会把「追加一行」判成整行删除+新增。
 - **渲染安全**：双列所有文本只经 Vue 插值，禁用 `v-html`；`<script>` 只作为文本显示。区间内创建不伪造空文本 diff，左列显示「起始时不存在」。
 
 ## Alternatives considered
@@ -31,5 +31,6 @@ Status: implemented
 - 管理员与成员使用同一历史服务与同一 diff 组件，边界、排序与徽章一致；成员范围先裁剪再计算。
 - 仅小任务被分配者没有主任务级历史（不在首版范围）；若将来需要小任务历史，必须单独设计脱敏后的快照投影。
 - `currentlyDeleted` 的 updated 项也会置底并显示「当前已删除」，历史可读性优先于按 changeKind 分组。
-- 大文本 diff 在可见页内计算并缓存于组件 computed；当前没有 Web Worker，超长文本会在主线程计算，后续按实际性能再引入。
+- 大文本 diff 按任务缓存并设 5 万字符上限（超限直接提示）；当前没有 Web Worker，后续按实际性能再引入。
+- 单请求仍全量读 current 与范围内 revisions；15s 轮询下的索引化/尾部早停留后续性能专项。
 - 双列行对「缺少末尾换行」做语义归一：只追加一行不再显示为整段替换，但「文件末尾换行本身变化」不会单独出现在 diff 中。

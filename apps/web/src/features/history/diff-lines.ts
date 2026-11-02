@@ -59,16 +59,46 @@ export function buildDiffColumns(before: string, after: string): DiffColumns {
   let removed = 0;
 
   const changes = diffLines(normalize(before), normalize(after));
-  for (const change of changes) {
+  for (let index = 0; index < changes.length; index += 1) {
+    const change = changes[index]!;
+    if (change.removed) {
+      const removedLines = linesOf(change.value);
+      const next = changes[index + 1];
+      if (next?.added) {
+        // 相邻 removed+added 是「修改」：逐行配对到同一行，避免左右错位。
+        const addedLines = linesOf(next.value);
+        const pairs = Math.min(removedLines.length, addedLines.length);
+        for (let row = 0; row < pairs; row += 1) {
+          left.push({ kind: "del", text: removedLines[row]! });
+          right.push({ kind: "add", text: addedLines[row]! });
+          removed += 1;
+          added += 1;
+        }
+        for (let row = pairs; row < removedLines.length; row += 1) {
+          left.push({ kind: "del", text: removedLines[row]! });
+          right.push({ kind: "blank", text: "" });
+          removed += 1;
+        }
+        for (let row = pairs; row < addedLines.length; row += 1) {
+          left.push({ kind: "blank", text: "" });
+          right.push({ kind: "add", text: addedLines[row]! });
+          added += 1;
+        }
+        index += 1;
+        continue;
+      }
+      for (const text of removedLines) {
+        left.push({ kind: "del", text });
+        right.push({ kind: "blank", text: "" });
+        removed += 1;
+      }
+      continue;
+    }
     for (const text of linesOf(change.value)) {
       if (change.added) {
         left.push({ kind: "blank", text: "" });
         right.push({ kind: "add", text });
         added += 1;
-      } else if (change.removed) {
-        left.push({ kind: "del", text });
-        right.push({ kind: "blank", text: "" });
-        removed += 1;
       } else {
         left.push({ kind: "same", text });
         right.push({ kind: "same", text });

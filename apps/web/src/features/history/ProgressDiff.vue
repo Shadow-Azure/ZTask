@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { buildDiffColumns, type DiffLine } from "./diff-lines";
+import { buildDiffColumns, type DiffColumns, type DiffLine } from "./diff-lines";
 
 /**
  * 双列进展 diff（08 §4.3，原型 344–354 / 1510–1540）：
@@ -16,9 +16,11 @@ const props = defineProps<{
   beforeLabel: string;
   /** 右列标题（含时间与进度）。 */
   afterLabel: string;
+  /** 复用的已计算列（null 表示文本过长已跳过）；缺省时组件内自行计算。 */
+  columns?: DiffColumns | null;
 }>();
 
-const columns = computed(() => buildDiffColumns(props.before ?? "", props.after));
+const columns = computed(() => props.columns === undefined ? buildDiffColumns(props.before ?? "", props.after) : props.columns);
 
 /** 行文本：blank 用不换行空格占位，保持行高（原型 .dl.blank）。 */
 function display(line: DiffLine): string {
@@ -39,7 +41,8 @@ function rightKind(line: DiffLine): string {
   <div class="diff-wrap">
     <div class="diff-col">
       <h4>{{ beforeLabel }}</h4>
-      <pre v-if="before !== null"><span
+      <p v-if="columns === null" class="diff-too-long">文本过长，已省略 diff 展示。</p>
+      <pre v-else-if="before !== null"><span
         v-for="(line, index) in columns.left"
         :key="index"
         class="dl"
@@ -48,7 +51,8 @@ function rightKind(line: DiffLine): string {
     </div>
     <div class="diff-col">
       <h4>{{ afterLabel }}</h4>
-      <pre><span
+      <p v-if="columns === null" class="diff-too-long">文本过长，已省略 diff 展示。</p>
+      <pre v-else><span
         v-for="(line, index) in columns.right"
         :key="index"
         class="dl"
@@ -74,6 +78,11 @@ function rightKind(line: DiffLine): string {
 
 .diff-col + .diff-col {
   border-left: 1px dashed var(--border);
+}
+
+.diff-too-long {
+  font-size: 11px;
+  color: var(--text-faint);
 }
 
 .diff-col h4 {

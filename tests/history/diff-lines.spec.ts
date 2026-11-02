@@ -19,10 +19,11 @@ describe("buildDiffColumns（jsdiff → 双列行）", () => {
     const result = buildDiffColumns("A\n旧内容\nC", "A\n新内容\nC");
     expect(result.removed).toBe(1);
     expect(result.added).toBe(1);
-    expect(result.left.map((line) => line.kind)).toEqual(["same", "del", "blank", "same"]);
-    expect(result.right.map((line) => line.kind)).toEqual(["same", "blank", "add", "same"]);
+    // 相邻 removed+added 配对到同一行，避免 1 行修改显示成错开的两行。
+    expect(result.left.map((line) => line.kind)).toEqual(["same", "del", "same"]);
+    expect(result.right.map((line) => line.kind)).toEqual(["same", "add", "same"]);
     expect(result.left[1]!.text).toBe("旧内容");
-    expect(result.right[2]!.text).toBe("新内容");
+    expect(result.right[1]!.text).toBe("新内容");
   });
 
   it("空详情：两侧都为空时不产生行", () => {
@@ -68,7 +69,8 @@ describe("buildDiffColumns（jsdiff → 双列行）", () => {
     const result = buildDiffColumns("旧一\n旧二", "新一\n新二\n新三");
     expect(result.removed).toBe(2);
     expect(result.added).toBe(3);
-    expect(result.left.filter((line) => line.kind === "del")).toHaveLength(2);
-    expect(result.right.filter((line) => line.kind === "add")).toHaveLength(3);
+    // 2 行配对 + 1 行右列新增。
+    expect(result.left.map((line) => line.kind)).toEqual(["del", "del", "blank"]);
+    expect(result.right.map((line) => line.kind)).toEqual(["add", "add", "add"]);
   });
 });

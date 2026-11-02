@@ -176,6 +176,25 @@ describe("ChangesPanel（05 §5.3、08 §4.2–4.3）", () => {
     wrapper.unmount();
   });
 
+  it("超长文本：跳过 diff 计算并提示，不被主线程阻塞", async () => {
+    response = {
+      ...response,
+      items: [
+        change({
+          before: { progress: 10, detail: "旧", recordedAt: "2026-11-01T02:00:00.000Z" },
+          after: { progress: 70, detail: "长".repeat(60_000), recordedAt: "2026-11-01T06:00:00.000Z" },
+        }),
+      ],
+    };
+    const wrapper = await mountPanel();
+    await vi.waitFor(() => expect(wrapper.findAll(".chg-row")).toHaveLength(1));
+
+    expect(wrapper.find(".diff-wrap").text()).toContain("文本过长");
+    expect(wrapper.find(".dstat .a").text()).toBe("+0");
+    expect(wrapper.find(".dstat .d").text()).toBe("−0");
+    wrapper.unmount();
+  });
+
   it("分享域：请求 share 端点并携带成员筛选", async () => {
     const wrapper = await mountPanel({ access: "share", memberIds: ["m-a"] });
     await vi.waitFor(() => expect(wrapper.text()).toContain("任务一"));

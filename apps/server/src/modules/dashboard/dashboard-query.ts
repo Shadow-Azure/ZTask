@@ -28,7 +28,7 @@ export function parseFolderId(query: Query): string {
   if (typeof value !== "string" || value.trim() === "") {
     throw new ApiError(400, "INVALID_REQUEST", "folderId 必填");
   }
-  return value;
+  return value.trim();
 }
 
 /**
