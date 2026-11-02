@@ -342,6 +342,28 @@ describe("restore（启动恢复）", () => {
     expect(service.isRunning()).toBe(false);
   });
 
+  it("network.json 被写成 wildcard/非本机地址：不 bind，转 degraded（与 enable 同规则）", async () => {
+    for (const host of ["0.0.0.0", "10.9.9.9"]) {
+      const { dataDir, fake, service } = await makeService();
+      await seedNetworkJson(dataDir, {
+        formatVersion: 1,
+        shareListener: { enabled: true, host, port: 8123, shareBaseUrl: `http://${host}:8123` },
+      });
+
+      const state = await service.restore();
+      expect(fake.events, host).toEqual([]);
+      expect(state.shareListener, host).toMatchObject({
+        enabled: true,
+        running: false,
+        degraded: true,
+        shareBaseUrl: null,
+      });
+      expect(state.shareListener.error).toBeTruthy();
+      expect(service.isRunning()).toBe(false);
+      await service.close();
+    }
+  });
+
   it("文件缺失/损坏按 disabled 处理，不抛错", async () => {
     const { dataDir, service } = await makeService();
     await mkdir(dataDir, { recursive: true });

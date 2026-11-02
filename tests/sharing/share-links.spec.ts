@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -136,6 +136,26 @@ describe("generate（05 §4.5、07 §7）", () => {
   });
 });
 
+  it("token 为 32 字节 CSPRNG 的 base64url（43 字符）且每次不同，磁盘只存 64 位十六进制哈希", async () => {
+    const memberId = await createMemberViaApi(app, "陈晨");
+    const first = tokenFromUrl((await issue(memberId)).url);
+    expect(first).toMatch(/^[A-Za-z0-9_-]{43}$/);
+
+    const rotated = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/members/${memberId}/share-link/rotate`,
+    });
+    expect(rotated.statusCode).toBe(200);
+    const second = tokenFromUrl((rotated.json() as { url: string }).url);
+    expect(second).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(second).not.toBe(first);
+
+    const file = await readLinkFile(memberId);
+    expect(file.tokenHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(file.tokenHash).toBe(sha256Hex(second));
+    expect(JSON.stringify(file)).not.toContain(second);
+  });
+
 describe("rotate（05 §4.6、07 §7）", () => {
   it("换新 id/tokenHash，旧 token 与旧 Cookie 立即失效", async () => {
     const memberId = await createMemberViaApi(app, "陈晨");
@@ -174,6 +194,31 @@ describe("rotate（05 §4.6、07 §7）", () => {
     const freshCookie = await exchangeCookie(app, newToken);
     const fresh = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: freshCookie } });
     expect(fresh.statusCode).toBe(200);
+  });
+
+  it("会话文件被保留/恢复也不能绕过 rotate：shareLinkId 不匹配一律 401", async () => {
+    const memberId = await createMemberViaApi(app, "陈晨");
+    const issued = await issue(memberId);
+    const oldCookie = await exchangeCookie(app, tokenFromUrl(issued.url));
+
+    // 抓住轮换前的会话文件内容，轮换后人为放回：模拟删除失败/备份恢复的残留。
+    const names = await sessionFiles();
+    expect(names).toHaveLength(1);
+    const sessionPath = path.join(dataDir, "auth-sessions", names[0]!);
+    const saved = await readFile(sessionPath, "utf8");
+
+    const rotated = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/members/${memberId}/share-link/rotate`,
+    });
+    expect(rotated.statusCode).toBe(200);
+    expect(await sessionFiles()).toEqual([]);
+
+    await writeFile(sessionPath, saved, "utf8");
+    expect(await sessionFiles()).toEqual([names[0]!]);
+    const stale = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: oldCookie } });
+    expect(stale.statusCode).toBe(401);
+    expect((stale.json() as { error: { code: string } }).error.code).toBe("SHARE_SESSION_REQUIRED");
   });
 
   it("LAN 未 running → 409 LAN_SHARE_DISABLED", async () => {

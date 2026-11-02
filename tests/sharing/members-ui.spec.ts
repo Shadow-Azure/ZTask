@@ -75,6 +75,17 @@ function networkWith(overrides: Partial<ShareListenerState> = {}): NetworkState 
   };
 }
 
+/** 把测试夹具切到「LAN 已运行」：生成链接前客户端会先确认 running（08 §5）。 */
+function lanRunning(port = 8123): void {
+  net = networkWith({
+    enabled: true,
+    running: true,
+    host: "192.168.1.5",
+    port,
+    shareBaseUrl: `http://192.168.1.5:${port}`,
+  });
+}
+
 function makeMember(id: string, name: string, shareLink: AdminMemberShareLink | null = null): AdminMember {
   return {
     id,
@@ -147,6 +158,15 @@ async function handleRequest(path: string, init?: RequestInit): Promise<Response
     const url = issueUrl(member.id);
     member.shareLink = activeLink({ createdAt: new Date().toISOString() });
     return jsonResponse(200, { id: `link-${member.id}`, status: "active", url, createdAt: member.shareLink.createdAt });
+  }
+
+  const memberMatch = path.match(/^\/api\/v1\/admin\/members\/([^/]+)$/);
+  if (memberMatch && method === "DELETE") {
+    const member = members.find((item) => item.id === memberMatch[1]);
+    if (!member) return errorResponse({ status: 404, code: "NOT_FOUND", message: "成员不存在" });
+    member.archivedAt = new Date().toISOString();
+    member.shareLink = revokedLink({ revokedAt: new Date().toISOString() });
+    return new Response(null, { status: 204 });
   }
 
   const linkMatch = path.match(/^\/api\/v1\/admin\/members\/([^/]+)\/share-link$/);
@@ -284,6 +304,7 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
   });
 
   it("生成成功 → 完整 URL + 复制 + 分发警告；刷新（只剩 active 态）后不可复制旧链接", async () => {
+    lanRunning();
     stubClipboard(vi.fn().mockResolvedValue(undefined));
     const { wrapper } = await mountApp();
     await vi.waitFor(() => expect(wrapper.text()).toContain("未生成"));
@@ -352,7 +373,8 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     wrapper.unmount();
   });
 
-  it("LAN_SHARE_DISABLED：提示先开启分享并把焦点交给网络面板", async () => {
+  it("LAN_SHARE_DISABLED（服务端 409 兜底）：提示先开启分享并把焦点交给网络面板", async () => {
+    lanRunning();
     forcedErrors.generate = { status: 409, code: "LAN_SHARE_DISABLED", message: "局域网分享未开启" };
     const { wrapper } = await mountApp();
     await vi.waitFor(() => expect(wrapper.text()).toContain("生成链接"));
@@ -372,6 +394,7 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     // 列表过期：行内显示未生成，但服务端已有 active 链接。
     members = [makeMember("m-a", "陈晨")];
     shareLinkOverrides["m-a"] = activeLink();
+    lanRunning();
     forcedErrors.generate = { status: 409, code: "ACTIVE_SHARE_LINK_EXISTS", message: "已有有效链接" };
     const { wrapper } = await mountApp();
     await vi.waitFor(() => expect(wrapper.text()).toContain("生成链接"));
@@ -384,6 +407,59 @@ describe("分享链接单元格（原型 .link-cell，08 §5）", () => {
     // GET 纠正后该行不再是「未生成」，而是可重置的 active 态。
     await vi.waitFor(() => expect(wrapper.text()).toContain("已生成"));
     expect(wrapper.text()).not.toContain("生成链接");
+    wrapper.unmount();
+  });
+
+  it("LAN 未运行：点生成不发 POST，直接提示并聚焦网络面板（08 §5 先引导再生成）", async () => {
+    const { wrapper } = await mountApp();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("生成链接"));
+
+    await button(wrapper, "生成链接").trigger("click");
+    await vi.waitFor(() => expect(document.body.textContent).toContain("请先开启局域网分享"));
+    expect(linkCalls()).toHaveLength(0);
+    await vi.waitFor(() => expect(wrapper.find(".network-panel").classes()).toContain("attention"));
+    expect(wrapper.find(".link-result").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("受控结果区按成员对齐：给 B 生成后，A 行回到「重新生成以复制」", async () => {
+    members = [makeMember("m-a", "陈晨"), makeMember("m-b", "林悦")];
+    lanRunning();
+    const { wrapper } = await mountApp();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("陈晨"));
+
+    await button(wrapper, "生成链接").trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".link-result").text()).toContain("陈晨"));
+
+    // A 已有结果区，所以 A 行不重复提示；B 仍是未生成。
+    let rows = wrapper.findAll("tbody tr");
+    expect(rows[0]!.text()).not.toContain("重新生成以复制");
+    expect(rows[1]!.text()).toContain("生成链接");
+
+    await button(wrapper, "生成链接").trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".link-result").text()).toContain("林悦"));
+
+    rows = wrapper.findAll("tbody tr");
+    // 结果区现在展示 B：A 的 URL 不再可见，A 行必须提示重新生成，而不是假装可复制。
+    expect(rows[0]!.text()).toContain("重新生成以复制");
+    expect(wrapper.find(".link-result").text()).not.toContain("陈晨");
+    wrapper.unmount();
+  });
+
+  it("归档成员：确认后清掉该成员的受控结果区，并提示链接立即失效", async () => {
+    lanRunning();
+    const { wrapper } = await mountApp();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("未生成"));
+
+    await button(wrapper, "生成链接").trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".link-result").exists()).toBe(true));
+
+    await button(wrapper, "归档").trigger("click");
+    await nextTick();
+    expect(openDialog().textContent).toContain("分享链接会立即失效");
+    dialogButton(".btn.danger-btn").click();
+    await vi.waitFor(() => expect(wrapper.find(".link-result").exists()).toBe(false));
+    expect(fetchCalls.some((call) => call.method === "DELETE" && call.path === `${API}/members/m-1`)).toBe(true);
     wrapper.unmount();
   });
 });
@@ -411,6 +487,15 @@ describe("NetworkSharePanel（08 §5、05 §4.9）", () => {
     // 开启成功同步失效 network + members（shareBaseUrl 影响链接展示）。
     const memberFetches = fetchCalls.filter((call) => call.path === `${API}/members` && call.method === "GET");
     expect(memberFetches.length).toBeGreaterThanOrEqual(2);
+    wrapper.unmount();
+  });
+
+  it("默认端口跟随 loopback 实际端口：--port 9000 时开启表单预填 9000", async () => {
+    net = networkWith();
+    net.loopbackUrl = "http://127.0.0.1:9000";
+    const { wrapper } = await mountApp();
+    await vi.waitFor(() => expect(wrapper.find(".network-panel .net-enable").exists()).toBe(true));
+    expect((wrapper.find(".network-panel input.net-port").element as HTMLInputElement).value).toBe("9000");
     wrapper.unmount();
   });
 

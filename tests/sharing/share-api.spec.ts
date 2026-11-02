@@ -205,8 +205,81 @@ describe("网络三端点（05 §4.9）", () => {
     });
     expect(badPort.statusCode).toBe(422);
 
-    // 注：schema 已声明 additionalProperties:false；Fastify 默认 ajv removeAdditional:true
-    // 会剥离未声明字段而不是回 400，因此这里不断言额外字段的状态码（见交付说明的待决点）。
+    // 05 §1/§8：schema 声明 additionalProperties:false 后，未声明字段必须 400 而不是被静默剥离。
+    const extraField = await app.inject({
+      method: "PUT",
+      url: "/api/v1/admin/network/share-listener",
+      payload: { host: "192.168.1.5", port: 8123, unexpected: "x" },
+    });
+    expect(extraField.statusCode).toBe(400);
+    expect((extraField.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+    expect(network.state().shareListener.running).toBe(false);
+  });
+});
+
+describe("同源 mutation 校验（04 §8）", () => {
+  it("跨站 Origin 或 Sec-Fetch-Site: cross-site 的写请求 403 CROSS_SITE_REQUEST", async () => {
+    await enableLan();
+    const memberId = await createMemberViaApi(app, "陈晨");
+
+    const crossOrigin = await app.inject({
+      method: "POST",
+      url: shareLinkUrl(memberId),
+      headers: { host: "127.0.0.1:8123", origin: "http://evil.example" },
+    });
+    expect(crossOrigin.statusCode).toBe(403);
+    expect((crossOrigin.json() as { error: { code: string } }).error.code).toBe("CROSS_SITE_REQUEST");
+    await expect(shareLinks.get(memberId)).resolves.toEqual({ status: "none" });
+
+    const crossSite = await app.inject({
+      method: "POST",
+      url: shareLinkUrl(memberId),
+      headers: { host: "127.0.0.1:8123", "sec-fetch-site": "cross-site" },
+    });
+    expect(crossSite.statusCode).toBe(403);
+
+    const sameSite = await app.inject({
+      method: "POST",
+      url: shareLinkUrl(memberId),
+      headers: { host: "127.0.0.1:8123", "sec-fetch-site": "same-site" },
+    });
+    expect(sameSite.statusCode).toBe(403);
+
+    // 只读请求不受影响；同源写请求与无 Origin 的 CLI/测试请求放行。
+    const read = await app.inject({ method: "GET", url: "/api/v1/admin/members" });
+    expect(read.statusCode).toBe(200);
+
+    const sameOrigin = await app.inject({
+      method: "POST",
+      url: shareLinkUrl(memberId),
+      headers: { host: "127.0.0.1:8123", origin: "http://127.0.0.1:8123" },
+    });
+    expect(sameOrigin.statusCode).toBe(201);
+
+    const noOrigin = await app.inject({
+      method: "POST",
+      url: `/api/v1/admin/members/${memberId}/share-link/rotate`,
+    });
+    expect(noOrigin.statusCode).toBe(200);
+  });
+});
+
+describe("Admin 本机守卫的另一半条件（04 §4.1）", () => {
+  it("listenerKind=loopback 但对端非环回地址：Admin API 仍 403", async () => {
+    const remote = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/members",
+      remoteAddress: "192.168.1.9",
+    });
+    expect(remote.statusCode).toBe(403);
+    expect((remote.json() as { error: { code: string } }).error.code).toBe("ADMIN_LOCAL_ONLY");
+
+    const local = await app.inject({
+      method: "GET",
+      url: "/api/v1/admin/members",
+      remoteAddress: "127.0.0.1",
+    });
+    expect(local.statusCode).toBe(200);
   });
 });
 

@@ -396,6 +396,17 @@ export function createNetworkService(options: NetworkServiceOptions): NetworkSer
           lastError = null;
           return state();
         }
+        // 恢复也必须走与 enable 相同的地址校验：network.json 可能被手工改成
+        // 0.0.0.0/:: 或已失效的网卡地址，不能让 restore 以 wildcard 绑定绕过
+        // 「不接受通配地址」这条规则（01 §3、07 §3.3）。
+        try {
+          validateHost(saved.host);
+        } catch {
+          active = null;
+          degraded = true;
+          lastError = "局域网监听恢复失败：保存的地址当前不可用或端口被占用";
+          return state();
+        }
         try {
           const handle = await options.startListener(saved.host, saved.port);
           const actualPort = Number.isInteger(handle.port) && handle.port > 0 ? handle.port : saved.port;

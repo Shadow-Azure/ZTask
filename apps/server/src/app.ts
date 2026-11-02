@@ -63,6 +63,35 @@ function isLoopbackRemote(remoteAddress: string | undefined): boolean {
   return remoteAddress !== undefined && isLoopbackHost(remoteAddress);
 }
 
+/** 会产生副作用的 HTTP 方法；GET/HEAD/OPTIONS 不做同源 mutation 校验。 */
+const MUTATION_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * 同源 mutation 校验（04 §8「mutation 检查 Origin/Fetch-Site」）。
+ *
+ * 浏览器对非 GET 请求会带 `Origin`；跨站表单/fetch 无法伪造 Host，因此
+ * `Origin.host === Host` 即证明请求来自同源页面。没有 `Origin` 的请求来自
+ * curl/CLI/自动化测试（非浏览器），不构成 CSRF 面。
+ * `Sec-Fetch-Site` 缺省（旧浏览器/非浏览器）时以 Origin 结论为准。
+ * @param request Fastify 请求。
+ * @returns true 表示可执行该 mutation。
+ */
+function isSameOriginMutation(request: FastifyRequest): boolean {
+  const host = request.headers.host;
+  if (host === undefined) return false;
+  const origin = request.headers.origin;
+  if (origin !== undefined) {
+    try {
+      return new URL(origin).host === host;
+    } catch {
+      // `Origin: null`（沙箱 iframe 等）无法解析，一律拒绝。
+      return false;
+    }
+  }
+  const site = request.headers["sec-fetch-site"];
+  return typeof site !== "string" || site === "same-origin" || site === "none";
+}
+
 /**
  * 装配 Fastify 应用：/api/v1 健康、统一 404、同源静态回退与 Admin 本机专用钩子。
  * /api/* 未命中返回统一 404 JSON，静态回退绝不吞掉 API（验收标准）。
@@ -77,6 +106,10 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   const app = Fastify({
     logger: false,
     genReqId: () => randomUUID(),
+    // 05 §1/§8「请求 schema 默认拒绝未声明字段」：ajv 默认 removeAdditional=true 会
+    // 静默剥离未知字段并回 200，与契约相反；显式关闭后 additionalProperties:false
+    // 才会产生 400 INVALID_REQUEST。
+    ajv: { customOptions: { removeAdditional: false } },
   });
   app.decorateRequest("listenerKind", "loopback");
   app.addHook("onRequest", async (request: FastifyRequest) => {
@@ -91,6 +124,21 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     reply.header("referrer-policy", "no-referrer");
     reply.header("x-content-type-options", "nosniff");
     reply.header("content-security-policy", CONTENT_SECURITY_POLICY);
+  });
+
+  // 同源 mutation 校验（04 §8）：必须早于路由注册，才能被所有后续插件继承。
+  // 重点保护无 body schema 的 POST/DELETE（如分享链接生成/重置/吊销），
+  // 跨站表单无法被「Content-Type: application/json」挡住。
+  app.addHook("preHandler", async (request, reply) => {
+    if (!MUTATION_METHODS.has(request.method)) return;
+    if (isSameOriginMutation(request)) return;
+    await reply.status(403).send({
+      error: {
+        code: "CROSS_SITE_REQUEST",
+        message: "跨站写请求已被拒绝",
+        requestId: request.id,
+      },
+    });
   });
 
   // Admin 本机专用守卫（04 §4.1）：必须在注册任何业务路由之前安装。

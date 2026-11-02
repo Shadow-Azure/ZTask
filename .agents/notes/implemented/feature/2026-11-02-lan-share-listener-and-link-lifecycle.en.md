@@ -16,6 +16,8 @@ Member collaboration requires "one process, two listeners": loopback serves admi
 - **Hash-only links**: `share-links/<memberId>.json` stores only the token's SHA-256; the full URL appears once in the `generate`/`rotate` response and afterwards only a reset can reproduce it. Raw tokens are never written into member or link files just to make them re-copyable.
 - **Invalidation chain for rotate/revoke/archive**: `rotate` atomically replaces the file with a new id/tokenHash and deletes all `auth-sessions` of that member; `revoke` idempotently writes revoked and deletes sessions; archiving a member revokes the link before writing `archivedAt`. The per-request link-status check remains the real guarantee; deleting sessions is cleanup.
 - **URLs derive only from shareBaseUrl**: token files never embed full URLs; switching LAN addresses only updates `network.json` while tokens stay stable, and previously distributed URLs must be re-sent by the administrator (CLI `--lan` only restores on startup).
+- **Same-origin mutation protection**: every non-`GET/HEAD/OPTIONS` request checks `Origin` (when present it must match `Host`) and `Sec-Fetch-Site` (`cross-site`/`same-site` rejected) before route registration; browser-less CLI/test requests pass. Once LAN is exposed, the body-less `POST rotate` can no longer be triggered by a cross-site form.
+- **Security headers are completed in this PR**: a global CSP joins `Referrer-Policy`/`nosniff`; scripts are same-origin only, styles explicitly allow `'unsafe-inline'` for Vue `:style`, and framing is denied.
 
 ## Alternatives considered
 
@@ -30,4 +32,5 @@ Member collaboration requires "one process, two listeners": loopback serves admi
 - `ServeHandle` exposes the network/shareLink services for routes, the CLI, and tests; a failed LAN restore is a **degradation**, not a startup failure, and health checks stay available.
 - The share URL is copyable only in the controlled result area right after generate/rotate; after a page refresh an administrator must rotate to obtain a new URL — the unavoidable cost of hash-only.
 - Session cleanup now covers rotate/revoke/archive; periodic cleanup of expired sessions remains follow-up debt (recorded in the #18 note).
+- Static shell, API, and error responses all carry CSP and same-origin write protection; new mutation endpoints need no extra wiring, but non-browser clients sending a mismatched `Origin` are rejected.
 - Multi-process/reverse-proxy setups are out of scope for v1; rate-limit thresholds for NAT-shared egress IPs must be re-evaluated before enabling LAN (recorded in the #18 note).

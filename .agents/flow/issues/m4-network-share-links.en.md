@@ -23,6 +23,7 @@ scope:
   - apps/web/src/api/network.ts
   - apps/web/src/router/index.ts
   - packages/shared/**
+  - plan/fullstack-design/05-api-design.md
   - tests/sharing/**
   - tests/admin-members/**
   - .agents/notes/implemented/feature/2026-11-02-*

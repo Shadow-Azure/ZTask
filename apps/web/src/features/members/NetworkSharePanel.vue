@@ -16,7 +16,7 @@ import ErrorState from "../../components/ui/ErrorState.vue";
 const queryClient = useQueryClient();
 const toast = useToast();
 
-const DEFAULT_PORT = 8123;
+const FALLBACK_PORT = 8123;
 const PORT_MIN = 1;
 const PORT_MAX = 65_535;
 
@@ -39,11 +39,35 @@ const running = computed(() => listener.value?.running === true);
 const degraded = computed(() => listener.value?.degraded === true);
 
 const host = ref("");
-const portInput = ref(String(DEFAULT_PORT));
+const portInput = ref(String(FALLBACK_PORT));
 const portError = ref("");
 /** 运行中切换地址时才展开表单；未运行时始终展示开启表单。 */
 const switching = ref(false);
 const confirmCloseOpen = ref(false);
+
+/**
+ * 默认分享端口跟随 loopback 实际端口（01 §3「两个监听默认共用端口」）：
+ * `--port 9000` 启动时不能把 LAN 监听默认写死成 8123。
+ */
+const defaultPort = computed(() => {
+  const url = networkQuery.data.value?.loopbackUrl;
+  if (!url) return FALLBACK_PORT;
+  try {
+    const parsed = new URL(url);
+    return parsed.port === "" ? FALLBACK_PORT : Number(parsed.port);
+  } catch {
+    return FALLBACK_PORT;
+  }
+});
+
+watch(
+  defaultPort,
+  (port) => {
+    // 只在用户尚未开始编辑（表单收起且分享未运行）时同步默认值，避免 15s 轮询覆盖手输端口。
+    if (!switching.value && !running.value) portInput.value = String(port);
+  },
+  { immediate: true },
+);
 
 watch(
   [interfaces, listener],
@@ -100,7 +124,7 @@ function parsePort(): number | null {
 function openSwitch(): void {
   const state = listener.value;
   host.value = state?.host ?? interfaces.value[0]?.address ?? "";
-  portInput.value = String(state?.port ?? DEFAULT_PORT);
+  portInput.value = String(state?.port ?? defaultPort.value);
   portError.value = "";
   switching.value = true;
 }

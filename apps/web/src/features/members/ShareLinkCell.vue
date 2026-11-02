@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import { useMutation, useQueryClient } from "@tanstack/vue-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { ApiError, type AdminMember, type AdminMemberShareLink, type AdminShareLinkState } from "@ztask/shared";
-import { shareLinkApi } from "../../api/network";
+import { networkApi, shareLinkApi } from "../../api/network";
 import { useToast } from "../../components/ui/toast";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
 
@@ -10,11 +10,13 @@ import BaseDialog from "../../components/ui/BaseDialog.vue";
  * 成员分享链接单元格（08 §5，原型 .link-cell/.link-box，ztask-prototype.html:1786–1794）：
  * 只渲染脱敏状态（member.shareLink）；raw URL 只在本次生成/重置后交给表格下方的
  * 受控结果区展示，刷新后不伪称能复制旧链接，而提示「重新生成以复制」。
- * 重置/吊销复用统一确认 Dialog；LAN 未开启时引导到网络面板。
+ * 重置/吊销复用统一确认 Dialog；LAN 未开启时先引导网络面板，再调生成端点。
  */
 const props = defineProps<{
   /** 成员行（含脱敏链接态与计数）。 */
   member: AdminMember;
+  /** 受控结果区当前展示的成员；只有它能在表格里「直接复制」这次拿到的 URL。 */
+  issuedMemberId: string | null;
 }>();
 
 const emit = defineEmits<{
@@ -31,10 +33,15 @@ const toast = useToast();
 
 /** 409/链路错误后用 GET share-link 纠正过期列表态；列表刷新后以服务端为准。 */
 const reconciled = ref<AdminMemberShareLink | null>(null);
-/** 本次挂载内是否已拿到 raw URL：决定 active 行是否显示「重新生成以复制」。 */
-const hasIssuedUrl = ref(false);
 const confirmRotateOpen = ref(false);
 const confirmRevokeOpen = ref(false);
+
+/** 与 NetworkSharePanel 共用 ["admin","network"] 缓存：生成前判断 LAN 是否真的在运行。 */
+const networkQuery = useQuery({
+  queryKey: ["admin", "network"],
+  queryFn: networkApi.network,
+  refetchOnWindowFocus: true,
+});
 
 const state = computed<AdminMemberShareLink | null>(() => reconciled.value ?? props.member.shareLink);
 
@@ -105,7 +112,6 @@ async function reconcile(): Promise<void> {
 const generateMutation = useMutation({
   mutationFn: () => shareLinkApi.generateShareLink(props.member.id),
   onSuccess: (issued) => {
-    hasIssuedUrl.value = true;
     toast.show(`已为「${props.member.name}」生成分享链接`);
     emit("issued", { member: props.member, url: issued.url });
     void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
@@ -117,7 +123,6 @@ const rotateMutation = useMutation({
   mutationFn: () => shareLinkApi.rotateShareLink(props.member.id),
   onSuccess: (issued) => {
     confirmRotateOpen.value = false;
-    hasIssuedUrl.value = true;
     toast.show(`已重置「${props.member.name}」的链接，旧链接已失效`);
     emit("issued", { member: props.member, url: issued.url });
     void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
@@ -132,7 +137,6 @@ const revokeMutation = useMutation({
   mutationFn: () => shareLinkApi.revokeShareLink(props.member.id),
   onSuccess: () => {
     confirmRevokeOpen.value = false;
-    hasIssuedUrl.value = false;
     toast.show(`已吊销「${props.member.name}」的链接`);
     emit("cleared", props.member.id);
     void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
@@ -143,9 +147,19 @@ const revokeMutation = useMutation({
   },
 });
 
-/** 生成或重新生成（revoked 状态的「重新生成」复用同一 POST 端点）。 */
+/**
+ * 生成或重新生成（revoked 状态的「重新生成」复用同一 POST 端点）。
+ * 08 §5：先确认 LAN 已在运行，未运行则引导开面板，不向成员分发不可达地址。
+ * 网络状态尚未加载时不阻断，交给服务端 409 LAN_SHARE_DISABLED 兜底。
+ */
 function generate(): void {
   if (busy.value) return;
+  const listener = networkQuery.data.value?.shareListener;
+  if (listener !== undefined && !listener.running) {
+    toast.show("请先开启局域网分享");
+    emit("needs-network");
+    return;
+  }
   generateMutation.mutate();
 }
 </script>
@@ -160,7 +174,7 @@ function generate(): void {
     <template v-else-if="state.status === 'active'">
       <span class="link-state">已生成</span>
       <span class="link-meta">{{ lastUsedText }}</span>
-      <span v-if="!hasIssuedUrl" class="link-meta faint">重新生成以复制</span>
+      <span v-if="issuedMemberId !== member.id" class="link-meta faint">重新生成以复制</span>
       <button class="mini-btn" type="button" :disabled="busy" @click="confirmRotateOpen = true">重置</button>
       <button class="mini-btn red" type="button" :disabled="busy" @click="confirmRevokeOpen = true">吊销</button>
     </template>

@@ -46,9 +46,13 @@ function openCreate(): void {
 
 const archiveMutation = useMutation({
   mutationFn: (id: string) => adminApi.archiveMember(id),
-  onSuccess: () => {
+  onSuccess: (_data, archivedId) => {
     archiving.value = null;
+    // 归档会吊销链接并清空任务分配：成员、任务树与任务列表都必须失效（08 §5）。
+    if (issued.value?.memberId === archivedId) issued.value = null;
     void queryClient.invalidateQueries({ queryKey: ["admin", "members"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "folders"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin", "tasks"] });
     toast.show("成员已归档；其历史任务保留并显示待分配");
   },
   onError: (cause: unknown) => {
@@ -65,7 +69,7 @@ const archiveImpact = computed(() => {
   const member = archiving.value;
   if (!member) return "";
   const total = member.counts.owned + member.counts.collaborated;
-  return `归档后「${member.name}」将无法访问本服务；其${total > 0 ? ` ${total} 项任务分配将显示为待分配，` : ""}历史任务与操作记录完整保留。此操作不影响已完成的历史。`;
+  return `归档后「${member.name}」将无法访问本服务，其分享链接会立即失效；${total > 0 ? `其 ${total} 项任务分配将显示为待分配，` : ""}历史任务与操作记录完整保留。此操作不影响已完成的历史。`;
 });
 
 function confirmArchive(): void {
@@ -151,6 +155,7 @@ async function copyIssued(): Promise<void> {
             <ShareLinkCell
               v-if="!member.archivedAt"
               :member="member"
+              :issued-member-id="issued?.memberId ?? null"
               @issued="handleIssued"
               @cleared="handleCleared"
               @needs-network="emit('needs-network')"
