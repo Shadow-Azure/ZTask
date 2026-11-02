@@ -12,6 +12,7 @@ scope:
   - apps/server/src/modules/share/**
   - apps/server/src/modules/tasks/**
   - apps/server/src/app.ts
+  - apps/server/src/storage/manifest-store.ts
   - apps/server/src/index.ts
   - tests/member-access/**
   - apps/web/src/features/dashboard/**
