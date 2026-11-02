@@ -6,7 +6,7 @@ English | [中文](m5-recovery-acceptance.md)
 kind: issue
 milestone: m5
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/cli/**
   - apps/server/src/modules/maintenance/**
@@ -22,6 +22,7 @@ scope:
   - apps/server/src/app.ts
   - package.json
   - .agents/flow/issues/m5-recovery-acceptance*
+  - .agents/flow/milestones/m5-insights-recovery-release*
 adr: []
 github:
   number: 23
