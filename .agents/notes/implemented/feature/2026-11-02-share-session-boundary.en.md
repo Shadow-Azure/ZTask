@@ -15,6 +15,7 @@ A share link is only a credential: what actually isolates member data is "exchan
 - **Error-code choices**: exchange failures return `401 SHARE_LINK_INVALID` (an unknown credential is an authentication failure); missing/expired sessions return `401 SHARE_SESSION_REQUIRED`; unrelated tasks return `404 TASK_NOT_FOUND` (no existence leak). The exchange endpoint is rate-limited per source IP with a fixed window and returns `429 SHARE_EXCHANGE_RATE_LIMITED` when exceeded.
 - **Ownership and read-only**: #18 delivers only sessions and read-only queries; share-link mint/rotate/revoke endpoints belong to #20 and member personal-page writes to #19. #18 tests seed link files directly through fixtures instead of pulling minting into production code early. The tracker renders and registers no write mutations in the member scope.
 - **Single scope construction point**: `share-scope` decides member-visible tasks in one place (main-task owner/collaborator, or an assignee of a visible subtask), and the folder tree reuses `folder-service.tree(member-visible aggregates)` instead of duplicating tree building and counting.
+- **Subtask-only assignees** (how we resolve the 05 §6.4/§6.5 vs 07 §5.1 conflict): the stricter 07 §5.1 wins — they appear only in the read-only tracker, see the parent task context plus their assigned subtask, the main task `detail` is stripped from the DTO, and other subtasks stay invisible; the personal page groups by main-task assignment and excludes subtask-only tasks.
 
 ## Alternatives considered
 
@@ -29,3 +30,4 @@ A share link is only a credential: what actually isolates member data is "exchan
 - Sessions and links are scanned per file; member/link growth will need an index (debt, acceptable at v1 scale).
 - The frontend funnels member-scope 401s into "clear the share cache + go to the invalid page"; admin 401s do not take that path, avoiding collateral damage.
 - When #19 adds member writes, it must re-validate session, link status, and the owner role inside the write queue (07 §37) instead of trusting frontend disabling.
+- Session files accumulate per member and expired ones are only ignored, not deleted; cleanup ships with link reset/session management in #20. Rate limiting is a single-process in-memory fixed window and its threshold must be re-evaluated for NAT and multiple listeners before LAN sharing.

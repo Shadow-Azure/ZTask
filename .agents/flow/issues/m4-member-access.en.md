@@ -16,6 +16,7 @@ scope:
   - tests/member-access/**
   - apps/server/src/app.ts
   - apps/server/src/index.ts
+  - apps/server/src/modules/folders/**
   - apps/web/src/pages/ShareSessionPage.vue
   - apps/web/src/pages/MemberHomePage.vue
   - apps/web/src/layouts/ShareLayout.vue
