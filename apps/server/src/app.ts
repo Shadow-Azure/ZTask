@@ -8,6 +8,7 @@ import { isLoopbackHost } from "./config.js";
 import type { ZtaskStore } from "./storage/store.js";
 import { folderRoutes } from "./modules/folders/folder-routes.js";
 import { memberRoutes } from "./modules/members/member-routes.js";
+import { taskRoutes } from "./modules/tasks/task-routes.js";
 
 /** 请求入口类型；LAN 监听本体由后续 issue 装配，本 issue 先固定标记与 Admin 拒绝钩子。 */
 export type ListenerKind = "loopback" | "lan";
@@ -59,9 +60,10 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   }
 
   if (options.store) {
-    // 管理端业务路由（#15）；Admin 本机专用守卫仍由下方 preHandler 统一执行。
+    // 管理端业务路由（#15/#16）；Admin 本机专用守卫仍由下方 preHandler 统一执行。
     await app.register(folderRoutes, { dataDir: config.dataDir });
     await app.register(memberRoutes, { dataDir: config.dataDir });
+    await app.register(taskRoutes, { dataDir: config.dataDir });
   }
 
   app.addHook("preHandler", async (request, reply) => {

@@ -1,0 +1,330 @@
+// @vitest-environment node
+import { mkdir, rm } from "node:fs/promises";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { buildApp, initStore } from "@ztask/server";
+import type { FastifyInstance } from "fastify";
+
+let dataDir: string;
+let app: FastifyInstance;
+let folderId: string;
+let ownerA: string;
+let ownerB: string;
+
+beforeEach(async () => {
+  dataDir = path.join("/tmp", `ztask-tasks-api-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  await mkdir(dataDir, { recursive: true });
+  const store = await initStore({ dataDir, applicationVersion: "0.1.0" });
+  app = await buildApp({ host: "127.0.0.1", port: 0, dataDir, staticRoot: null }, { store });
+
+  folderId = (await app.inject({ method: "POST", url: "/api/v1/admin/folders", payload: { name: "迭代", parentId: null } })).json().id;
+  ownerA = (await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name: "陈晨" } })).json().id;
+  ownerB = (await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name: "林悦" } })).json().id;
+});
+
+afterEach(async () => {
+  await app.close();
+  await rm(dataDir, { recursive: true, force: true });
+});
+
+function createPayload(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    folderId,
+    parentId: null,
+    description: "任务树组件重构",
+    ownerIds: [ownerA],
+    collaboratorIds: [ownerB],
+    progress: 0,
+    detail: "初始详情",
+    importance: "high",
+    dueDate: "2026-11-10",
+    ...overrides,
+  };
+}
+
+async function createMain(): Promise<{ id: string; version: number }> {
+  const response = await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload() });
+  expect(response.statusCode).toBe(201);
+  const task = response.json();
+  return { id: task.id, version: task.version };
+}
+
+describe("POST /admin/tasks（创建）", () => {
+  it("主任务：201 返回 Task DTO，version=1，成员映射为 MemberSummary", async () => {
+    const response = await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload() });
+    const task = response.json();
+    expect(task.version).toBe(1);
+    expect(task.parentId).toBeNull();
+    expect(task.owners).toEqual([{ id: ownerA, name: "陈晨", role: "", color: expect.any(String) }]);
+    expect(task.collaborators[0]!.name).toBe("林悦");
+    expect(task.subtasks).toEqual([]);
+    expect(task.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+  });
+
+  it("小任务：201 返回 { task, parent }，父聚合 version 递增", async () => {
+    const main = await createMain();
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/tasks",
+      payload: { folderId, parentId: main.id, description: "树节点拖拽交互", ownerIds: [ownerA], progress: 0, detail: "", importance: "mid", dueDate: null },
+    });
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.task.parentId).toBe(main.id);
+    expect(body.task.owner.id).toBe(ownerA);
+    expect(body.parent.version).toBe(main.version + 1);
+    expect(body.parent.subtasks.length).toBe(1);
+  });
+
+  it("小任务下再建小任务返回 422", async () => {
+    const main = await createMain();
+    const sub = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: main.id, description: "小任务" }),
+    });
+    const subId = sub.json().task.id;
+    const nested = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: subId, description: "三层" }),
+    });
+    expect(nested.statusCode).toBe(422);
+  });
+
+  it("空描述/无有效 owner/归档成员引用被拒绝", async () => {
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ description: "  " }) })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ ownerIds: [] }) })).statusCode).toBe(422);
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ folderId: "11111111-1111-4111-8111-111111111111" }) })).statusCode).toBe(422);
+
+    await app.inject({ method: "DELETE", url: `/api/v1/admin/members/${ownerA}` });
+    const archivedRef = await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload() });
+    expect(archivedRef.statusCode).toBe(422);
+  });
+
+  it("progress 越界与非法重要度返回 400", async () => {
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ progress: 120 }) })).statusCode).toBe(400);
+    expect((await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ importance: "urgent" }) })).statusCode).toBe(400);
+  });
+});
+
+describe("GET /admin/tasks（列表）", () => {
+  it("folderId 必填；返回主任务含小任务；importance 过滤", async () => {
+    await createMain();
+    await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ description: "中重要任务", importance: "mid" }) });
+
+    const missing = await app.inject({ method: "GET", url: "/api/v1/admin/tasks" });
+    expect(missing.statusCode).toBe(400);
+
+    const all = await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}` });
+    expect(all.json().items.length).toBe(2);
+
+    const high = await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}&importance=high` });
+    expect(high.json().items.length).toBe(1);
+    expect(high.json().items[0]!.importance).toBe("high");
+  });
+
+  it("搜索 q 与游标分页", async () => {
+    await createMain();
+    await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ description: "虚拟滚动优化" }) });
+
+    const search = await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}&q=${encodeURIComponent("虚拟滚动")}` });
+    expect(search.json().items.length).toBe(1);
+    expect(search.json().items[0]!.description).toBe("虚拟滚动优化");
+
+    const page1 = await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}` });
+    expect(page1.json().nextCursor).toBeNull();
+  });
+});
+
+describe("GET /admin/tasks/{id}", () => {
+  it("主任务返回完整 Task；小任务返回 { task, parent }", async () => {
+    const main = await createMain();
+    const sub = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: main.id, description: "小任务", importance: "low" }),
+    });
+    const subId = sub.json().task.id;
+
+    const mainGet = await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` });
+    expect(mainGet.json().description).toBe("任务树组件重构");
+
+    const subGet = await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${subId}` });
+    expect(subGet.json().task.description).toBe("小任务");
+    expect(subGet.json().parent.id).toBe(main.id);
+  });
+
+  it("不存在返回 404", async () => {
+    const missing = await app.inject({ method: "GET", url: "/api/v1/admin/tasks/11111111-1111-4111-8111-111111111111" });
+    expect(missing.statusCode).toBe(404);
+  });
+});
+
+describe("PATCH /admin/tasks/{id}", () => {
+  it("主任务部分字段更新：进度变化追加 progress revision", async () => {
+    const main = await createMain();
+    const patched = await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`,
+      payload: { version: main.version, progress: 80 },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().progress).toBe(80);
+    expect(patched.json().version).toBe(2);
+  });
+
+  it("小任务不接受 detail/collaboratorIds；返回 { task, parent }", async () => {
+    const main = await createMain();
+    const sub = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: main.id, description: "小任务", importance: "low" }),
+    });
+    const subId = sub.json().task.id;
+
+    const bad = await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${subId}`,
+      payload: { version: sub.json().parent.version, detail: "不允许" },
+    });
+    expect(bad.statusCode).toBe(400);
+
+    const ok = await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${subId}`,
+      payload: { version: sub.json().parent.version, description: "改名后", progress: 60 },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().task.progress).toBe(60);
+  });
+
+  it("版本过期返回 409 + 最新任务", async () => {
+    const main = await createMain();
+    const conflict = await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`,
+      payload: { version: 99, progress: 10 },
+    });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json().error.code).toBe("TASK_VERSION_CONFLICT");
+    expect(conflict.json().error.details.current.version).toBe(1);
+  });
+
+  it("无有效变化不制造 revision（版本不变）", async () => {
+    const main = await createMain();
+    const same = await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`,
+      payload: { version: main.version, progress: 0, detail: "初始详情" },
+    });
+    expect(same.statusCode).toBe(200);
+    expect(same.json().version).toBe(main.version);
+  });
+});
+
+describe("PUT /admin/tasks/{id}/editor（原子编辑器）", () => {
+  it("一次保存主任务属性 + 小任务增改删", async () => {
+    const main = await createMain();
+    const sub = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: main.id, description: "旧小任务", importance: "low" }),
+    });
+    const subId = sub.json().task.id;
+
+    const saved = await app.inject({
+      method: "PUT", url: `/api/v1/admin/tasks/${main.id}/editor`,
+      payload: {
+        version: sub.json().parent.version,
+        task: { description: "编辑后标题", ownerIds: [ownerA, ownerB], collaboratorIds: [], progress: 70, detail: "新详情", importance: "mid", dueDate: "2026-11-20" },
+        subtasks: {
+          create: [{ clientId: "temp-1", description: "新小任务", ownerId: ownerA, progress: 0, importance: "mid", dueDate: null }],
+          update: [{ id: subId, description: "改后小任务", ownerId: ownerA, progress: 50, importance: "high", dueDate: null }],
+          deleteIds: [],
+        },
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    const task = saved.json();
+    expect(task.description).toBe("编辑后标题");
+    expect(task.progress).toBe(70);
+    expect(task.subtasks.length).toBe(2);
+    expect(task.subtasks.find((s: { description: string }) => s.description === "新小任务")).toBeTruthy();
+    expect(task.subtasks.find((s: { description: string }) => s.description === "改后小任务")?.progress).toBe(50);
+  });
+
+  it("不存在的小任务 ID / 归档 owner：整个聚合不写入", async () => {
+    const main = await createMain();
+    const before = (await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` })).json();
+
+    const badSub = await app.inject({
+      method: "PUT", url: `/api/v1/admin/tasks/${main.id}/editor`,
+      payload: {
+        version: before.version,
+        task: { description: "x", ownerIds: [ownerA], collaboratorIds: [], progress: 0, detail: "", importance: "mid", dueDate: null },
+        subtasks: { create: [], update: [{ id: "22222222-2222-4222-8222-222222222222", description: "幽灵", ownerId: ownerA, progress: 0, importance: "mid", dueDate: null }], deleteIds: [] },
+      },
+    });
+    expect([404, 422]).toContain(badSub.statusCode);
+
+    await app.inject({ method: "DELETE", url: `/api/v1/admin/members/${ownerB}` });
+    const badOwner = await app.inject({
+      method: "PUT", url: `/api/v1/admin/tasks/${main.id}/editor`,
+      payload: {
+        version: before.version,
+        task: { description: "x", ownerIds: [ownerB], collaboratorIds: [], progress: 0, detail: "", importance: "mid", dueDate: null },
+        subtasks: { create: [], update: [], deleteIds: [] },
+      },
+    });
+    expect(badOwner.statusCode).toBe(422);
+
+    const after = (await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` })).json();
+    expect(after).toEqual(before);
+  });
+
+  it("版本冲突 409 且携带最新任务", async () => {
+    const main = await createMain();
+    const conflict = await app.inject({
+      method: "PUT", url: `/api/v1/admin/tasks/${main.id}/editor`,
+      payload: {
+        version: 42,
+        task: { description: "x", ownerIds: [ownerA], collaboratorIds: [], progress: 0, detail: "", importance: "mid", dueDate: null },
+        subtasks: { create: [], update: [], deleteIds: [] },
+      },
+    });
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.json().error.details.current.version).toBe(1);
+  });
+});
+
+describe("DELETE /admin/tasks/{id}（软删除）", () => {
+  it("主任务软删除连带小任务；历史 revision 保留", async () => {
+    const main = await createMain();
+    const sub = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: main.id, description: "小任务", importance: "low" }),
+    });
+
+    const current = (await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` })).json();
+    const removed = await app.inject({ method: "DELETE", url: `/api/v1/admin/tasks/${main.id}?version=${current.version}` });
+    expect(removed.statusCode).toBe(204);
+
+    const list = await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}` });
+    expect(list.json().items.length).toBe(0);
+    expect((await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` })).statusCode).toBe(404);
+
+    // revisions.jsonl 文件保留（历史可查）
+    const { readFile } = await import("node:fs/promises");
+    const raw = await readFile(path.join(dataDir, "tasks", main.id, "revisions.jsonl"), "utf8");
+    expect(raw.trim().split("\n").length).toBeGreaterThanOrEqual(2);
+    void sub;
+  });
+
+  it("版本不匹配 409", async () => {
+    const main = await createMain();
+    const conflict = await app.inject({ method: "DELETE", url: `/api/v1/admin/tasks/${main.id}?version=99` });
+    expect(conflict.statusCode).toBe(409);
+  });
+
+  it("两个客户端并发保存：一胜一 409，草稿可重试", async () => {
+    const main = await createMain();
+    const [a, b] = await Promise.allSettled([
+      app.inject({ method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`, payload: { version: 1, progress: 30 } }),
+      app.inject({ method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`, payload: { version: 1, progress: 60 } }),
+    ]);
+    const statuses = [a, b].map((r) => (r.status === "fulfilled" ? r.value.statusCode : 0));
+    expect(statuses.filter((code) => code === 200).length).toBe(1);
+    expect(statuses.filter((code) => code === 409).length).toBe(1);
+  });
+});

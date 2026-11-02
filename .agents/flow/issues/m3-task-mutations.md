@@ -6,13 +6,16 @@
 kind: issue
 milestone: m3
 priority: P0
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/modules/tasks/**
   - apps/server/src/modules/revisions/**
   - apps/web/src/features/tasks/**
+  - apps/web/src/api/admin.ts
   - packages/shared/**
   - tests/admin-tasks/**
+  - apps/server/src/app.ts
+  - apps/web/src/pages/TrackerPage.vue
   - .agents/flow/issues/m3-task-mutations*
 adr: []
 github:
