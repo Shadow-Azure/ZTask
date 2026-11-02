@@ -7,3 +7,6 @@ node_modules/
 
 # Workspace build outputs
 **/dist/
+
+# PR review working docs (kept local; not versioned)
+/plans/
