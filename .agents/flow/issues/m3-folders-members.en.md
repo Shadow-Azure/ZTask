@@ -6,7 +6,7 @@ English | [中文](m3-folders-members.md)
 kind: issue
 milestone: m3
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/folders/**
   - apps/server/src/modules/members/**
