@@ -6,11 +6,14 @@
 kind: issue
 milestone: m2
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - apps/web/**
   - packages/shared/**
   - tests/web-shell/**
+  - package.json
+  - pnpm-lock.yaml
+  - vitest.config.ts
   - .agents/flow/issues/m2-frontend-shell*
 adr: []
 github:
