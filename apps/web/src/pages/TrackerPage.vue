@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useQuery } from "@tanstack/vue-query";
+import type { AdminMember, Task } from "@ztask/shared";
+import { adminApi, adminTaskApi } from "../api/admin";
+import TaskCard from "../components/TaskCard.vue";
+import TaskEditorDialog from "../features/tasks/TaskEditorDialog.vue";
+import LoadingState from "../components/ui/LoadingState.vue";
 import PaneResizer from "../components/ui/PaneResizer.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
 import FolderTree from "../features/folders/FolderTree.vue";
@@ -30,6 +36,63 @@ const activeTab = computed<"tasks" | "dash">(() => (route.query.tab === "dash" ?
 function switchTab(tab: "tasks" | "dash"): void {
   void router.replace({ query: { ...route.query, tab } });
 }
+
+const selectedFolderId = computed(() => (typeof route.query.folder === "string" && route.query.folder ? route.query.folder : null));
+
+const tasksQuery = useQuery({
+  queryKey: ["admin", "tasks", selectedFolderId],
+  queryFn: () => adminTaskApi.list({ folderId: selectedFolderId.value ?? "", includeDescendants: true }),
+  enabled: computed(() => selectedFolderId.value !== null),
+  refetchInterval: 15_000,
+});
+
+const editorOpen = ref(false);
+const editorTask = ref<Task | null>(null);
+
+function openEditor(task: Task): void {
+  editorTask.value = task;
+  editorOpen.value = true;
+}
+
+function openEditorById(taskId: string): void {
+  const task = tasksQuery.data.value?.items.find((item) => item.id === taskId);
+  if (task) openEditor(task);
+}
+
+function openCreate(): void {
+  editorTask.value = null;
+  editorOpen.value = true;
+}
+
+function onSaved(): void {
+  void tasksQuery.refetch();
+}
+
+const importanceFilter = ref<"all" | "high" | "mid" | "low">("all");
+const searchText = ref("");
+
+const visibleTasks = computed(() => {
+  const items = tasksQuery.data.value?.items ?? [];
+  return items.filter((task) => {
+    if (importanceFilter.value !== "all" && task.importance !== importanceFilter.value) return false;
+    if (searchText.value && !task.description.includes(searchText.value)) return false;
+    return true;
+  });
+});
+
+function localFilterClasses(level: "all" | "high" | "mid" | "low"): string {
+  return importanceFilter.value === level ? "fchip active" : "fchip";
+}
+
+const membersQuery = useQuery({
+  queryKey: ["admin", "members"],
+  queryFn: adminApi.members,
+  refetchInterval: 30_000,
+});
+
+const activeMembers = computed<AdminMember[]>(() =>
+  (membersQuery.data.value?.items ?? []).filter((member) => member.archivedAt === null),
+);
 </script>
 
 <template>
@@ -54,7 +117,7 @@ function switchTab(tab: "tasks" | "dash"): void {
     <main class="board">
       <div class="board-head">
         <div class="crumb">
-          <span class="path">全部任务夹</span>
+          <span class="path">{{ selectedFolderId ? "选中任务夹" : "全部任务夹" }}</span>
           <span class="scope-hint">包含子任务夹中的全部任务</span>
         </div>
         <div class="tabs" role="tablist" aria-label="事项跟踪视图">
@@ -81,23 +144,41 @@ function switchTab(tab: "tasks" | "dash"): void {
 
       <div v-if="activeTab === 'tasks'" class="board-body">
         <div class="toolbar">
-          <button v-if="isAdmin" class="btn primary" type="button" disabled title="任务数据在后续里程碑接入">＋ 新建任务</button>
-          <span v-else class="ro-tag">只读视图 · 数据来自你有权查看的范围</span>
+          <button v-if="isAdmin" class="btn primary" type="button" :disabled="!selectedFolderId" title="先选择任务夹" @click="openCreate">＋ 新建任务</button>
+          <span v-if="!isAdmin" class="ro-tag">只读视图 · 数据来自你有权查看的范围</span>
           <span class="spacer" />
           <span class="flabel">重要度</span>
-          <button class="fchip active" type="button">全部</button>
-          <button class="fchip" type="button">高</button>
-          <button class="fchip" type="button">中</button>
-          <button class="fchip" type="button">低</button>
-          <input class="search-box" type="search" placeholder="搜索任务描述…" :disabled="!isAdmin" aria-label="搜索任务描述">
+          <button
+            v-for="level in ['all', 'high', 'mid', 'low'] as const"
+            :key="level"
+            type="button"
+            :class="localFilterClasses(level)"
+            @click="importanceFilter = level"
+          >{{ level === "all" ? "全部" : level === "high" ? "高" : level === "mid" ? "中" : "低" }}</button>
+          <input v-model="searchText" class="search-box" type="search" placeholder="搜索任务描述…" aria-label="搜索任务描述">
         </div>
-        <EmptyState hint="任务列表将在 m3 接入真实数据；此处为设计系统占位" />
+
+        <LoadingState v-if="tasksQuery.isLoading.value && selectedFolderId" label="任务加载中…" />
+        <div v-else-if="selectedFolderId" class="task-list">
+          <TaskCard v-for="task in visibleTasks" :key="task.id" :task="task" @open="openEditorById" />
+          <EmptyState v-if="visibleTasks.length === 0" title="暂无任务" hint="点击「＋ 新建任务」创建第一个任务" />
+        </div>
+        <EmptyState v-else title="先选择任务夹" hint="在左侧任务夹树中选择一个任务夹以查看任务" />
         <p class="hint-line">任务进展为只读视图；点击任务标题区可在浮窗中查看或编辑完整任务。</p>
       </div>
 
       <div v-else class="board-body">
         <EmptyState hint="情况看板统计与历史变化将在 m5 接入" />
       </div>
+
+    <TaskEditorDialog
+      :open="editorOpen"
+      :folder-id="selectedFolderId"
+      :task="editorTask"
+      :members="activeMembers"
+      @close="editorOpen = false"
+      @saved="onSaved"
+    />
     </main>
   </div>
 </template>
