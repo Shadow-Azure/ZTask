@@ -6,7 +6,7 @@
 kind: issue
 milestone: m3
 priority: P0
-status: in-progress
+status: done
 scope:
   - AGENTS.md
   - README*
