@@ -76,3 +76,26 @@ export interface HealthPayload {
 
 /** 任务与成员档案的重要性档位。 */
 export type Importance = "high" | "mid" | "low";
+
+/** 历史变更类型（06 §7.1 受控枚举）：只有实际有效变更才追加 revision，读取与冲突不产生历史。 */
+export type ChangeKind = "create" | "update" | "progress" | "detail" | "subtask" | "delete";
+
+/**
+ * revision 的最小公开形态（05 §2.1）：列表/看板只需要版本、时刻与变更语义；
+ * 完整快照留在存储层，不进入 API。
+ */
+export interface RevisionResult {
+  taskVersion: number;
+  /** UTC RFC 3339。 */
+  recordedAt: string;
+  changeKind: ChangeKind;
+}
+
+/**
+ * revision 的操作者。name 是操作时显示名快照，成员后续改名/归档不影响历史可读性；admin 操作 memberId 为 null。
+ */
+export interface RevisionActor {
+  kind: "admin" | "member";
+  memberId: string | null;
+  name: string;
+}
