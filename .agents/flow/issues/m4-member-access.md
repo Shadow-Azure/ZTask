@@ -6,7 +6,7 @@
 kind: issue
 milestone: m4
 priority: P0
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/modules/share/**
   - apps/server/src/plugins/auth*
@@ -14,6 +14,11 @@ scope:
   - apps/web/src/features/tracker/**
   - packages/shared/**
   - tests/member-access/**
+  - apps/server/src/app.ts
+  - apps/web/src/pages/ShareSessionPage.vue
+  - apps/web/src/pages/MemberHomePage.vue
+  - apps/web/src/layouts/ShareLayout.vue
+  - apps/web/src/api/share.ts
   - .agents/flow/issues/m4-member-access*
 adr: []
 github:
