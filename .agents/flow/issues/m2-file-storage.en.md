@@ -6,7 +6,7 @@ English | [中文](m2-file-storage.md)
 kind: issue
 milestone: m2
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/server/src/storage/**
   - apps/server/src/plugins/**
