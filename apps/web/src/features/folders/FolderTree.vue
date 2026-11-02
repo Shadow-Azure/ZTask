@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import { useRoute } from "vue-router";
 import { adminApi } from "../../api/admin";
+import { shareApi } from "../../api/share";
 import { useToast } from "../../components/ui/toast";
 import EmptyState from "../../components/ui/EmptyState.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
@@ -10,18 +11,28 @@ import ErrorState from "../../components/ui/ErrorState.vue";
 import FolderTreeNode from "./FolderTreeNode.vue";
 
 /**
- * 任务夹树容器（08 §2.2）：树查询 + 管理员"＋ 新建任务夹"行内创建。
+ * 任务夹树容器（08 §2.2、05 §6.11）：按数据域取树 + 管理员"＋ 新建任务夹"行内创建。
+ * scope=share 时使用成员只读树（只含相关任务及祖先）且不渲染新建行；
  * 创建位置 = 当前选中夹（URL folder），无选中则在根。
  */
-const props = defineProps<{ canEdit?: boolean }>();
+const props = defineProps<{
+  canEdit?: boolean;
+  /** 数据域：share 走成员只读 API，query key 一并按域隔离（08 §6.3）。 */
+  scope?: "admin" | "share";
+}>();
 
 const route = useRoute();
 const queryClient = useQueryClient();
 const toast = useToast();
 
+const isShareScope = computed(() => props.scope === "share");
+const scopePrefix = computed(() => (isShareScope.value ? "share" : "admin"));
+/** 只读域（成员壳）永不渲染新建任务夹行，即使父级误传 canEdit。 */
+const canCreate = computed(() => props.canEdit === true && !isShareScope.value);
+
 const treeQuery = useQuery({
-  queryKey: ["admin", "folders", "tree"],
-  queryFn: adminApi.folderTree,
+  queryKey: [scopePrefix.value, "folders", "tree"],
+  queryFn: () => (isShareScope.value ? shareApi.foldersTree() : adminApi.folderTree()),
   refetchInterval: 15_000,
 });
 
@@ -42,6 +53,7 @@ const createMutation = useMutation({
 });
 
 function submitCreate(): void {
+  if (!canCreate.value) return;
   const name = newName.value.trim();
   if (!name || createMutation.isPending.value) return;
   const parentId = typeof route.query.folder === "string" && route.query.folder ? route.query.folder : null;
@@ -66,8 +78,8 @@ defineExpose({ treeQuery });
     <template v-else>
       <EmptyState
         v-if="!hasFolders"
-        :title="canEdit ? undefined : '暂无任务夹'"
-        :hint="canEdit ? '点击「＋ 新建任务夹」创建第一个任务夹' : undefined"
+        :title="canCreate ? undefined : '暂无任务夹'"
+        :hint="canCreate ? '点击「＋ 新建任务夹」创建第一个任务夹' : '当前范围内没有可见的任务夹（只读）'"
       />
       <ul v-else class="tree-root" role="tree" aria-label="任务夹">
         <FolderTreeNode
@@ -75,12 +87,12 @@ defineExpose({ treeQuery });
           :key="node.id"
           :node="node"
           :depth="0"
-          :can-edit="canEdit"
+          :can-edit="canCreate"
         />
       </ul>
     </template>
 
-    <div v-if="canEdit" class="create-row">
+    <div v-if="canCreate" class="create-row">
       <template v-if="creating">
         <input
           v-model="newName"

@@ -34,7 +34,7 @@ export function createAppRouter(): Router {
         children: [
           { path: "", redirect: "/s/home" },
           { path: "home", name: "share-home", component: MemberHomePage },
-          { path: "tracker", name: "share-tracker", component: TrackerPage, props: { access: "readonly" } },
+          { path: "tracker", name: "share-tracker", component: TrackerPage, props: { access: "readonly", scope: "share" } },
         ],
       },
       { path: "/share-invalid", name: "share-invalid", component: ShareInvalidPage },

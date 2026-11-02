@@ -4,7 +4,7 @@ export { ApiError, type ApiErrorCode };
 
 /** requestJson 的选项；timeoutMs 默认 15 秒，与协作轮询同量级。 */
 export interface RequestOptions {
-  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   /** 查询参数（undefined/null 值会被跳过）。 */
   query?: Record<string, string | number | boolean | undefined | null>;
