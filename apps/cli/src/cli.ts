@@ -4,10 +4,11 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 import process from "node:process";
-import { LockHeldError, serve, validateServeConfig } from "@ztask/server";
+import { CommanderError } from "commander";
+import { defaultDataDir, LockHeldError, serve, validateServeConfig } from "@ztask/server";
 import type { NetworkState } from "@ztask/shared";
-import { resolveOpenDecision } from "./serve-args.js";
-import { parseServeArgs } from "./serve-args.js";
+import { parseCliArgs, resolveOpenDecision, type ParsedServeArgs } from "./serve-args.js";
+import { EXIT_USAGE, runBackup, runDoctor, runRestore } from "./maintenance.js";
 
 const require = createRequire(import.meta.url);
 /** CLI 版本即服务版本，健康检查回显。 */
@@ -16,8 +17,39 @@ const VERSION: string = require("../package.json").version;
 /** 生产态 Vue 构建产物位置（apps/web/dist）；不存在时服务纯 API 模式。 */
 const WEB_DIST = path.resolve(import.meta.dirname, "../../web/dist");
 
+/**
+ * 命令分发：serve 启动服务；backup/restore/doctor 走维护路径（#23）。
+ * 维护命令不启动 HTTP、不可达/校验失败时以非零退出码结束（见 maintenance.ts）。
+ * @param argv 命令行参数（不含 node 与脚本路径）。
+ */
 async function main(argv: string[]): Promise<void> {
-  const { input, open } = parseServeArgs(argv);
+  const parsed = parseCliArgs(argv);
+  switch (parsed.command) {
+    case "backup":
+      process.exitCode = await runBackup({ url: parsed.url });
+      return;
+    case "restore":
+      process.exitCode = await runRestore({
+        backupDir: parsed.backupDir,
+        dataDir: parsed.dataDir,
+        applicationVersion: VERSION,
+      });
+      return;
+    case "doctor":
+      process.exitCode = await runDoctor({ dataDir: parsed.dataDir ?? defaultDataDir() });
+      return;
+    case "serve":
+      await runServe(parsed.serve);
+      return;
+  }
+}
+
+/**
+ * 启动 `ztask serve`：校验配置、启动服务、打印地址与分享状态，并接管 SIGINT/SIGTERM。
+ * @param parsed serve 子命令的解析结果。
+ */
+async function runServe(parsed: ParsedServeArgs): Promise<void> {
+  const { input, open } = parsed;
   const config = validateServeConfig({
     ...input,
     staticRoot: existsSync(WEB_DIST) ? WEB_DIST : null,
@@ -90,6 +122,10 @@ function openBrowser(url: string): void {
 }
 
 main(process.argv.slice(2)).catch((cause: unknown) => {
+  if (cause instanceof CommanderError) {
+    // --help/--version 是正常退出（exitCode 0）；参数/子命令错误统一按用法错误退出（2）。
+    process.exit(cause.exitCode === 0 ? 0 : EXIT_USAGE);
+  }
   if (cause instanceof LockHeldError) {
     console.error(`启动失败：${cause.message}`);
     process.exit(1);

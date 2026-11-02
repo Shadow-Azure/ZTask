@@ -99,3 +99,38 @@ export type {
   MemberServiceDeps,
   ShareLinkSummarySource,
 } from "./modules/members/member-service.js";
+
+// 备份/恢复/doctor（#23）：在线备份服务与路由、离线恢复、只读校验与体检。
+export {
+  BACKUP_REPORT_FORMAT_VERSION,
+  createBackupService,
+} from "./modules/maintenance/backup-service.js";
+export type {
+  BackupHooks,
+  BackupReport,
+  BackupResult,
+  BackupService,
+  BackupServiceOptions,
+} from "./modules/maintenance/backup-service.js";
+export {
+  BACKUP_REPORT_FILE,
+  EXCLUDED_DATA_ENTRIES,
+  listDataDirFiles,
+  validateDataDir,
+} from "./modules/maintenance/validate-service.js";
+export type {
+  DataDirFile,
+  ValidationIssue,
+  ValidationIssueKind,
+  ValidationResult,
+} from "./modules/maintenance/validate-service.js";
+export { RestoreError, restoreFromBackup } from "./modules/maintenance/restore-service.js";
+export type {
+  RestoreErrorCode,
+  RestoreOptions,
+  RestoreSummary,
+} from "./modules/maintenance/restore-service.js";
+export { doctor } from "./modules/maintenance/doctor-service.js";
+export type { DoctorReport } from "./modules/maintenance/doctor-service.js";
+export { MAINTENANCE_ADMIN_PATH, maintenanceRoutes } from "./modules/maintenance/maintenance-routes.js";
+export type { MaintenanceRoutesOptions } from "./modules/maintenance/maintenance-routes.js";

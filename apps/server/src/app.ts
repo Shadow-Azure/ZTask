@@ -17,6 +17,8 @@ import { dashboardRoutes } from "./modules/dashboard/dashboard-routes.js";
 import { createHistoryService } from "./modules/revisions/history-service.js";
 import type { NetworkService } from "./modules/network/network-service.js";
 import type { ShareLinkService } from "./modules/share/share-links.js";
+import { maintenanceRoutes } from "./modules/maintenance/maintenance-routes.js";
+import type { BackupHooks } from "./modules/maintenance/backup-service.js";
 
 /** 请求入口类型；loopback 入口可访问 Admin API，LAN 入口一律拒绝（04 §4.1）。 */
 export type ListenerKind = "loopback" | "lan";
@@ -37,6 +39,11 @@ export interface BuildAppOptions {
    * 写入侧 revision 的 recordedAt 由 TaskStore 的 clock 决定，需要确定性时两者应注入同一时钟。
    */
   clock?: () => Date;
+  /**
+   * 在线备份故障注入缝（#23 测试用）：模拟「发布前崩溃」与「备份进行中」的并发窗口；
+   * 生产不传。备份服务仍需 store.pauseWrites 建立一致性边界。
+   */
+  backupHooks?: BackupHooks;
 }
 
 declare module "fastify" {
@@ -329,6 +336,15 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
       taskStore: options.store.tasks,
       dashboardService,
       historyService,
+    });
+    // 在线备份（#23）：Admin 本机专用守卫已就位；备份通过 store.pauseWrites 暂停写入。
+    // appVersion 取调用方声明的服务版本，缺省回落到 manifest 里写入数据的应用版本。
+    await app.register(maintenanceRoutes, {
+      dataDir: config.dataDir,
+      appVersion: options.version ?? options.store.manifest.applicationVersion,
+      store: options.store,
+      ...(options.clock === undefined ? {} : { clock: options.clock }),
+      ...(options.backupHooks === undefined ? {} : { backupHooks: options.backupHooks }),
     });
   }
 

@@ -111,6 +111,12 @@ export interface TaskStore {
   readRevisions(taskId: string, visitor: (line: RevisionLine) => void): Promise<void>;
   listTaskIds(): Promise<string[]>;
   drain(): Promise<void>;
+  /**
+   * 备份/维护用的一致性边界（06 §10）：先暂停新写入，再等待在途写入结束，返回恢复函数。
+   * 暂停期间提交的写会排队，恢复后按提交顺序执行；未调用 resume 的暂停会让写入永久排队。
+   * @returns resume；幂等，调用后队列恢复接受新写入。
+   */
+  pauseWrites(): Promise<() => void>;
 }
 
 /**
@@ -233,6 +239,13 @@ export function createTaskStore(options: TaskStoreOptions): TaskStore {
 
     drain(): Promise<void> {
       return queue.drain();
+    },
+
+    async pauseWrites(): Promise<() => void> {
+      // 顺序不可交换：先关闸门再 drain，才能保证「drain 观察到的在途集合」之后不会再有新写入。
+      const resume = queue.pause();
+      await queue.drain();
+      return resume;
     },
   };
 }

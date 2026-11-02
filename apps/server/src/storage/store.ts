@@ -57,6 +57,12 @@ export interface ZtaskStore {
   rebuildIndexes(): Promise<DerivedIndexes>;
   /** 排空写队列（优雅关闭顺序：停连接 → 排空队列 → 释放锁，04 §9）。 */
   drain(): Promise<void>;
+  /**
+   * 在线备份的一致性边界（06 §10 / 07 §9）：委托任务写队列先暂停再排空，
+   * 返回恢复函数。暂停期间成员/管理端写请求排队等待，不写入文件。
+   * @returns resume；幂等。
+   */
+  pauseWrites(): Promise<() => void>;
 }
 
 /** 读取 revisions.jsonl 的最后一行（含 checksum 校验）；文件缺失或为空返回 null。 */
@@ -178,6 +184,9 @@ export async function initStore(options: StoreInitOptions): Promise<ZtaskStore> 
     },
     drain(): Promise<void> {
       return tasks.drain();
+    },
+    pauseWrites(): Promise<() => void> {
+      return tasks.pauseWrites();
     },
   };
   store.indexes = await store.rebuildIndexes();
