@@ -6,7 +6,7 @@ English | [中文](m4-network-share-links.md)
 kind: issue
 milestone: m4
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/cli/**
   - apps/server/src/modules/network/**
