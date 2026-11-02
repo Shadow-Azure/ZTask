@@ -99,3 +99,33 @@ export interface RevisionActor {
   memberId: string | null;
   name: string;
 }
+
+/**
+ * 管理端成员行（05 §2.3）：含主任务计数与分享链接脱敏态；
+ * raw token 与链接 URL 绝不进入该结构。
+ */
+export interface AdminMemberCounts {
+  owned: number;
+  collaborated: number;
+}
+
+/** 分享链接的脱敏态（m4 接入前恒为 null；不含 token/URL）。 */
+export interface AdminMemberShareLink {
+  status: string;
+  /** UTC RFC 3339。 */
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/** 管理端成员行（05 §2.3）：负责中/协作中为主任务口径的在册计数。 */
+export interface AdminMember {
+  id: string;
+  name: string;
+  role: string;
+  color: string;
+  /** UTC RFC 3339；null 表示在册。 */
+  archivedAt: string | null;
+  counts: AdminMemberCounts;
+  /** m4 前恒为 null。 */
+  shareLink: AdminMemberShareLink | null;
+}

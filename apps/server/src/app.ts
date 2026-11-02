@@ -5,6 +5,9 @@ import Fastify, { type FastifyError, type FastifyInstance, type FastifyRequest }
 import { API_PREFIX, ApiError } from "@ztask/shared";
 import type { ServerConfig } from "./config.js";
 import { isLoopbackHost } from "./config.js";
+import type { ZtaskStore } from "./storage/store.js";
+import { folderRoutes } from "./modules/folders/folder-routes.js";
+import { memberRoutes } from "./modules/members/member-routes.js";
 
 /** 请求入口类型；LAN 监听本体由后续 issue 装配，本 issue 先固定标记与 Admin 拒绝钩子。 */
 export type ListenerKind = "loopback" | "lan";
@@ -14,6 +17,8 @@ export interface BuildAppOptions {
   listenerKind?: ListenerKind;
   /** 健康检查里回显的服务版本；缺省 "0.0.0"。 */
   version?: string;
+  /** 存储门面；提供后挂接管理端业务路由（folders/members）。 */
+  store?: ZtaskStore;
 }
 
 declare module "fastify" {
@@ -51,6 +56,12 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   if (config.staticRoot) {
     // wildcard:false：只精确服务真实文件，未命中路径统一交给下方 notFoundHandler 做 SPA 回退。
     await app.register(fastifyStatic, { root: config.staticRoot, wildcard: false });
+  }
+
+  if (options.store) {
+    // 管理端业务路由（#15）；Admin 本机专用守卫仍由下方 preHandler 统一执行。
+    await app.register(folderRoutes, { dataDir: config.dataDir });
+    await app.register(memberRoutes, { dataDir: config.dataDir });
   }
 
   app.addHook("preHandler", async (request, reply) => {
