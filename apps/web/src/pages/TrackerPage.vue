@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/vue-query";
 import type { AdminMember, Task } from "@ztask/shared";
 import { adminApi, adminTaskApi } from "../api/admin";
 import TaskCard from "../components/TaskCard.vue";
+import type { TaskCardModel } from "../components/task-card-model";
 import TaskEditorDialog from "../features/tasks/TaskEditorDialog.vue";
 import LoadingState from "../components/ui/LoadingState.vue";
 import PaneResizer from "../components/ui/PaneResizer.vue";
@@ -70,6 +71,43 @@ function onSaved(): void {
 
 const importanceFilter = ref<"all" | "high" | "mid" | "low">("all");
 const searchText = ref("");
+
+const foldersQuery = useQuery({
+  queryKey: ["admin", "folders", "tree"],
+  queryFn: adminApi.folderTree,
+  refetchInterval: 15_000,
+});
+
+const folderNameById = computed(() => {
+  const map = new Map<string, string>();
+  const walk = (nodes: { id: string; name: string; children: unknown[] }[]): void => {
+    for (const node of nodes) {
+      map.set(node.id, node.name);
+      walk((node.children as { id: string; name: string; children: unknown[] }[]) ?? []);
+    }
+  };
+  walk(foldersQuery.data.value?.tree ?? []);
+  return map;
+});
+
+function toCardModel(task: Task): TaskCardModel {
+  return {
+    id: task.id,
+    description: task.description,
+    folderName: folderNameById.value.get(task.folderId),
+    owners: task.owners.map((owner) => owner.name),
+    importance: task.importance,
+    dueDate: task.dueDate,
+    progress: task.progress,
+    detail: task.detail,
+    subtasks: task.subtasks.map((sub) => ({
+      id: sub.id,
+      description: sub.description,
+      progress: sub.progress,
+      ownerName: sub.owner?.name,
+    })),
+  };
+}
 
 const visibleTasks = computed(() => {
   const items = tasksQuery.data.value?.items ?? [];
@@ -160,7 +198,7 @@ const activeMembers = computed<AdminMember[]>(() =>
 
         <LoadingState v-if="tasksQuery.isLoading.value && selectedFolderId" label="任务加载中…" />
         <div v-else-if="selectedFolderId" class="task-list">
-          <TaskCard v-for="task in visibleTasks" :key="task.id" :task="task" @open="openEditorById" />
+          <TaskCard v-for="task in visibleTasks" :key="task.id" :task="toCardModel(task)" @open="openEditorById" />
           <EmptyState v-if="visibleTasks.length === 0" title="暂无任务" hint="点击「＋ 新建任务」创建第一个任务" />
         </div>
         <EmptyState v-else title="先选择任务夹" hint="在左侧任务夹树中选择一个任务夹以查看任务" />
