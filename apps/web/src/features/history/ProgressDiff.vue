@@ -4,7 +4,9 @@ import { buildDiffColumns, type DiffColumns, type DiffLine } from "./diff-lines"
 
 /**
  * 双列进展 diff（08 §4.3，原型 344–354 / 1510–1540）：
- * 左列起始快照、右列结束快照；删除行左红右空、新增行左空右绿、未变化两列同文。
+ * 左列起始快照、右列结束快照；删除行左红右空、新增行左空右绿、未变化两列同文；
+ * 行首带 `− / + / 空格` 记号（原型 1532–1534）。区间内创建（before 为 null）时
+ * 左列整列留空、右列整列标绿（D16，原型表现即如此）。
  * 全部文本通过 Vue 插值渲染，`<script>` 等内容只会显示为文本，绝不执行。
  */
 const props = defineProps<{
@@ -22,18 +24,21 @@ const props = defineProps<{
 
 const columns = computed(() => props.columns === undefined ? buildDiffColumns(props.before ?? "", props.after) : props.columns);
 
-/** 行文本：blank 用不换行空格占位，保持行高（原型 .dl.blank）。 */
+/** 行文本：blank 用不换行空格占位保持行高；非 blank 行带 `− / + / 空格` 记号（原型 1532–1534）。 */
 function display(line: DiffLine): string {
-  return line.kind === "blank" ? "\u00a0" : line.text === "" ? "\u00a0" : line.text;
+  if (line.kind === "blank") return "\u00a0";
+  if (line.text === "") return "\u00a0";
+  const mark = line.kind === "add" ? "+ " : line.kind === "del" ? "− " : "\u00a0 ";
+  return `${mark}${line.text}`;
 }
 
-/** 创建场景右列不标绿：不是「新增行」，而是「此前不存在」。 */
+/** 创建场景（before 为 null）：左列全部留空占位、右列整列按 add 标绿（原型 1530–1534）。 */
 function leftKind(line: DiffLine): string {
   return props.before === null ? "blank" : line.kind;
 }
 
 function rightKind(line: DiffLine): string {
-  return props.before === null ? "same" : line.kind;
+  return line.kind;
 }
 </script>
 
@@ -63,12 +68,13 @@ function rightKind(line: DiffLine): string {
 </template>
 
 <style scoped>
+/* 原型 345：双列底色 #fbfcfe（--bg-diff）、下边线 #eef1f5（与 .chg-row 同一行分隔线口径，R3-D3·6）。 */
 .diff-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border-row);
+  background: var(--bg-diff);
 }
 
 .diff-col {

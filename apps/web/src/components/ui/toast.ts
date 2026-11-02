@@ -29,7 +29,8 @@ export function useToast(): { show: (text: string) => void } {
       }
       const id = nextId++;
       state.items.push({ id, text });
-      setTimeout(() => dismiss(id), 2400);
+      // 原型 `.toast` 2.2s 后淡出（R6-D1：配置值与原型一致）。
+      setTimeout(() => dismiss(id), 2200);
     },
   };
 }

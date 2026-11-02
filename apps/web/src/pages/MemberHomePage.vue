@@ -181,10 +181,8 @@ function folderPathOf(task: Task): string | undefined {
   padding: 18px 22px 44px;
 }
 
-.share-body-inner {
-  max-width: 980px;
-  margin: 0 auto;
-}
+/* R8-D1（原型 1899）：原型 .share-body-inner 无任何宽度规则，内容列直接铺满 .share-body
+ * 的内宽（1440 视口 x=22 / w=1396），故取消早期的 max-width:980px 居中收窄。 */
 
 .share-group {
   margin-bottom: 22px;
@@ -211,11 +209,10 @@ function folderPathOf(task: Task): string | undefined {
   margin: 4px 0 10px;
 }
 
-/* 原型 1903/1908：空态是普通文本块（.empty-tip 在原型里没有额外描边），不套管理端虚线卡。 */
+/* 原型 1903/1908：空态是普通文本块（.empty-tip 在原型里没有额外 CSS，字体继承正文 13px/--text）。
+ * R3-D1 去掉 12px 灰字弱化，仅保留内距。 */
 .empty-tip {
   padding: 16px 4px;
-  font-size: 12px;
-  color: var(--text-faint);
 }
 
 .session-expired {

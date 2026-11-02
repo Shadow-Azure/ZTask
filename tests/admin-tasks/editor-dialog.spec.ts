@@ -117,14 +117,16 @@ describe("TaskEditorDialog（08 §3 编辑器）", () => {
     mockFetch({ status: 200, body: taskFixture() });
     const wrapper = await mountEditor(taskFixture());
     const root = dialog();
-    clickByText(root, "＋ 添加小任务");
+    // D11 后小任务行由行内输入直接创建：填写描述后回车，进入 create 数组。
+    const addInput = root.querySelector('[aria-label="新小任务描述"]') as HTMLInputElement;
+    await setInput(addInput, "新小任务");
+    addInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     await nextTick();
-    const row = root.querySelectorAll(".sub-row")[0] as HTMLElement;
-    await setInput(row.querySelector(".sub-desc") as HTMLInputElement, "新小任务");
     clickByText(root, "保存");
     await new Promise((resolve) => setTimeout(resolve, 30));
     const body = JSON.parse(String(fetchCalls.find((call) => call.init?.method === "PUT")?.init?.body));
     expect(body.subtasks.create.length).toBe(1);
+    expect(body.subtasks.create[0].description).toBe("新小任务");
     expect(body.subtasks.create[0].clientId).toMatch(/^client-/);
     wrapper.unmount();
   });

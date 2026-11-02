@@ -2,13 +2,20 @@
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
 
 /**
- * 基础浮窗（03 §7.5）：teleport 到 body、focus trap、Escape 关闭、焦点归还。
- * overlay/modal 视觉沿用原型；焦点管理是组件职责，不复刻原型的显隐逻辑当可访问性。
+ * 基础浮窗（03 §7.5，原型 420–426/481–484）：teleport 到 body、focus trap、Escape 关闭、焦点归还。
+ * 视觉对齐原型 .overlay/.modal：7vh 顶部起点、radius 14、白底 sticky 头/足；
+ * width 属性按调用方选择浮窗宽度（任务 660 / 成员 440 / 确认 400）。
+ * 焦点管理是组件职责，不复刻原型的显隐逻辑当可访问性。
  */
-const props = defineProps<{
-  open: boolean;
-  title: string;
-}>();
+const props = withDefaults(
+  defineProps<{
+    open: boolean;
+    title: string;
+    /** 浮窗宽度（px）；缺省 660（原型任务浮窗）。 */
+    width?: number;
+  }>(),
+  { width: 660 },
+);
 
 const emit = defineEmits<{ close: [] }>();
 
@@ -75,6 +82,7 @@ onBeforeUnmount(() => {
         role="dialog"
         aria-modal="true"
         :aria-label="title"
+        :style="{ width: `${width}px` }"
         tabindex="-1"
         @keydown="onKeydown"
       >
@@ -95,45 +103,51 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+/* 原型 420–421。 */
 .overlay {
   position: fixed;
   inset: 0;
   z-index: 300;
-  background: rgba(23, 28, 36, 0.45);
+  background: rgba(24, 28, 36, 0.42);
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding: 56px 16px 16px;
+  padding: 7vh 20px 20px;
 }
 
+/* 原型 422：radius 14 + 大投影；宽度由 props 决定。 */
 .modal {
-  width: 720px;
   max-width: 100%;
-  max-height: calc(100vh - 88px);
+  max-height: 84vh;
   display: flex;
   flex-direction: column;
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: 0 12px 40px rgba(20, 28, 44, 0.22);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(20, 26, 38, 0.28);
   overflow: hidden;
 }
 
+/* 原型 423–425：白底头部、15/20/12 内距、h3 14.5px/700 占满剩余空间。 */
 .modal-head {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 15px 20px 12px;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-panel);
+  background: var(--bg-card);
 }
 
 .modal-head h3 {
-  font-size: 13.5px;
+  font-size: 14.5px;
+  font-weight: 700;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .icon-btn {
-  margin-left: auto;
   border: none;
   background: transparent;
   color: var(--text-faint);
@@ -141,6 +155,7 @@ onBeforeUnmount(() => {
   font-size: 13px;
   border-radius: 7px;
   padding: 3px 8px;
+  flex: none;
 }
 
 .icon-btn:hover {
@@ -148,18 +163,20 @@ onBeforeUnmount(() => {
   background: var(--bg-inset);
 }
 
+/* 原型 426：16/20 内距。 */
 .modal-body {
-  padding: 14px 16px;
+  padding: 16px 20px;
   overflow: auto;
 }
 
+/* 原型 481：13/20 内距、上边框、白底、按钮间距 10（此前 8，R4-D7）。 */
 .modal-foot {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 13px 20px;
   border-top: 1px solid var(--border);
-  background: var(--bg-panel);
+  background: var(--bg-card);
 }
 
 .modal :deep(.modal-foot:empty) {

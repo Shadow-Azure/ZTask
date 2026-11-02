@@ -17,6 +17,29 @@
   --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   --radius: 10px;
   --shadow: 0 1px 3px rgba(30, 40, 60, 0.07);
+  /* 原型派生色（task-card/柱状图/树等共用，避免散落魔法值）。 */
+  --blue-light: #6f9bff;
+  --imp-low: #8a93a1;
+  /* 柱状图渐变端色与图例「低」色（原型 292–294/1442）。 */
+  --red-light: #ef6a6a;
+  --orange-light: #f2a354;
+  --low-light: #9aa3b2;
+  --low-strong: #6e7787;
+  /* 树内 mid/low 任务色点弱化色（原型 .trow.task .imp-dot）。 */
+  --imp-dim: #c6ccd6;
+  /* 卡片体分隔线与行分隔线（原型 #edf0f4 / #eef1f5）。 */
+  --border-soft: #edf0f4;
+  --border-row: #eef1f5;
+  /* 变化面板 diff 双列底色（原型 .diff-wrap #fbfcfe）与「当前已删除」徽章三值（原型 342 行）。 */
+  --bg-diff: #fbfcfe;
+  --badge-bg: #eef1f5;
+  --badge-border: #dce1e8;
+  --radius-card: 12px;
+  --shadow-card: 0 1px 2px rgba(30, 40, 60, 0.035);
+  /* 分栏拖柄槽宽（原型 128 行树 gutter 10px、224 行卡内 gutter 13px）。
+   * 卡内槽宽同时被 TaskCard 的中缝网格列引用，故收敛为令牌避免两处漂移。 */
+  --resizer-tree: 10px;
+  --resizer-pane: 13px;
 }
 
 * {

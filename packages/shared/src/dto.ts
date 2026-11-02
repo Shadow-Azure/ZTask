@@ -128,6 +128,8 @@ export interface TaskChangeSnapshot {
 export interface TaskChange {
   taskId: string;
   description: string;
+  /** 主任务重要度（变化列表行首色点用，原型 1539）。 */
+  importance: Importance;
   owners: MemberSummary[];
   before: TaskChangeSnapshot | null;
   after: TaskChangeSnapshot;

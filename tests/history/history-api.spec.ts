@@ -152,6 +152,7 @@ describe("默认区间与响应形状", () => {
     expect(item).toEqual({
       taskId: task.id,
       description: "默认区间任务",
+      importance: "mid",
       owners: [{ id: owner, name: "陈晨", role: "", color: expect.any(String) }],
       before: {
         progress: 10,
