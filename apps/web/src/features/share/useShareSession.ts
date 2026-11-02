@@ -6,10 +6,10 @@ import { shareApi } from "../../api/share";
 
 /**
  * 成员会话的模块级状态（03 §4 分享会话、08 §6.1/§7）：
- * 前端只保留脱敏的成员摘要与"是否已确认会话"；token/verifier 绝不进入这里。
+ * 前端只保留脱敏的成员摘要；token/verifier 绝不进入这里。
+ * "是否已确认会话"由成员壳的本地 ready 门控（ShareLayout），不在模块态里重复记一份。
  */
 const member = ref<MemberSummary | null>(null);
-const checked = ref(false);
 
 /**
  * 判断是否为成员域 401（会话缺失/过期/链接失效）。
@@ -39,7 +39,6 @@ export function useShareSession() {
    */
   async function invalidate(reason?: "logout"): Promise<void> {
     member.value = null;
-    checked.value = true;
     clearShareCache();
     const target = reason === "logout" ? "/share-invalid?from=logout" : "/share-invalid";
     if (router.currentRoute.value.fullPath !== target) {
@@ -59,21 +58,19 @@ export function useShareSession() {
   }
 
   /**
-   * Cookie 恢复会话；失败时清理缓存进入失效页。
-   * @returns 是否恢复成功。
+   * Cookie 恢复会话；401 清理缓存进入失效页，其他失败向上抛给成员壳决定重试（§6.8）。
+   * @returns 是否恢复成功（401 表示无有效会话）。
    */
   async function restore(): Promise<boolean> {
     try {
       const response = await shareApi.restore();
       member.value = response.member;
-      checked.value = true;
       return true;
     } catch (cause) {
       if (isShareUnauthorized(cause)) {
         await invalidate();
         return false;
       }
-      checked.value = true;
       throw cause;
     }
   }
@@ -81,7 +78,6 @@ export function useShareSession() {
   /** 交换成功后写入成员摘要（token 不进状态）。 */
   function setMember(next: MemberSummary): void {
     member.value = next;
-    checked.value = true;
   }
 
   /**
@@ -96,11 +92,5 @@ export function useShareSession() {
     }
   }
 
-  /** 测试隔离：重置模块级会话状态。 */
-  function reset(): void {
-    member.value = null;
-    checked.value = false;
-  }
-
-  return { member, checked, restore, setMember, logout, handleAuthError, clearShareCache, reset };
+  return { member, restore, setMember, logout, handleAuthError, clearShareCache };
 }

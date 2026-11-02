@@ -165,6 +165,13 @@ const taskItems = computed(() => accumulated.value);
 const showLoadMore = computed(() => isShareScope.value && nextCursor.value !== null);
 const taskErrorIsAuth = computed(() => isShareScope.value && isShareUnauthorized(tasksQuery.error.value));
 const showTaskError = computed(() => canLoadTasks.value && tasksQuery.isError.value && !taskErrorIsAuth.value);
+/**
+ * 续页（cursor）失败：列表已有内容时错误不再落到首屏错误态，单独给一行可见提示（§6.2）。
+ * 触发场景是管理员并发编辑/删除导致游标失效（400）或网络/5xx。
+ */
+const showLoadMoreError = computed(
+  () => isShareScope.value && pageCursor.value !== null && tasksQuery.isError.value && !taskErrorIsAuth.value,
+);
 
 const emptyTitle = computed(() => {
   if (debouncedQ.value) return "没有匹配的任务";
@@ -198,6 +205,12 @@ function toCardModel(task: Task): TaskCardModel {
 function loadMore(): void {
   if (!isShareScope.value || nextCursor.value === null) return;
   pageCursor.value = nextCursor.value;
+}
+
+/** 续页失败后重试当前 cursor 查询：保留已加载的页，不清空 accumulated（§6.2）。 */
+function retryLoadMore(): void {
+  if (pageCursor.value === null) return;
+  void tasksQuery.refetch();
 }
 
 const editorOpen = ref(false);
@@ -348,6 +361,10 @@ function onTreeDrag(clientX: number): void {
             :disabled="tasksQuery.isFetching.value"
             @click="loadMore"
           >{{ tasksQuery.isFetching.value ? "加载中…" : "加载更多" }}</button>
+          <div v-if="showLoadMoreError" class="load-more-error" role="alert">
+            <span>加载更多失败</span>
+            <button class="btn" type="button" :disabled="tasksQuery.isFetching.value" @click="retryLoadMore">重试</button>
+          </div>
         </div>
         <p class="hint-line">
           {{ isAdmin ? "任务进展为只读视图；点击任务标题区可在浮窗中查看或编辑完整任务。" : "成员视图为只读；点击任务可查看完整详情。" }}
@@ -567,6 +584,16 @@ function onTreeDrag(clientX: number): void {
 
 .load-more {
   align-self: center;
+}
+
+/* 续页失败：列表保留，错误行紧跟「加载更多」按钮，重试不清空已加载的页（§6.2）。 */
+.load-more-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--red);
 }
 
 @media (max-width: 900px) {

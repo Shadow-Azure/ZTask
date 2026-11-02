@@ -1,31 +1,40 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
 import { useShareSession } from "../features/share/useShareSession";
 import LoadingState from "../components/ui/LoadingState.vue";
+import ErrorState from "../components/ui/ErrorState.vue";
 
 /**
  * 成员壳（08 §6.1，原型 381–390）：挂载时用 Cookie 恢复会话，
  * 未确认会话前不渲染 RouterView，避免子页先发 401 请求；
- * 恢复失败统一进入失效页。导航严格只有「成员个人页」「事项跟踪」两个链接，
+ * 401 进入失效页；网络/5xx 等瞬时故障在壳内给出可重试错误，不误判成链接失效（§6.8）。
+ * 导航严格只有「成员个人页」「事项跟踪」两个链接，
  * 顶栏右侧展示脱敏成员身份与注销按钮——不渲染 token/链接原文。
  */
-const router = useRouter();
 const { member, restore, logout } = useShareSession();
 
 /** 本次挂载是否已完成会话确认；只用于门控 RouterView，避免模块态跨页面泄漏。 */
 const ready = ref(false);
+/** 恢复的瞬时失败（非 401）：在壳内显示 ErrorState，重试成功后照常渲染成员内容。 */
+const restoreFailed = ref(false);
 
 const initial = computed(() => (member.value?.name ?? "成").slice(0, 1));
 
-onMounted(async () => {
+/**
+ * 尝试恢复会话；401 由 restore 内部进入失效页，非 401 只标记壳内错误态。
+ */
+async function restoreSession(): Promise<void> {
+  restoreFailed.value = false;
   try {
     ready.value = await restore();
   } catch {
-    // 非 401 的恢复失败同样不能渲染成员内容（08 §6.1）。
-    await router.replace("/share-invalid");
+    // 网络/5xx 是瞬时故障，不代表链接失效：留在壳内让用户重试（08 §6.1）。
+    ready.value = false;
+    restoreFailed.value = true;
   }
-});
+}
+
+onMounted(restoreSession);
 
 async function onLogout(): Promise<void> {
   // logout 内部先清 share 作用域缓存再进入失效页；请求失败也保持同一结局（08 §7）。
@@ -51,6 +60,9 @@ async function onLogout(): Promise<void> {
     </header>
 
     <RouterView v-if="ready && member" />
+    <div v-else-if="restoreFailed" class="share-restoring">
+      <ErrorState message="无法连接 ZTask 服务" retryable @retry="restoreSession" />
+    </div>
     <div v-else class="share-restoring">
       <LoadingState label="正在恢复成员会话…" />
     </div>
@@ -183,6 +195,11 @@ async function onLogout(): Promise<void> {
   align-items: center;
   justify-content: center;
   padding: 24px;
+}
+
+/* 恢复失败的瞬时故障提示与恢复中的加载态共用居中容器，限宽避免整行拉满。 */
+.share-restoring :deep(.error-state) {
+  width: min(420px, 100%);
 }
 
 @media (max-width: 720px) {
