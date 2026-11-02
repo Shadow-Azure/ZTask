@@ -6,7 +6,7 @@
 kind: issue
 milestone: m5
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/server/src/modules/dashboard/**
   - apps/server/src/modules/share/**
