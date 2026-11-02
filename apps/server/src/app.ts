@@ -36,13 +36,11 @@ function isLoopbackRemote(remoteAddress: string | undefined): boolean {
 export async function buildApp(config: ServerConfig, options: BuildAppOptions = {}): Promise<FastifyInstance> {
   const listenerKind: ListenerKind = options.listenerKind ?? "loopback";
   const version = options.version ?? "0.0.0";
-  const startedAt = Date.now();
 
   const app = Fastify({
     logger: false,
     genReqId: () => randomUUID(),
   });
-
   app.decorateRequest("listenerKind", "loopback");
   app.addHook("onRequest", async (request: FastifyRequest) => {
     request.listenerKind = listenerKind;
@@ -73,7 +71,8 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   app.get(`${API_PREFIX}/health`, async () => ({
     status: "ok" as const,
     version,
-    uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+    // 进程口径（与 HealthPayload 注释一致）：同一进程内重复 buildApp 不会让数值回跳。
+    uptimeSeconds: Math.floor(process.uptime()),
   }));
 
   app.setErrorHandler((error: FastifyError, request, reply) => {

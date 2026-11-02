@@ -86,3 +86,15 @@ describe("Admin 本机专用钩子（管理路由本体后续 issue）", () => {
     expect(response.json().error.code).toBe("NOT_FOUND");
   });
 });
+
+describe("健康检查 uptime 口径", () => {
+  it("以进程为口径：跨 buildApp 实例单调不减", async () => {
+    const { app: first } = await appWith({});
+    await first.inject({ method: "GET", url: "/api/v1/health" });
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const firstUptime = (await first.inject({ method: "GET", url: "/api/v1/health" })).json().uptimeSeconds;
+    const { app: second } = await appWith({});
+    const secondUptime = (await second.inject({ method: "GET", url: "/api/v1/health" })).json().uptimeSeconds;
+    expect(secondUptime).toBeGreaterThanOrEqual(firstUptime);
+  });
+});
