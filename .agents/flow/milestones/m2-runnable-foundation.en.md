@@ -6,7 +6,7 @@ English | [中文](m2-runnable-foundation.md)
 kind: milestone
 id: m2
 title: 阶段 2：可运行全栈基座
-status: planned
+status: done
 github:
   number: 2
   url: https://github.com/Shadow-Azure/ZTask/milestone/2

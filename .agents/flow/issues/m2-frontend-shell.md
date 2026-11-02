@@ -6,7 +6,7 @@
 kind: issue
 milestone: m2
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/web/**
   - packages/shared/**
@@ -15,6 +15,7 @@ scope:
   - pnpm-lock.yaml
   - vitest.config.ts
   - .agents/flow/issues/m2-frontend-shell*
+  - .agents/flow/milestones/m2-runnable-foundation*
 adr: []
 github:
   number: 14
