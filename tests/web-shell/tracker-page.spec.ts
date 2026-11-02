@@ -22,13 +22,13 @@ async function mountTracker(props: { access?: "admin" | "readonly" }, query: Rec
 }
 
 describe("TrackerPage 结构与权限体验", () => {
-  it("admin：树侧 + 拖柄 + 面板齐备，含新建控件", async () => {
+  it("admin：树侧 + 拖柄 + 面板齐备，含新建控件与真实任务夹树", async () => {
     const { wrapper } = await mountTracker({ access: "admin" });
     expect(wrapper.find(".tree-side").exists()).toBe(true);
+    expect(wrapper.find(".folder-tree").exists()).toBe(true);
     expect(wrapper.find('[role="separator"]').exists()).toBe(true);
     expect(wrapper.text()).toContain("＋ 新建任务夹");
     expect(wrapper.text()).toContain("＋ 新建任务");
-    expect(wrapper.text()).toContain("任务夹与任务树将在 m3 接入真实数据");
   });
 
   it("tab 深链：?tab=dash 切到看板占位", async () => {

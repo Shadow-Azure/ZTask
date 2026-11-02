@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import PaneResizer from "../components/ui/PaneResizer.vue";
 import EmptyState from "../components/ui/EmptyState.vue";
+import FolderTree from "../features/folders/FolderTree.vue";
 import { readPreference, writePreference } from "../lib/preferences";
 
 /**
@@ -36,10 +37,9 @@ function switchTab(tab: "tasks" | "dash"): void {
     <aside class="tree-side" :style="{ width: `${treeWidth}px` }">
       <div class="tree-head">
         <h2>任务夹</h2>
-        <button v-if="isAdmin" class="btn ghost" type="button" disabled title="任务夹数据在后续里程碑接入">＋ 新建任务夹</button>
       </div>
       <div class="tree-body">
-        <EmptyState hint="任务夹与任务树将在 m3 接入真实数据" />
+        <FolderTree :can-edit="isAdmin" />
       </div>
     </aside>
 
