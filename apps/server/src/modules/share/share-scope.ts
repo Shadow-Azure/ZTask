@@ -1,11 +1,51 @@
-import type { Task } from "@ztask/shared";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import type { FolderTreeNode, Task } from "@ztask/shared";
 import type { MemberFile } from "../members/member-service.js";
+import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 小任务无 owner 时的展示摘要；与管理端 tasks 映射同口径（05 §6.5）。 */
+const UNASSIGNED_SUMMARY = { id: "", name: "待分配", role: "", color: "#9aa2ae" } as const;
+
+/**
+ * 读取 tasks/ 下全部聚合（share 模块唯一入口，07 §5.1）。
+ * 只扫描 UUID 目录；单个损坏聚合跳过，不让成员视图整体 500。
+ * @param dataDir 数据目录。
+ * @returns 任务聚合列表（不保证顺序）。
+ */
+export async function listTaskAggregates(dataDir: string): Promise<TaskAggregate[]> {
+  let names: string[];
+  try {
+    names = await readdir(join(dataDir, "tasks"));
+  } catch {
+    return [];
+  }
+  const aggregates: TaskAggregate[] = [];
+  for (const taskId of names.filter((name) => UUID_PATTERN.test(name))) {
+    try {
+      const aggregate = await readTaskAggregate(dataDir, taskId);
+      if (aggregate) aggregates.push(aggregate);
+    } catch {
+      // 损坏的单个聚合按不可见处理（05 §7 不泄露存储细节）
+    }
+  }
+  return aggregates;
+}
 
 /**
  * 成员相关集合（07 §5.1）：主任务 owner/collaborator 或任一可见小任务的被分配者。
  * 软删除任务不进入成员范围。
+ * @param aggregates 全部聚合。
+ * @param memberId 成员 ID。
+ * @returns 只含该成员相关且未软删除的主任务聚合。
  */
+export function memberVisibleAggregates(aggregates: TaskAggregate[], memberId: string): TaskAggregate[] {
+  return aggregates.filter((aggregate) => aggregate.task.deletedAt === null && isRelated(aggregate, memberId).related);
+}
+
 /**
  * 判定聚合是否与成员相关（主任务 owner/collaborator 或可见小任务被分配者）。
  * @param aggregate 任务聚合。
@@ -48,6 +88,18 @@ function summary(members: Map<string, MemberFile>, id: string) {
 }
 
 /**
+ * 小任务 owner 摘要：无 owner 分配时给「待分配」，绝不用 sub.id 冒充成员 ID。
+ * @param aggregate 任务聚合。
+ * @param subtaskId 小任务 ID。
+ * @param members 成员档案映射。
+ * @returns 成员摘要。
+ */
+function subtaskOwner(aggregate: TaskAggregate, subtaskId: string, members: Map<string, MemberFile>) {
+  const ownerId = aggregate.assignments.find((a) => a.taskId === subtaskId && a.kind === "owner")?.memberId;
+  return ownerId === undefined ? { ...UNASSIGNED_SUMMARY } : summary(members, ownerId);
+}
+
+/**
  * 成员视角的任务 DTO：小任务按可见性过滤，owner 摘要来自成员档案（待分配兜底）。
  * @param aggregate 任务聚合。
  * @param memberId 成员 ID。
@@ -73,7 +125,7 @@ export function toMemberTask(aggregate: TaskAggregate, memberId: string, members
       id: sub.id,
       parentId: aggregate.taskId,
       description: sub.description,
-      owner: summary(members, aggregate.assignments.find((a) => a.taskId === sub.id && a.kind === "owner")?.memberId ?? sub.id),
+      owner: subtaskOwner(aggregate, sub.id, members),
       progress: sub.progress,
       importance: sub.importance,
       dueDate: sub.dueDate,
@@ -83,54 +135,17 @@ export function toMemberTask(aggregate: TaskAggregate, memberId: string, members
 }
 
 /**
- * 成员可见的任务夹树（05 §6.11）：只含相关任务及祖先节点，计数按成员任务口径。
- * @param folders 任务夹实体。
- * @param aggregates 全部聚合。
- * @param memberId 当前成员。
- * @returns 成员可见树节点数组。
+ * 裁剪成员树（05 §6.11）：folder-service 产出与管理端同构的 FolderTreeNode[]，
+ * 但管理端会保留空任务夹；成员树只保留含相关任务的节点及其祖先。
+ * @param nodes 同构任务夹树。
+ * @returns 裁剪后的任务夹树。
  */
-export function buildMemberTree(
-  folders: Array<{ id: string; parentId: string | null; name: string; position: number }>,
-  aggregates: TaskAggregate[],
-  memberId: string,
-): unknown[] {
-  const visibleFolders = new Set<string>();
-  const tasksByFolder = new Map<string, Array<{ id: string; description: string; progress: number; importance: string }>>();
-  for (const aggregate of aggregates) {
-    if (aggregate.task.deletedAt !== null) continue;
-    if (!isRelated(aggregate, memberId).related) continue;
-    visibleFolders.add(aggregate.task.folderId);
-    const list = tasksByFolder.get(aggregate.task.folderId) ?? [];
-    list.push({
-      id: aggregate.taskId,
-      description: aggregate.task.description,
-      progress: aggregate.task.progress,
-      importance: aggregate.task.importance,
-    });
-    tasksByFolder.set(aggregate.task.folderId, list);
+export function pruneMemberTree(nodes: FolderTreeNode[]): FolderTreeNode[] {
+  const kept: FolderTreeNode[] = [];
+  for (const node of nodes) {
+    const children = pruneMemberTree(node.children);
+    if (node.tasks.length === 0 && children.length === 0) continue;
+    kept.push({ ...node, children });
   }
-  const byId = new Map(folders.map((folder) => [folder.id, folder]));
-  for (const folderId of [...visibleFolders]) {
-    let cursor = byId.get(folderId);
-    while (cursor?.parentId) {
-      visibleFolders.add(cursor.parentId);
-      cursor = byId.get(cursor.parentId);
-    }
-  }
-
-  type TreeNode = { id: string; parentId: string | null; name: string; position: number; children: TreeNode[]; tasks: unknown[]; counts: { done: number; todo: number } };
-  const childrenOf = new Map<string | null, TreeNode[]>();
-  for (const folder of folders) {
-    if (!visibleFolders.has(folder.id)) continue;
-    const tasks = tasksByFolder.get(folder.id) ?? [];
-    const done = tasks.filter((task) => task.progress >= 100).length;
-    const list = childrenOf.get(folder.parentId) ?? [];
-    list.push({ id: folder.id, parentId: folder.parentId, name: folder.name, position: folder.position, children: [], tasks, counts: { done, todo: tasks.length - done } });
-    childrenOf.set(folder.parentId, list);
-  }
-  function attach(nodes: TreeNode[]): TreeNode[] {
-    for (const node of nodes) node.children = attach(childrenOf.get(node.id) ?? []);
-    return nodes.sort((a, b) => a.position - b.position);
-  }
-  return attach(childrenOf.get(null) ?? []);
+  return kept;
 }

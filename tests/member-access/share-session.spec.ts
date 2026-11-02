@@ -1,49 +1,34 @@
 // @vitest-environment node
-import { mkdir, rm } from "node:fs/promises";
-import path from "node:path";
+import { rm } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildApp, initStore, mintShareLinkForTest, requestShareSession } from "@ztask/server";
 import type { FastifyInstance } from "fastify";
+import {
+  createMember,
+  createMemberAccessApp,
+  exchangeCookie,
+  readSessionFile,
+  readShareLink,
+  seedShareLink,
+  sessionIdOf,
+  sha256,
+  tmpDataDir,
+  updateSessionFile,
+} from "./support/share-fixtures.js";
 
 let dataDir: string;
 let app: FastifyInstance;
-let folderId: string;
 let memberA: string;
 let memberB: string;
-let taskA: string;
-let taskB: string;
 let tokenA: string;
 let tokenB: string;
-let cookieA: string;
 
 beforeEach(async () => {
-  dataDir = path.join("/tmp", `ztask-member-access-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(dataDir, { recursive: true });
-  const store = await initStore({ dataDir, applicationVersion: "0.1.0" });
-  app = await buildApp({ host: "127.0.0.1", port: 0, dataDir, staticRoot: null }, { store });
-
-  folderId = (await app.inject({ method: "POST", url: "/api/v1/admin/folders", payload: { name: "迭代", parentId: null } })).json().id;
-  memberA = (await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name: "陈晨" } })).json().id;
-  memberB = (await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name: "林悦" } })).json().id;
-
-  async function createTask(description: string, ownerIds: string[], collaboratorIds: string[]): Promise<string> {
-    const response = await app.inject({
-      method: "POST", url: "/api/v1/admin/tasks",
-      payload: { folderId, parentId: null, description, ownerIds, collaboratorIds, progress: 30, detail: `${description}详情`, importance: "mid", dueDate: null },
-    });
-    return response.json().id;
-  }
-
-  taskA = await createTask("A 的任务", [memberA], []);
-  taskB = await createTask("B 的任务", [memberB], []);
-
-  tokenA = await mintShareLinkForTest({ dataDir, memberId: memberA });
-  tokenB = await mintShareLinkForTest({ dataDir, memberId: memberB });
-
-  const session = await requestShareSession({ dataDir }, tokenA);
-  if (!session) throw new Error("session exchange failed");
-  cookieA = session.cookie;
-  void taskA; void taskB;
+  dataDir = tmpDataDir();
+  app = await createMemberAccessApp(dataDir);
+  memberA = await createMember(app, "陈晨");
+  memberB = await createMember(app, "林悦");
+  ({ token: tokenA } = await seedShareLink({ dataDir, memberId: memberA }));
+  ({ token: tokenB } = await seedShareLink({ dataDir, memberId: memberB }));
 });
 
 afterEach(async () => {
@@ -51,95 +36,187 @@ afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
+function setCookieOf(response: { headers: Record<string, unknown> }): string {
+  const header = response.headers["set-cookie"];
+  const value = Array.isArray(header) ? header[0] : header;
+  return String(value ?? "");
+}
+
 describe("POST /share/session（令牌交换）", () => {
-  it("有效 token：201 + HttpOnly Set-Cookie + 成员摘要（不含 token/verifier）", async () => {
+  it("有效 token：201 + HttpOnly Set-Cookie + 成员摘要（不含 token/verifier/tokenHash）", async () => {
     const response = await app.inject({ method: "POST", url: "/api/v1/share/session", payload: { token: tokenB } });
     expect(response.statusCode).toBe(201);
     expect(response.json().member.name).toBe("林悦");
-    const setCookie = response.headers["set-cookie"] as unknown as string[];
-    const cookie = Array.isArray(setCookie) ? setCookie[0]! : setCookie;
+
+    const cookie = setCookieOf(response);
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Strict");
-    expect(cookie.toLowerCase()).not.toContain(tokenB.toLowerCase());
+    expect(cookie).toContain("Path=/api/v1/share");
+
+    // 05 §6.1：响应不返回 raw token、verifier 或 tokenHash。
+    expect(response.body).not.toContain(tokenB);
+    expect(response.body).not.toContain(sha256(tokenB));
+    expect(response.body).not.toContain("verifier");
+    expect(response.body).not.toContain("tokenHash");
   });
 
-  it("无效/已吊销/空 token 统一 401 SHARE_LINK_INVALID", async () => {
-    for (const token of ["bogus-token", ""]) {
+  it("无效/空 token 统一 401 SHARE_LINK_INVALID", async () => {
+    for (const token of ["bogus-token-0123456789", ""]) {
       const response = await app.inject({ method: "POST", url: "/api/v1/share/session", payload: { token } });
       expect(response.statusCode).toBe(401);
       expect(response.json().error.code).toBe("SHARE_LINK_INVALID");
     }
   });
+
+  it("固定窗口限流：第 11 次 429 + Retry-After；GET/DELETE 与不同 IP 不受影响", async () => {
+    const cookieA = await exchangeCookie(app, tokenA); // 第 1 次
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      const rejected = await app.inject({
+        method: "POST",
+        url: "/api/v1/share/session",
+        payload: { token: "invalid-token-0123456789" },
+      });
+      expect(rejected.statusCode).toBe(401);
+    } // 共 10 次，窗口已满
+
+    const limited = await app.inject({ method: "POST", url: "/api/v1/share/session", payload: { token: tokenA } });
+    expect(limited.statusCode).toBe(429);
+    expect(limited.json().error.code).toBe("SHARE_EXCHANGE_RATE_LIMITED");
+    expect(Number(limited.headers["retry-after"])).toBeGreaterThan(0);
+    // 私密数据不得缓存（05 §7）。
+    expect(limited.headers["cache-control"]).toBe("no-store");
+
+    // 05 §6.2/6.3：GET/DELETE 不参与交换限流。
+    const restored = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
+    expect(restored.statusCode).toBe(200);
+    const removed = await app.inject({ method: "DELETE", url: "/api/v1/share/session", headers: { cookie: cookieA } });
+    expect(removed.statusCode).toBe(204);
+
+    // 限流按 IP：其他来源不受影响。
+    const otherIp = await app.inject({
+      method: "POST",
+      url: "/api/v1/share/session",
+      payload: { token: tokenB },
+      remoteAddress: "10.0.0.9",
+    });
+    expect(otherIp.statusCode).toBe(201);
+  });
 });
 
 describe("GET /share/session（会话恢复）", () => {
-  it("有效 Cookie 恢复成员身份", async () => {
+  it("有效 Cookie 恢复成员身份，且响应 no-store", async () => {
+    const cookieA = await exchangeCookie(app, tokenA);
     const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(response.statusCode).toBe(200);
     expect(response.json().member.name).toBe("陈晨");
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).not.toContain(tokenA);
+    expect(response.body).not.toContain("verifier");
   });
 
-  it("无 Cookie 返回 401 SHARE_SESSION_REQUIRED", async () => {
-    const response = await app.inject({ method: "GET", url: "/api/v1/share/session" });
+  it("非 session share 端点无会话一律 401 SHARE_SESSION_REQUIRED（preHandler 统一解析）", async () => {
+    const urls = [
+      "/api/v1/share/tasks?view=home",
+      "/api/v1/share/tasks?view=tracker",
+      "/api/v1/share/tasks/00000000-0000-4000-8000-000000000000",
+      "/api/v1/share/folders/tree",
+    ];
+    for (const url of urls) {
+      const response = await app.inject({ method: "GET", url });
+      expect(response.statusCode, url).toBe(401);
+      expect(response.json().error.code).toBe("SHARE_SESSION_REQUIRED");
+      expect(response.headers["cache-control"]).toBe("no-store");
+    }
+  });
+
+  it("无 Cookie / 伪造 Cookie 返回 401 SHARE_SESSION_REQUIRED", async () => {
+    for (const headers of [{}, { cookie: "ztask_share_session=not-a-session" }]) {
+      const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers });
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.code).toBe("SHARE_SESSION_REQUIRED");
+      expect(response.headers["cache-control"]).toBe("no-store");
+    }
+  });
+
+  it("会话过期（expiresAt 已过）→ 401", async () => {
+    const cookieA = await exchangeCookie(app, tokenA);
+    await updateSessionFile(dataDir, sessionIdOf(cookieA), {
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    });
+    const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(response.statusCode).toBe(401);
     expect(response.json().error.code).toBe("SHARE_SESSION_REQUIRED");
+  });
+
+  it("成员归档后既有会话下一请求 401", async () => {
+    const cookieB = await exchangeCookie(app, tokenB);
+    const archived = await app.inject({ method: "DELETE", url: `/api/v1/admin/members/${memberB}` });
+    expect(archived.statusCode).toBe(204);
+
+    const restored = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieB } });
+    expect(restored.statusCode).toBe(401);
+    const tasks = await app.inject({ method: "GET", url: "/api/v1/share/tasks?view=home", headers: { cookie: cookieB } });
+    expect(tasks.statusCode).toBe(401);
+  });
+
+  it("链接重置为 revoked 后旧会话立即失效（link 状态兜底）", async () => {
+    const cookieA = await exchangeCookie(app, tokenA);
+    const link = await readShareLink(dataDir, memberA);
+    const { writeJsonAtomic } = await import("@ztask/server");
+    await writeJsonAtomic(`${dataDir}/share-links/${memberA}.json`, { ...link, status: "revoked" });
+
+    const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
+    expect(response.statusCode).toBe(401);
   });
 });
 
 describe("DELETE /share/session（注销）", () => {
-  it("注销后 Cookie 清除且旧会话失效", async () => {
+  it("注销后 Cookie 清除且旧会话失效；无会话时也幂等 204", async () => {
+    const cookieA = await exchangeCookie(app, tokenA);
     const removed = await app.inject({ method: "DELETE", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(removed.statusCode).toBe(204);
-    expect(removed.headers["set-cookie"]).toBeTruthy();
+    expect(String(removed.headers["set-cookie"])).toContain("Max-Age=0");
 
     const restored = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(restored.statusCode).toBe(401);
+
+    const anonymous = await app.inject({ method: "DELETE", url: "/api/v1/share/session" });
+    expect(anonymous.statusCode).toBe(204);
   });
 });
 
-describe("成员数据隔离（A/B 隔离矩阵）", () => {
-  it("home 视图：A 只见自己负责/协作的任务", async () => {
-    const home = await app.inject({ method: "GET", url: "/api/v1/share/tasks?view=home", headers: { cookie: cookieA } });
-    expect(home.statusCode).toBe(200);
-    const body = home.json();
-    expect(body.owned.map((t: { description: string }) => t.description)).toEqual(["A 的任务"]);
-    expect(body.collaborated).toEqual([]);
-    expect(JSON.stringify(body)).not.toContain("B 的任务");
+describe("链接与会话时间戳节流（07 §3.2 / 06 §5）", () => {
+  it("交换成功写 lastUsedAt；60s 窗口内再次交换不重写", async () => {
+    const before = await readShareLink(dataDir, memberA);
+    expect(before.lastUsedAt).toBeNull();
+
+    await exchangeCookie(app, tokenA);
+    const afterFirst = await readShareLink(dataDir, memberA);
+    expect(afterFirst.lastUsedAt).not.toBeNull();
+    // 其余字段保留（07 §3.2 第 3 步）。
+    expect(afterFirst.id).toBe(before.id);
+    expect(afterFirst.tokenHash).toBe(before.tokenHash);
+    expect(afterFirst.status).toBe("active");
+    expect(afterFirst.createdAt).toBe(before.createdAt);
+
+    await exchangeCookie(app, tokenA);
+    const afterSecond = await readShareLink(dataDir, memberA);
+    expect(afterSecond.lastUsedAt).toBe(afterFirst.lastUsedAt);
   });
 
-  it("tracker 视图 + 相关任务详情；跨成员任务 404", async () => {
-    const tracker = await app.inject({ method: "GET", url: "/api/v1/share/tasks?view=tracker", headers: { cookie: cookieA } });
-    expect(tracker.statusCode).toBe(200);
-    const descriptions = tracker.json().items.map((t: { description: string }) => t.description);
-    expect(descriptions).toEqual(["A 的任务"]);
+  it("lastSeenAt 心跳节流：过期心跳会被写回，窗口内不重写", async () => {
+    const cookieA = await exchangeCookie(app, tokenA);
+    const sessionId = sessionIdOf(cookieA);
+    const stale = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    await updateSessionFile(dataDir, sessionId, { lastSeenAt: stale });
 
-    const own = await app.inject({ method: "GET", url: `/api/v1/share/tasks/${taskA}`, headers: { cookie: cookieA } });
-    expect(own.statusCode).toBe(200);
-    expect(own.json().memberRole).toBe("owner");
+    const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
+    expect(response.statusCode).toBe(200);
+    const refreshed = await readSessionFile(dataDir, sessionId);
+    expect(refreshed.lastSeenAt).not.toBe(stale);
 
-    const foreign = await app.inject({ method: "GET", url: `/api/v1/share/tasks/${taskB}`, headers: { cookie: cookieA } });
-    expect(foreign.statusCode).toBe(404);
-  });
-
-  it("相关树只含可见任务夹与计数", async () => {
-    const tree = await app.inject({ method: "GET", url: "/api/v1/share/folders/tree", headers: { cookie: cookieA } });
-    expect(tree.statusCode).toBe(200);
-    expect(JSON.stringify(tree.json())).toContain("迭代");
-    // 管理路由的本机守卫由 #12 覆盖（loopback 即管理员）；成员边界由 share 作用域保证
-  });
-
-  it("吊销链接后：旧会话立即失效（link 状态兜底）", async () => {
-    // 直接把 share-link 状态改为 revoked
-    const { readFile, writeFile } = await import("node:fs/promises");
-    const linkPath = path.join(dataDir, "share-links", `${memberA}.json`);
-    const link = JSON.parse(await readFile(linkPath, "utf8"));
-    link.status = "revoked";
-    await writeFile(linkPath, JSON.stringify(link, null, 2), "utf8");
-
-    const restored = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
-    expect(restored.statusCode).toBe(401);
-
-    const tasks = await app.inject({ method: "GET", url: "/api/v1/share/tasks?view=home", headers: { cookie: cookieA } });
-    expect(tasks.statusCode).toBe(401);
+    await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
+    const second = await readSessionFile(dataDir, sessionId);
+    expect(second.lastSeenAt).toBe(refreshed.lastSeenAt);
   });
 });

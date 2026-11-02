@@ -60,36 +60,9 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     await app.register(fastifyStatic, { root: config.staticRoot, wildcard: false });
   }
 
-  if (options.store) {
-    // 管理端业务路由（#15/#16）；Admin 本机专用守卫仍由下方 preHandler 统一执行。
-    await app.register(folderRoutes, { dataDir: config.dataDir });
-    await app.register(memberRoutes, { dataDir: config.dataDir });
-    await app.register(taskRoutes, { dataDir: config.dataDir });
-    await app.register(shareRoutes, { dataDir: config.dataDir });
-  }
-
-  app.addHook("preHandler", async (request, reply) => {
-    const url = request.raw.url ?? "/";
-    if (!url.startsWith(`${API_PREFIX}/admin`)) return;
-    const localAdmin = request.listenerKind === "loopback" && isLoopbackRemote(request.socket.remoteAddress);
-    if (!localAdmin) {
-      await reply.status(403).send({
-        error: {
-          code: "ADMIN_LOCAL_ONLY",
-          message: "管理 API 仅允许从服务主机本机访问",
-          requestId: request.id,
-        },
-      });
-    }
-  });
-
-  app.get(`${API_PREFIX}/health`, async () => ({
-    status: "ok" as const,
-    version,
-    // 进程口径（与 HealthPayload 注释一致）：同一进程内重复 buildApp 不会让数值回跳。
-    uptimeSeconds: Math.floor(process.uptime()),
-  }));
-
+  // 错误与 404 序列化器必须在任何路由注册之前安装：Fastify 在注册路由时把当时的
+  // errorHandler 固化进路由上下文，之后再 setErrorHandler 不会回溯已注册的路由，
+  // 插件作用域会退化为 Fastify 默认错误体（05 §7 要求统一的嵌套 error 结构）。
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof ApiError) {
       void reply.status(error.statusCode).send({
@@ -128,6 +101,36 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     }
     void reply.status(404).type("text/plain; charset=utf-8").send("not found");
   });
+
+  if (options.store) {
+    // 管理端业务路由（#15/#16）；Admin 本机专用守卫仍由下方 preHandler 统一执行。
+    await app.register(folderRoutes, { dataDir: config.dataDir });
+    await app.register(memberRoutes, { dataDir: config.dataDir });
+    await app.register(taskRoutes, { dataDir: config.dataDir });
+    await app.register(shareRoutes, { dataDir: config.dataDir });
+  }
+
+  app.addHook("preHandler", async (request, reply) => {
+    const url = request.raw.url ?? "/";
+    if (!url.startsWith(`${API_PREFIX}/admin`)) return;
+    const localAdmin = request.listenerKind === "loopback" && isLoopbackRemote(request.socket.remoteAddress);
+    if (!localAdmin) {
+      await reply.status(403).send({
+        error: {
+          code: "ADMIN_LOCAL_ONLY",
+          message: "管理 API 仅允许从服务主机本机访问",
+          requestId: request.id,
+        },
+      });
+    }
+  });
+
+  app.get(`${API_PREFIX}/health`, async () => ({
+    status: "ok" as const,
+    version,
+    // 进程口径（与 HealthPayload 注释一致）：同一进程内重复 buildApp 不会让数值回跳。
+    uptimeSeconds: Math.floor(process.uptime()),
+  }));
 
   return app;
 }

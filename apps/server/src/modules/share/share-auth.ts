@@ -1,11 +1,17 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { readFile, readdir, unlink } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { createEntityStore, type EntityStore } from "../../storage/entity-store.js";
 import type { MemberSummary } from "@ztask/shared";
 
 /** 会话有效期：30 天（06 §5 expiresAt）。 */
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * lastUsedAt / lastSeenAt 的节流窗口（07 §3.2 第 3 步、06 §5）：
+ * 同一窗口内的重复请求不再原子替换文件，避免每次请求都产生一次写盘。
+ */
+const TOUCH_THROTTLE_MS = 60 * 1000;
 
 /** 会话 Cookie 名；值形如 `<sessionId>.<verifier>`。 */
 export const SHARE_COOKIE_NAME = "ztask_share_session";
@@ -57,6 +63,10 @@ function linkStore(dataDir: string): EntityStore<ShareLinkFile> {
   return createEntityStore<ShareLinkFile>({ dataDir, subdir: "share-links" });
 }
 
+function sessionStore(dataDir: string): EntityStore<SessionFile> {
+  return createEntityStore<SessionFile>({ dataDir, subdir: "auth-sessions" });
+}
+
 function sessionDir(dataDir: string): string {
   return join(dataDir, "auth-sessions");
 }
@@ -66,31 +76,15 @@ function memberSummaryFile(file: { id: string; name: string; role: string; color
 }
 
 /**
- * 铸发（或重置）成员的 active 分享链接：CSPRNG 生成 32 字节 token（Base64URL），
- * 只落 tokenHash（06 §4.3 / 04 §8）。raw token 仅在返回值中出现一次，供管理员分发。
- * @param options 装配项。
- * @param options.dataDir 数据目录。
- * @param options.memberId 目标成员。
- * @param options.clock 可注入时钟。
- * @returns 完整 raw token（Base64URL）。
+ * 节流判定：时间戳为空、损坏或距 now 已超过 TOUCH_THROTTLE_MS 时需要写回。
+ * @param lastTouchedAt 上次写回时间（RFC 3339，可缺失）。
+ * @param nowMs 当前毫秒时间戳。
+ * @returns 是否需要更新持久化时间戳。
  */
-export async function mintShareLink(options: { dataDir: string; memberId: string; clock?: () => Date }): Promise<string> {
-  const store = linkStore(options.dataDir);
-  const now = (options.clock ?? (() => new Date()))().toISOString();
-  const token = randomBytes(32).toString("base64url");
-  const existing = await store.get(options.memberId);
-  const file: ShareLinkFile = {
-    formatVersion: 1,
-    id: existing?.id ?? randomUUID(),
-    memberId: options.memberId,
-    tokenHash: sha256(token),
-    status: "active",
-    createdAt: existing?.createdAt ?? now,
-    revokedAt: null,
-    lastUsedAt: existing?.lastUsedAt ?? null,
-  };
-  await store.put(options.memberId, file);
-  return token;
+function needsTouch(lastTouchedAt: string | null, nowMs: number): boolean {
+  if (lastTouchedAt === null) return true;
+  const last = new Date(lastTouchedAt).getTime();
+  return !Number.isFinite(last) || nowMs - last > TOUCH_THROTTLE_MS;
 }
 
 /**
@@ -113,10 +107,12 @@ export function clearSessionCookie(): string {
 
 /**
  * 令牌换取会话（07 §3.2）：SHA-256 后匹配 active link → 成员未归档 →
- * 铸发 sessionId + 高熵 verifier（只存 verifierHash）→ 原子写会话文件。
+ * 铸发 sessionId + 高熵 verifier（只存 verifierHash）→ 原子写会话文件 →
+ * 节流更新 link.lastUsedAt（null 或超过窗口才写，保留其余字段）。
  * @param options 装配项。
  * @param options.dataDir 数据目录。
- * @param token 分享 raw token。
+ * @param options.token 分享 raw token。
+ * @param options.clock 可注入时钟（测试过期/节流窗口）。
  * @returns 成员摘要与 Set-Cookie 值；token 无效/成员已归档为 null。
  */
 export async function exchangeShareToken(options: { dataDir: string; token: string; clock?: () => Date }): Promise<{ member: MemberSummary; cookie: string } | null> {
@@ -125,8 +121,11 @@ export async function exchangeShareToken(options: { dataDir: string; token: stri
   const tokenHash = sha256(token);
   const store = linkStore(options.dataDir);
   const links = await store.list();
-  const link = links.map((entry) => entry.value).find((value) => value.status === "active" && constantTimeEqual(value.tokenHash, tokenHash));
-  if (!link) return null;
+  const link = links
+    .map((entry) => entry.value)
+    .find((value) => value.status === "active" && typeof value.tokenHash === "string" && constantTimeEqual(value.tokenHash, tokenHash));
+  // 损坏链接（tokenHash 缺失或 memberId 非 UUID）按无效处理，不把存储错误暴露给前端。
+  if (!link || !UUID_PATTERN.test(link.memberId)) return null;
 
   const members = createEntityStore<{ id: string; name: string; role: string; color: string; archivedAt: string | null }>({
     dataDir: options.dataDir,
@@ -148,21 +147,27 @@ export async function exchangeShareToken(options: { dataDir: string; token: stri
     expiresAt: new Date(now.getTime() + SESSION_TTL_MS).toISOString(),
     lastSeenAt: now.toISOString(),
   };
-  const { writeJsonAtomic } = await import("../../storage/atomic-json.js");
-  await writeJsonAtomic(join(sessionDir(options.dataDir), `${sessionId}.json`), session);
+  await sessionStore(options.dataDir).put(sessionId, session);
+
+  // 07 §3.2 第 3 步：节流写 lastUsedAt；展开旧实体保留 id/tokenHash/status/createdAt。
+  if (needsTouch(link.lastUsedAt, now.getTime())) {
+    await store.put(link.memberId, { ...link, lastUsedAt: now.toISOString() });
+  }
 
   return { member: memberSummaryFile(member), cookie: serializeSessionCookie(sessionId, verifier) };
 }
 
 /**
  * 解析并校验会话（每请求执行）：sessionId 定位文件 → 常量时间校验 verifierHash →
- * 未过期 → 成员未归档 → shareLinkId 仍是当前 active link（残留会话兜底失效）。
+ * 未过期 → 成员未归档 → shareLinkId 仍是当前 active link（残留会话兜底失效）；
+ * 通过后按 TOUCH_THROTTLE_MS 节流更新 lastSeenAt（06 §5）。
  * @param options 装配项。
  * @param options.dataDir 数据目录。
  * @param options.cookieHeader 请求的 Cookie 头（可缺失）。
+ * @param options.clock 可注入时钟（测试过期/节流窗口）。
  * @returns 成员 principal；无效为 null。
  */
-export async function resolveShareSession(options: { dataDir: string; cookieHeader: string | undefined }): Promise<MemberPrincipal | null> {
+export async function resolveShareSession(options: { dataDir: string; cookieHeader: string | undefined; clock?: () => Date }): Promise<MemberPrincipal | null> {
   const header = options.cookieHeader;
   if (!header) return null;
   const pair = header
@@ -177,14 +182,29 @@ export async function resolveShareSession(options: { dataDir: string; cookieHead
   const verifier = value.slice(dotIndex + 1);
   if (!UUID_PATTERN.test(sessionId)) return null;
 
-  let session: SessionFile;
+  let session: SessionFile | null;
   try {
-    session = JSON.parse(await readFile(join(sessionDir(options.dataDir), `${sessionId}.json`), "utf8")) as SessionFile;
+    session = await sessionStore(options.dataDir).get(sessionId);
   } catch {
+    // 损坏或不可读的会话文件按未登录处理，不向前端泄露存储错误（05 §7）。
+    return null;
+  }
+  if (!session || session.sessionId !== sessionId) return null;
+  // 字段缺失/类型不符的损坏会话按未登录处理，避免 NaN 过期判断或哈希比较抛错。
+  if (
+    typeof session.memberId !== "string" ||
+    typeof session.shareLinkId !== "string" ||
+    typeof session.verifierHash !== "string" ||
+    typeof session.expiresAt !== "string" ||
+    typeof session.lastSeenAt !== "string"
+  ) {
     return null;
   }
   if (!constantTimeEqual(sha256(verifier), session.verifierHash)) return null;
-  if (new Date(session.expiresAt).getTime() <= Date.now()) return null;
+  if (!UUID_PATTERN.test(session.memberId)) return null;
+
+  const now = (options.clock ?? (() => new Date()))();
+  if (new Date(session.expiresAt).getTime() <= now.getTime()) return null;
 
   const members = createEntityStore<{ id: string; name: string; role: string; color: string; archivedAt: string | null }>({
     dataDir: options.dataDir,
@@ -196,6 +216,15 @@ export async function resolveShareSession(options: { dataDir: string; cookieHead
   const links = await linkStore(options.dataDir).list();
   const link = links.map((entry) => entry.value).find((value) => value.id === session.shareLinkId);
   if (!link || link.status !== "active") return null;
+
+  // 06 §5 的心跳语义：只节流更新 lastSeenAt，心跳写失败不影响本请求。
+  if (needsTouch(session.lastSeenAt, now.getTime())) {
+    try {
+      await sessionStore(options.dataDir).put(sessionId, { ...session, lastSeenAt: now.toISOString() });
+    } catch {
+      // 只读请求不因心跳落盘失败而失败
+    }
+  }
 
   return {
     memberId: member.id,
@@ -215,43 +244,5 @@ export async function destroySession(dataDir: string, sessionId: string): Promis
   await unlink(join(sessionDir(dataDir), `${sessionId}.json`)).catch(() => undefined);
 }
 
-async function listSessionFiles(dataDir: string): Promise<string[]> {
-  try {
-    return await readdir(sessionDir(dataDir));
-  } catch {
-    return [];
-  }
-}
-
-/**
- * 删除某成员的全部会话（链接重置/吊销时的清理动作，06 §4.3）。
- * @param dataDir 数据目录。
- * @param memberId 成员 ID。
- */
-export async function destroyMemberSessions(dataDir: string, memberId: string): Promise<void> {
-  for (const name of await listSessionFiles(dataDir)) {
-    if (!name.endsWith(".json")) continue;
-    try {
-      const session = JSON.parse(await readFile(join(sessionDir(dataDir), name), "utf8")) as { memberId?: string };
-      if (session.memberId === memberId) await unlink(join(sessionDir(dataDir), name));
-    } catch {
-      // 损坏会话文件一并清理
-      await unlink(join(sessionDir(dataDir), name)).catch(() => undefined);
-    }
-  }
-}
-
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export { sessionDir as authSessionsDir, UUID_PATTERN as SHARE_UUID_PATTERN };
-
-/**
- * 测试/工具助手：直接用 dataDir + token 换取会话 Cookie（不经 HTTP）。
- * @param options 装配项。
- * @param options.dataDir 数据目录。
- * @param token 分享 raw token。
- * @returns Cookie 与成员摘要；无效为 null。
- */
-export async function requestShareSession(options: { dataDir: string }, token: string): Promise<{ cookie: string; member: MemberSummary } | null> {
-  return exchangeShareToken({ dataDir: options.dataDir, token });
-}

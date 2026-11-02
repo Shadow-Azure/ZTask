@@ -13,6 +13,11 @@ export type {
   MemberSummary,
   RevisionActor,
   RevisionResult,
+  ShareHomeTasks,
+  ShareMemberRole,
+  ShareSessionResponse,
+  ShareTaskDetail,
+  ShareTrackerTasks,
   Subtask,
   Task,
 } from "./dto.js";
