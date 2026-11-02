@@ -17,6 +17,9 @@ importers:
       '@types/node':
         specifier: ^22.19.3
         version: 22.20.5
+      '@vitejs/plugin-vue':
+        specifier: ^6.0.4
+        version: 6.0.10(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2))(vue@3.5.44(typescript@5.9.3))
       '@vue/test-utils':
         specifier: ^2.4.6
         version: 2.5.1(@vue/compiler-dom@3.5.44)(@vue/server-renderer@3.5.44)(vue@3.5.44(typescript@5.9.3))
@@ -1898,6 +1901,12 @@ snapshots:
     dependencies:
       '@rolldown/pluginutils': 1.0.1
       vite: 7.3.7(@types/node@22.20.5)(lightningcss@1.33.0)
+      vue: 3.5.44(typescript@5.9.3)
+
+  '@vitejs/plugin-vue@6.0.10(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2))(vue@3.5.44(typescript@5.9.3))':
+    dependencies:
+      '@rolldown/pluginutils': 1.0.1
+      vite: 8.3.5(@types/node@22.20.5)(esbuild@0.28.2)
       vue: 3.5.44(typescript@5.9.3)
 
   '@vitest/mocker@5.0.5(vite@8.3.5(@types/node@22.20.5)(esbuild@0.28.2))':
