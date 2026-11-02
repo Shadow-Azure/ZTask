@@ -34,6 +34,7 @@ export function defaultDataDir(env: NodeJS.ProcessEnv = process.env): string {
 /**
  * 判定 host 是否为 wildcard（0.0.0.0 / :: / 空串）。wildcard 不允许作为监听地址。
  * @param host 待判定主机名。
+ * @returns 是 wildcard 时为 true。
  */
 export function isWildcardHost(host: string): boolean {
   const normalized = host.trim().toLowerCase();
@@ -43,6 +44,7 @@ export function isWildcardHost(host: string): boolean {
 /**
  * 判定 host 是否为 loopback（localhost / 127.0.0.0/8 / ::1 / IPv4 映射 loopback）。
  * @param host 待判定主机名。
+ * @returns 是 loopback 时为 true。
  */
 export function isLoopbackHost(host: string): boolean {
   const normalized = host.trim().toLowerCase().replace(/^\[/, "").replace(/\]$/, "");

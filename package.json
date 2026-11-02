@@ -22,7 +22,7 @@
     "test": "pnpm test:gates && pnpm test:prototype && vitest run apps tests",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel --stream dev",
-    "typecheck": "tsc -p tsconfig.json && pnpm -r typecheck",
+    "typecheck": "pnpm -r typecheck",
     "serve": "ztask serve"
   },
   "devDependencies": {

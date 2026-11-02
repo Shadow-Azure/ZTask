@@ -27,8 +27,10 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: 门禁自测试
-        run: pnpm test:gates
+      - name: 测试（门禁自测 + 原型 + workspace 自动化测试）
+        run: pnpm test
+      - name: 生产构建（shared/server/cli/web）
+        run: pnpm build
       - name: 文档门禁（doc-sync）
         run: pnpm verify:docs
       - name: 开发流程门禁（PR diff）
