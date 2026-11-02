@@ -7,7 +7,7 @@
 ```sh
 pnpm install
 pnpm build        # 构建 shared/server/cli/web
-pnpm serve        # 等价于 ztask serve，默认 http://127.0.0.1:8123/
+pnpm serve        # 等价于 node apps/cli/dist/cli.js serve，默认 http://127.0.0.1:8123/
 ```
 
 开发模式（Vite HMR + API 同机）：

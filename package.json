@@ -19,11 +19,11 @@
     "install:hooks": "node scripts/install-git-hooks.mjs",
     "install-merge-driver": "node scripts/install-merge-driver.mjs",
     "test:prototype": "node --test scripts/prototype-tracker.spec.mjs",
-    "test": "pnpm test:gates && pnpm test:prototype && vitest run apps tests",
+    "test": "pnpm build && pnpm test:gates && pnpm test:prototype && vitest run apps tests",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel --stream dev",
     "typecheck": "pnpm -r typecheck",
-    "serve": "ztask serve"
+    "serve": "node apps/cli/dist/cli.js serve"
   },
   "devDependencies": {
     "@redocly/ajv": "8.11.2",
