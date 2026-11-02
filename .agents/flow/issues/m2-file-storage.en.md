@@ -15,6 +15,7 @@ scope:
   - packages/shared/**
   - tests/storage/**
   - .agents/flow/issues/m2-file-storage*
+  - .agents/notes/implemented/feature/2026-11-02-*
 adr: []
 github:
   number: 13
