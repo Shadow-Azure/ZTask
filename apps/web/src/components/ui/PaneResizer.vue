@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 
 /**
  * 分栏拖柄（原型 tree-resizer / task-pane-resizer 的组件化）：
@@ -14,9 +14,42 @@ const props = defineProps<{
   modelValue: number;
 }>();
 
-const emit = defineEmits<{ "update:modelValue": [value: number] }>();
+const emit = defineEmits<{
+  "update:modelValue": [value: number];
+  /** 指针拖拽过程中的原始 clientX；由父级映射为面板宽度。 */
+  drag: [clientX: number];
+  dragend: [];
+}>();
 
 const clamped = computed(() => Math.round(Math.min(props.max, Math.max(props.min, props.modelValue))));
+
+const dragging = ref(false);
+
+function onPointerDown(event: PointerEvent): void {
+  if (event.button !== 0) return;
+  event.preventDefault();
+  dragging.value = true;
+  try {
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  } catch {
+    // 无活动指针（如测试环境）时忽略；拖拽状态已进入。
+  }
+}
+
+function onPointerMove(event: PointerEvent): void {
+  if (!dragging.value) return;
+  emit("drag", event.clientX);
+}
+
+function onPointerUp(): void {
+  if (!dragging.value) return;
+  dragging.value = false;
+  emit("dragend");
+}
+
+onBeforeUnmount(() => {
+  dragging.value = false;
+});
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === "Home") {
@@ -46,7 +79,12 @@ function onKeydown(event: KeyboardEvent): void {
     :aria-valuenow="clamped"
     tabindex="0"
     title="拖拽调整宽度；也可使用左右方向键"
+    :class="{ dragging }"
     @keydown="onKeydown"
+    @pointerdown="onPointerDown"
+    @pointermove="onPointerMove"
+    @pointerup="onPointerUp"
+    @pointercancel="onPointerUp"
   >
     <span />
   </div>
@@ -79,5 +117,10 @@ function onKeydown(event: KeyboardEvent): void {
 .resizer:focus-visible {
   outline: 2px solid var(--blue);
   outline-offset: 2px;
+}
+
+.resizer.dragging span {
+  background: var(--blue);
+  height: 100%;
 }
 </style>
