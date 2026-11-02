@@ -6,7 +6,7 @@
 kind: milestone
 id: m5
 title: 阶段 5：看板历史与交付加固
-status: planned
+status: done
 github:
   number: 5
   url: https://github.com/Shadow-Azure/ZTask/milestone/5

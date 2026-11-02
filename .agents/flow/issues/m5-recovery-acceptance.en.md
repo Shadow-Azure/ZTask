@@ -6,7 +6,7 @@ English | [中文](m5-recovery-acceptance.md)
 kind: issue
 milestone: m5
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/cli/**
   - apps/server/src/modules/maintenance/**
