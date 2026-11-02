@@ -6,10 +6,12 @@ English | [中文](m2-file-storage.md)
 kind: issue
 milestone: m2
 priority: P0
-status: backlog
+status: in-progress
 scope:
   - apps/server/src/storage/**
   - apps/server/src/plugins/**
+  - apps/server/src/bootstrap.ts
+  - apps/server/src/index.ts
   - packages/shared/**
   - tests/storage/**
   - .agents/flow/issues/m2-file-storage*
