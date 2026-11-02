@@ -11,6 +11,7 @@ scope:
   - apps/server/src/modules/share/**
   - apps/web/src/features/share/**
   - apps/web/src/features/tasks/**
+  - apps/web/src/pages/MemberHomePage.vue
   - packages/shared/**
   - tests/member-authoring/**
   - tests/member-access/**
