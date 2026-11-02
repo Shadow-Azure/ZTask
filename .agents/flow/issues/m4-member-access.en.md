@@ -15,12 +15,21 @@ scope:
   - packages/shared/**
   - tests/member-access/**
   - apps/server/src/app.ts
+  - apps/server/src/index.ts
   - apps/web/src/pages/ShareSessionPage.vue
   - apps/web/src/pages/MemberHomePage.vue
   - apps/web/src/layouts/ShareLayout.vue
   - apps/web/src/api/share.ts
+  - apps/web/src/api/http.ts
+  - apps/web/src/features/folders/**
+  - apps/web/src/pages/TrackerPage.vue
+  - apps/web/src/pages/ShareInvalidPage.vue
+  - apps/web/src/router/index.ts
+  - tests/web-shell/**
+  - .agents/notes/implemented/feature/2026-11-02-share-session-boundary*
   - .agents/flow/issues/m4-member-access*
-adr: []
+adr:
+  - ../../notes/implemented/feature/2026-11-02-share-session-boundary.md
 github:
   number: 18
   url: https://github.com/Shadow-Azure/ZTask/issues/18
@@ -44,6 +53,7 @@ A share link is only a credential. The actual security boundary is session excha
 ## Implementation
 
 - Clear the fragment with replace after exchange; keep tokens out of query caches, logs, and referrers.
+- Rate-limit the exchange endpoint by source (429 `SHARE_EXCHANGE_RATE_LIMITED`) and scope the session cookie to share paths.
 - Construct member scope centrally on the server so deep links and direct APIs are equally restricted.
 - Clear share query caches on logout/invalidation so browser Back cannot reveal old private content.
 

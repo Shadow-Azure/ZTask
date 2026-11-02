@@ -15,12 +15,21 @@ scope:
   - packages/shared/**
   - tests/member-access/**
   - apps/server/src/app.ts
+  - apps/server/src/index.ts
   - apps/web/src/pages/ShareSessionPage.vue
   - apps/web/src/pages/MemberHomePage.vue
   - apps/web/src/layouts/ShareLayout.vue
   - apps/web/src/api/share.ts
+  - apps/web/src/api/http.ts
+  - apps/web/src/features/folders/**
+  - apps/web/src/pages/TrackerPage.vue
+  - apps/web/src/pages/ShareInvalidPage.vue
+  - apps/web/src/router/index.ts
+  - tests/web-shell/**
+  - .agents/notes/implemented/feature/2026-11-02-share-session-boundary*
   - .agents/flow/issues/m4-member-access*
-adr: []
+adr:
+  - ../../notes/implemented/feature/2026-11-02-share-session-boundary.md
 github:
   number: 18
   url: https://github.com/Shadow-Azure/ZTask/issues/18
@@ -44,6 +53,7 @@ github:
 ## 实现内容
 
 - 交换后 replace 清除 fragment，token 不进入 query cache、日志或 Referer。
+- 交换端点按来源限流（429 `SHARE_EXCHANGE_RATE_LIMITED`），会话 Cookie 只发往 share 路径。
 - 服务端统一构造 member scope，深链和直接 API 同样受限。
 - 注销/失效清理 share query cache，浏览器后退不得展示旧私有内容。
 
