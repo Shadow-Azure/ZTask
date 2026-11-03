@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { adminApi } from "../../api/admin";
 import { useToast } from "../../components/ui/toast";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 树内「新建任务夹」行（原型 172–173、1120–1121）：渲染在**当前选中夹**的 `.tchildren`
@@ -32,7 +33,7 @@ const createMutation = useMutation({
     emit("close");
   },
   onError: (cause: unknown) => {
-    toast.show(cause instanceof Error ? cause.message : "创建失败");
+    toast.show(describeApiError(cause, "创建失败"));
   },
 });
 

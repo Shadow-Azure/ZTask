@@ -5,6 +5,7 @@ import { ApiError, type AdminMember, type AdminMemberShareLink, type AdminShareL
 import { networkApi, shareLinkApi } from "../../api/network";
 import { useToast } from "../../components/ui/toast";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 成员分享链接单元格（08 §5，原型 .link-cell/.link-box，ztask-prototype.html:1786–1794）：
@@ -105,7 +106,7 @@ function handleError(cause: unknown): void {
     void reconcile();
     return;
   }
-  toast.show(cause instanceof Error ? cause.message : "链接操作失败");
+  toast.show(describeApiError(cause, "链接操作失败"));
 }
 
 /** 用 GET share-link 纠正本行脱敏态（成员列表 15s 轮询之外的即时兜底）。 */

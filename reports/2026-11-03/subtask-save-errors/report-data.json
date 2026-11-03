@@ -1,0 +1,380 @@
+{
+  "lang": "zh-CN",
+  "title": "小任务保存错误提示修复 · 冒烟报告",
+  "eyebrow": "Computer Use Smoke · Before / After",
+  "summary": "在真实构建与真实 API 上复现并对比小任务保存的两类失败：不可写数据目录触发 500“内部错误”，以及成员端空进度提交英文校验消息。修复后前者给出目录权限原因与请求编号，后者在本地拦下并给出中文提示；管理端缺少小任务负责人改为行内定位，合法小任务保存回归通过。当前主线上的常规点击链路未能复现用户原始 500，报告同时记录该限制与可复现的 500 载荷路径。",
+  "meta": "2026-11-03 · macOS · Chrome 156 · 1440×1000 · 真实构建 + 真实 API",
+  "metrics": [
+    {
+      "value": "10",
+      "label": "冒烟场景"
+    },
+    {
+      "value": "5",
+      "label": "修复前后对比"
+    },
+    {
+      "value": "432",
+      "label": "自动化测试"
+    },
+    {
+      "value": "1",
+      "label": "复现限制"
+    }
+  ],
+  "facts": [
+    {
+      "label": "分支",
+      "value": "agent/fix-subtask-save-error-5fab3efafcd6"
+    },
+    {
+      "label": "Before",
+      "value": "origin/main @ 4ba8153（独立 worktree 构建）"
+    },
+    {
+      "label": "After",
+      "value": "本工单工作树构建（含修复）"
+    },
+    {
+      "label": "服务",
+      "value": "ztask serve · loopback 18140/18141 · LAN 18142/18143"
+    },
+    {
+      "label": "数据",
+      "value": "两套一次性隔离目录；同结构种子数据"
+    },
+    {
+      "label": "视口",
+      "value": "1440×1000"
+    }
+  ],
+  "issues": [
+    {
+      "severity": "P1",
+      "title": "保存失败只显示“内部错误”",
+      "facts": [
+        {
+          "label": "现象",
+          "value": "任务目录不可写时保存小任务，toast 只有“内部错误”，不知道是权限、磁盘还是代码问题。"
+        },
+        {
+          "label": "期望",
+          "value": "提示具体原因（目录不可写/EACCES）、下一步动作与请求编号。"
+        },
+        {
+          "label": "根因",
+          "value": "统一错误处理把未预期异常压成 INTERNAL_ERROR / 内部错误，且没有服务端日志。"
+        }
+      ],
+      "state": {
+        "kind": "fixed",
+        "label": "Fixed · 02/04/06 场景"
+      }
+    },
+    {
+      "severity": "P1",
+      "title": "小任务载荷结构错误落入 500",
+      "facts": [
+        {
+          "label": "现象",
+          "value": "PUT editor 的 subtasks.create 传对象时返回 500“内部错误”。"
+        },
+        {
+          "label": "期望",
+          "value": "返回 400 并指出 subtasks.create 须为列表，且不写盘。"
+        },
+        {
+          "label": "根因",
+          "value": "saveEditor 直接 for...of 未校验 create/update/deleteIds，对象或 null 条目抛 TypeError。"
+        }
+      ],
+      "state": {
+        "kind": "fixed",
+        "label": "Fixed · 400 + 不产生 revision"
+      }
+    },
+    {
+      "severity": "P2",
+      "title": "可预判表单错误被送到服务端",
+      "facts": [
+        {
+          "label": "现象",
+          "value": "成员端清空进度后提交，toast 显示 body/progress must be integer；管理端小任务未选负责人时显示“小任务 owner 含非法成员 ID”。"
+        },
+        {
+          "label": "期望",
+          "value": "提交前就地提示具体行与字段，并用中文说明。"
+        },
+        {
+          "label": "根因",
+          "value": "表单缺少小任务负责人/进度的本地校验。"
+        }
+      ],
+      "state": {
+        "kind": "fixed",
+        "label": "Fixed · 06/04 场景"
+      }
+    },
+    {
+      "severity": "P2",
+      "title": "原始用户 500 未能按常规点击链路复现",
+      "facts": [
+        {
+          "label": "尝试",
+          "value": "新建任务带小任务、编辑任务新增小任务、成员个人页添加小任务，均在主线构建与用户数据副本上成功。"
+        },
+        {
+          "label": "结论",
+          "value": "原始触发条件仍未知；本次修复覆盖可复现的 500 载荷与错误提示，后续可用请求编号定位用户侧真实原因。"
+        }
+      ],
+      "state": {
+        "kind": "warn",
+        "label": "Open · 等待请求编号/截图"
+      }
+    }
+  ],
+  "matrix": {
+    "columns": [
+      "#",
+      "场景",
+      "结果",
+      "验证结论",
+      "证据"
+    ],
+    "rows": [
+      {
+        "id": "01",
+        "name": "Before：不可写目录保存小任务",
+        "status": {
+          "kind": "fail",
+          "label": "FAIL · 基线缺陷"
+        },
+        "detail": "任务目录 chmod 555 后保存，API 500，toast 仅“内部错误”。",
+        "evidence": [
+          "screenshots/01-before-storage-error.png"
+        ]
+      },
+      {
+        "id": "02",
+        "name": "After：不可写目录保存小任务",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "同一操作显示“保存失败：数据目录不可写，请检查 ZTask 数据目录的权限后重试（原因：EACCES，请求编号：…）”。",
+        "evidence": [
+          "screenshots/02-after-storage-error.png"
+        ]
+      },
+      {
+        "id": "03",
+        "name": "Before：非法 subtasks.create 载荷",
+        "status": {
+          "kind": "fail",
+          "label": "FAIL · 基线缺陷"
+        },
+        "detail": "PUT editor 的 subtasks.create 传对象，返回 500 INTERNAL_ERROR / 内部错误，版本不变。",
+        "evidence": [
+          "screenshots/09-api-before-after.png"
+        ]
+      },
+      {
+        "id": "04",
+        "name": "After：非法 subtasks.create 载荷",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "同一请求返回 400 INVALID_REQUEST / subtasks.create 须为列表，版本不变、无 revision。",
+        "evidence": [
+          "screenshots/09-api-before-after.png"
+        ]
+      },
+      {
+        "id": "05",
+        "name": "Before：成员端空进度",
+        "status": {
+          "kind": "fail",
+          "label": "FAIL · 英文技术消息"
+        },
+        "detail": "清空小任务进度提交，toast 显示 body/progress must be integer。",
+        "evidence": [
+          "screenshots/03-before-member-progress.png"
+        ]
+      },
+      {
+        "id": "06",
+        "name": "After：成员端空进度",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "提交前拦截，toast 显示“小任务进度必须是 0–100 的整数”，未发送请求。",
+        "evidence": [
+          "screenshots/04-after-member-progress.png"
+        ]
+      },
+      {
+        "id": "07",
+        "name": "Before：小任务未选负责人",
+        "status": {
+          "kind": "fail",
+          "label": "FAIL · 服务端笼统错误"
+        },
+        "detail": "新建任务内先加小任务后选主负责人，保存返回 400“小任务 owner 含非法成员 ID”。",
+        "evidence": [
+          "screenshots/05-before-subtask-owner.png"
+        ]
+      },
+      {
+        "id": "08",
+        "name": "After：小任务未选负责人",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "红字就地定位到“小任务「未选负责人小任务」还没有负责人，请选择负责人”，未发送请求。",
+        "evidence": [
+          "screenshots/06-after-subtask-owner.png"
+        ]
+      },
+      {
+        "id": "09",
+        "name": "合法保存回归（Before / After）",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "编辑任务新增“正常保存小任务”，两版均显示“任务已保存”，卡片出现该小任务；主体与版本递增正确。",
+        "evidence": [
+          "screenshots/07-before-valid-save.png",
+          "screenshots/08-after-valid-save.png"
+        ]
+      },
+      {
+        "id": "10",
+        "name": "普通测试与冒烟回归",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "pnpm test：57 个测试文件、432 个测试全绿；新增 API 错误报告、编辑器校验与错误翻译测试。",
+        "evidence": [
+          "screenshots/08-after-valid-save.png"
+        ]
+      }
+    ]
+  },
+  "screenshots": [
+    {
+      "src": "screenshots/01-before-storage-error.png",
+      "alt": "基线：任务目录不可写时仅提示内部错误",
+      "label": "01 · Before",
+      "caption": "保存小任务失败，底部 toast 只有“内部错误”。",
+      "variant": "issue"
+    },
+    {
+      "src": "screenshots/02-after-storage-error.png",
+      "alt": "修复后：目录不可写提示具体原因与请求编号",
+      "label": "02 · After",
+      "caption": "同一操作提示数据目录不可写、EACCES 与请求编号。",
+      "variant": "issue"
+    },
+    {
+      "src": "screenshots/03-before-member-progress.png",
+      "alt": "基线：成员端空进度显示英文校验消息",
+      "label": "03 · Before",
+      "caption": "成员个人页提交空进度，toast 为 AJV 英文消息。",
+      "variant": "normal"
+    },
+    {
+      "src": "screenshots/04-after-member-progress.png",
+      "alt": "修复后：成员端空进度显示中文提示",
+      "label": "04 · After",
+      "caption": "提交前拦截并提示“小任务进度必须是 0–100 的整数”。",
+      "variant": "normal"
+    },
+    {
+      "src": "screenshots/05-before-subtask-owner.png",
+      "alt": "基线：小任务未选负责人时服务端报错",
+      "label": "05 · Before",
+      "caption": "保存后 toast 显示服务端“小任务 owner 含非法成员 ID”。",
+      "variant": "issue"
+    },
+    {
+      "src": "screenshots/06-after-subtask-owner.png",
+      "alt": "修复后：小任务未选负责人在表单内就地提示",
+      "label": "06 · After",
+      "caption": "红字定位到具体小任务行，保存请求未发出。",
+      "variant": "issue"
+    },
+    {
+      "src": "screenshots/07-before-valid-save.png",
+      "alt": "基线：合法小任务保存成功",
+      "label": "07 · Before",
+      "caption": "合法新增小任务保存成功，任务卡出现该小任务。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/08-after-valid-save.png",
+      "alt": "修复后：合法小任务保存成功",
+      "label": "08 · After",
+      "caption": "修复后合法小任务保存与回显保持不变。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/09-api-before-after.png",
+      "alt": "同一非法小任务载荷在修复前后的 API 响应",
+      "label": "09 · API",
+      "caption": "修复前 500 内部错误；修复后 400 指出 subtasks.create 须为列表，两者都不写盘。",
+      "variant": "wide"
+    }
+  ],
+  "coverage": {
+    "columns": [
+      "范围",
+      "自动化看护",
+      "结论",
+      "建议"
+    ],
+    "rows": [
+      {
+        "area": "小任务载荷结构",
+        "coverage": "API 集成测试",
+        "conclusion": "非对象 subtasks、非数组字段与 null 条目均返回 400，且版本不变。",
+        "recommendation": "新增载荷形状时同步扩展校验用例。"
+      },
+      {
+        "area": "内部错误提示",
+        "coverage": "API 集成 + 单元测试",
+        "conclusion": "StorageCorruption / EACCES 映射为具体中文原因，含请求编号且不泄露路径；日志含请求编号与堆栈。",
+        "recommendation": "新增 StorageError code 时同步文案。"
+      },
+      {
+        "area": "前端错误翻译与表单校验",
+        "coverage": "组件 + 单元测试",
+        "conclusion": "空进度、空描述、缺少负责人的可预判错误在本地拦截；英文 AJV 消息翻译为中文。",
+        "recommendation": "保留 GUI 冒烟覆盖用户可见文案。"
+      },
+      {
+        "area": "合法保存链路",
+        "coverage": "真实 GUI 冒烟 + 既有测试",
+        "conclusion": "新建/编辑/成员端小任务保存均未回归。",
+        "recommendation": "发布冒烟保留本场景。"
+      }
+    ]
+  },
+  "conclusion": {
+    "kind": "warn",
+    "label": "修复完成 · 原始触发仍待用户线索",
+    "summary": "可复现的 500 载荷路径与错误提示已修复并通过 432 个自动化测试与浏览器前后对比；常规点击链路上未复现用户原始 500，需用户提供请求编号/截图继续定位。",
+    "points": [
+      "不可写目录与非法小任务载荷两类 500 均已从“内部错误”变为可操作提示。",
+      "成员端空进度与管理端缺少负责人改为提交前中文本地提示。",
+      "合法小任务保存链路在修复前后均通过。",
+      "原始用户报错的触发条件未知，报告不宣称已修复该未知根因。"
+    ]
+  },
+  "footer": "由 computer-use-smoke-reporting 工作流生成；截图仅含一次性冒烟数据，不含私有 Feishu 内容或凭证。"
+}

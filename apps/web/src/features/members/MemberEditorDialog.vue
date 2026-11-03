@@ -5,6 +5,7 @@ import type { AdminMember } from "@ztask/shared";
 import { adminApi } from "../../api/admin";
 import { useToast } from "../../components/ui/toast";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 成员添加/编辑浮窗（08 §5）：表单只维护 name/role/color；
@@ -53,7 +54,7 @@ const saveMutation = useMutation({
     emit("close");
   },
   onError: (cause: unknown) => {
-    toast.show(cause instanceof Error ? cause.message : "保存失败");
+    toast.show(describeApiError(cause, "保存失败"));
   },
 });
 

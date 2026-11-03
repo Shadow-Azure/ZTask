@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import { ApiError, type Importance, type ShareTaskMutation, type Subtask, type Task } from "@ztask/shared";
 import { isOverdue } from "../../components/task-card-model";
 import { shareApi } from "../../api/share";
+import { describeApiError } from "../../api/error-message";
 import { useToast } from "../../components/ui/toast";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
 
@@ -140,7 +141,7 @@ function handleWriteError(cause: unknown, operation: string): void {
     // 编辑期间小任务被管理员删除：关闭编辑器，避免对着已不存在的对象继续保存。
     subtaskEditor.value = null;
   }
-  toast.show(cause instanceof Error ? cause.message : "保存失败");
+  toast.show(describeApiError(cause, "保存失败"));
 }
 
 const progressMutation = useMutation({
@@ -250,6 +251,11 @@ function saveSubtask(): void {
   const draft = subtaskEditor.value;
   if (!draft || draft.description.trim() === "") {
     toast.show("小任务描述不能为空");
+    return;
+  }
+  const progress = draft.progress as unknown;
+  if (typeof progress !== "number" || !Number.isInteger(progress) || progress < 0 || progress > 100) {
+    toast.show("小任务进度必须是 0–100 的整数");
     return;
   }
   saveSubtaskMutation.mutate(draft);

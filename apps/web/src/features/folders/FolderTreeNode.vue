@@ -6,6 +6,7 @@ import type { FolderTreeNode } from "@ztask/shared";
 import { adminApi } from "../../api/admin";
 import { useToast } from "../../components/ui/toast";
 import FolderTreeCreateRow from "./FolderTreeCreateRow.vue";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 递归树节点（08 §2.2、原型 149–174/1094–1125）：
@@ -87,7 +88,7 @@ const renameMutation = useMutation({
     toast.show("已重命名任务夹");
   },
   onError: (cause: unknown) => {
-    toast.show(cause instanceof Error ? cause.message : "重命名失败");
+    toast.show(describeApiError(cause, "重命名失败"));
   },
 });
 

@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
 import type { AdminMember, FolderTreeNode, Task } from "@ztask/shared";
 import { adminTaskApi } from "../../api/admin";
+import { describeApiError } from "../../api/error-message";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
 import { useToast } from "../../components/ui/toast";
 import MemberMultiSelect from "./MemberMultiSelect.vue";
@@ -53,6 +54,7 @@ const importance = ref<"high" | "mid" | "low">("mid");
 const dueDate = ref("");
 const subtasks = ref<DraftSubtask[]>([]);
 const descriptionError = ref("");
+const subtaskError = ref("");
 const conflict = ref(false);
 /** 新建模式的「保存到」目标任务夹。 */
 const targetFolderId = ref("");
@@ -110,12 +112,40 @@ function removeSubtask(clientId: string): void {
   subtasks.value = subtasks.value.filter((sub) => sub.clientId !== clientId);
 }
 
+/** 用户修正小任务行后清除上一轮行内提示。 */
+watch(subtasks, () => {
+  if (subtaskError.value !== "") subtaskError.value = "";
+}, { deep: true });
+
+/** 小任务行级校验：描述、负责人、进度必须能在本地判断，避免把可预判错误发给服务端。 */
+function validateSubtasks(): boolean {
+  const blank = subtasks.value.findIndex((sub) => sub.description.trim() === "");
+  if (blank >= 0) {
+    subtaskError.value = `小任务第 ${blank + 1} 行描述不能为空`;
+    return false;
+  }
+  const missingOwner = subtasks.value.findIndex((sub) => sub.ownerId === "");
+  if (missingOwner >= 0) {
+    subtaskError.value = `小任务「${subtasks.value[missingOwner]!.description.trim()}」还没有负责人，请选择负责人`;
+    return false;
+  }
+  const badProgress = subtasks.value.findIndex(
+    (sub) => !Number.isInteger(sub.progress) || sub.progress < 0 || sub.progress > 100,
+  );
+  if (badProgress >= 0) {
+    subtaskError.value = `小任务「${subtasks.value[badProgress]!.description.trim()}」进度须为 0–100 的整数`;
+    return false;
+  }
+  return true;
+}
+
 watch(
   () => props.open,
   (open) => {
     if (!open) return;
     conflict.value = false;
     descriptionError.value = "";
+    subtaskError.value = "";
     subInput.value = "";
     if (props.task) {
       const task = props.task;
@@ -224,7 +254,7 @@ const saveMutation = useMutation({
       conflict.value = true;
       return;
     }
-    toast.show(cause instanceof Error ? cause.message : "保存失败");
+    toast.show(describeApiError(cause, "保存失败"));
   },
 });
 
@@ -234,6 +264,8 @@ function save(): void {
     return;
   }
   descriptionError.value = "";
+  subtaskError.value = "";
+  if (!validateSubtasks()) return;
   saveMutation.mutate();
 }
 
@@ -264,7 +296,7 @@ const deleteMutation = useMutation({
       conflict.value = true;
       return;
     }
-    toast.show(cause instanceof Error ? cause.message : "删除失败");
+    toast.show(describeApiError(cause, "删除失败"));
   },
 });
 
@@ -345,6 +377,7 @@ const confirmDelete = ref(false);
     <textarea v-model="detail" class="detail-input" placeholder="记录当前进展、阻塞点、下一步计划…" />
 
     <div class="sec-title sec-subtasks">小任务 <span class="rule">小任务用于拆解执行步骤，不可再向下嵌套</span></div>
+    <p v-if="subtaskError" class="field-error" role="alert">{{ subtaskError }}</p>
     <!-- D11（原型 469–477）：小任务行 = 色点 + 描述 + 负责人 + 滑杆 + % + 日期 + ✕。 -->
     <div class="sub-list">
       <div v-if="subtasks.length === 0" class="sub-item sub-empty-row">暂无小任务</div>

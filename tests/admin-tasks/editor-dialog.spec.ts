@@ -161,6 +161,41 @@ describe("TaskEditorDialog（08 §3 编辑器）", () => {
     wrapper.unmount();
   });
 
+  it("小任务缺少负责人：就地提示且不发送保存请求", async () => {
+    mockFetch({ status: 200, body: taskFixture() });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    const addInput = root.querySelector('[aria-label="新小任务描述"]') as HTMLInputElement;
+    await setInput(addInput, "没有负责人的小任务");
+    addInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await nextTick();
+    const ownerSelect = root.querySelector('[aria-label="小任务 2 负责人"]') as HTMLSelectElement;
+    ownerSelect.value = "";
+    ownerSelect.dispatchEvent(new Event("change", { bubbles: true }));
+    await nextTick();
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(root.textContent).toContain("还没有负责人");
+    expect(fetchCalls.find((call) => call.init?.method === "PUT")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("小任务描述为空：就地提示且不发送保存请求", async () => {
+    mockFetch({ status: 200, body: taskFixture() });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    const addInput = root.querySelector('[aria-label="新小任务描述"]') as HTMLInputElement;
+    await setInput(addInput, "  临时小任务");
+    addInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await nextTick();
+    await setInput(root.querySelector('[aria-label="小任务 2 描述"]') as HTMLInputElement, "");
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(root.textContent).toContain("第 2 行描述不能为空");
+    expect(fetchCalls.find((call) => call.init?.method === "PUT")).toBeUndefined();
+    wrapper.unmount();
+  });
+
   it("409：保留草稿、显示冲突提示与重试入口，不发新请求即不清空", async () => {
     mockFetch({ status: 409 });
     const wrapper = await mountEditor(taskFixture());

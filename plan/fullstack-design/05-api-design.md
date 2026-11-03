@@ -558,6 +558,10 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 | 429 | `SHARE_EXCHANGE_RATE_LIMITED` | 令牌交换过频 |
 | 500 | `INTERNAL_ERROR` | 已脱敏的内部异常 |
 
+错误消息必须可操作：400 定位到字段并给出中文修改建议（AJV 英文消息在边界翻译），500 不得只返回“内部错误”，而应按存储损坏、条目不存在、目录不可写、磁盘不足等分类说明原因和下一步动作；无法分类时返回请求编号并提示重试或反馈。服务端日志按同一 `requestId` 记录方法、路由模板、错误码与堆栈。响应绝不包含数据目录路径、token 或内部文件结构。
+
+小任务写入载荷的结构错误（`subtasks` 非对象、`create/update` 非数组、`deleteIds` 非字符串数组、条目为 `null`）属于 400 `INVALID_REQUEST`，必须先于聚合写入拒绝，不能因为遍历抛 `TypeError` 而落入 500。
+
 ## 8. 契约测试
 
 - 每个 route 验证 method、URL、params、body、成功 response schema 和额外字段拒绝。
