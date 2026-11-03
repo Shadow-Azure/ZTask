@@ -6,7 +6,7 @@
 kind: milestone
 id: m6
 title: 阶段 6：界面与原型逐屏对齐
-status: active
+status: done
 github:
   number: 7
   url: https://github.com/Shadow-Azure/ZTask/milestone/7
