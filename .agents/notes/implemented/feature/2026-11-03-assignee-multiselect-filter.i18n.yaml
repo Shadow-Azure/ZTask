@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/notes/implemented/feature/2026-11-03-assignee-multiselect-filter.md
-2026-11-03-assignee-multiselect-filter.md: 06a4623e33d2678d8e1d9f8cc3ad8a1d4a82342b
-2026-11-03-assignee-multiselect-filter.en.md: a1a2dfe5804206a72d6900cd2085b82f11a9bbc9
+2026-11-03-assignee-multiselect-filter.md: c585575be3ce470a74e6df9fea0a1db61478ec1d
+2026-11-03-assignee-multiselect-filter.en.md: 489aa1e6265882dd06cce1e9cdf3852aa8c4be94

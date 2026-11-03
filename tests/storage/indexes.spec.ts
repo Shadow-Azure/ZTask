@@ -74,6 +74,30 @@ describe("派生索引", () => {
     expect(indexes.activeOwnersByTask.get(TASK_2)).toEqual([MEMBER_X]);
   });
 
+  it("小任务父级与有效小任务 owner 索引从聚合重建", async () => {
+    const boot = await initStore({ dataDir, applicationVersion: "0.1.0" });
+    const tasks = createTaskStore({ dataDir, clock: () => new Date("2026-11-02T03:00:00.000Z") });
+    const subtaskId = "33333333-3333-4333-8333-333333333333";
+    await tasks.createAggregate({
+      taskId: TASK_1,
+      task: task(FOLDER_A, 40),
+      subtasks: [{
+        id: subtaskId, parentId: TASK_1, folderId: FOLDER_A, description: "子任务",
+        progress: 20, importance: "mid", dueDate: null,
+        createdAt: "2026-11-01T01:00:00.000Z", deletedAt: null,
+      }],
+      assignments: [
+        { taskId: TASK_1, memberId: MEMBER_X, kind: "owner" },
+        { taskId: subtaskId, memberId: MEMBER_Y, kind: "owner" },
+      ],
+      actor: actor(),
+    });
+
+    const indexes = await boot.rebuildIndexes();
+    expect(indexes.parentBySubtaskId.get(subtaskId)).toBe(TASK_1);
+    expect(indexes.activeSubtaskOwnersByTask.get(TASK_1)).toEqual([MEMBER_Y]);
+  });
+
   it("重启后重建的索引与首次一致", async () => {
     const boot1 = await initStore({ dataDir, applicationVersion: "0.1.0" });
     const tasks = createTaskStore({ dataDir, clock: () => new Date("2026-11-02T03:00:00.000Z") });

@@ -16,6 +16,10 @@ Status: implemented
 
 全栈设计把原型行为固化为管理员任务列表查询参数 `ownerIds`：服务端先按 folder、主任务描述搜索和重要度过滤，再判断主任务负责人；主任务命中返回整条任务，否则只返回负责人命中的小任务，没有命中的主任务整体丢弃。过滤在 cursor 分页前完成，返回的 `subtasks` 可能是子集，但 `owners/collaborators` 保持完整；前端用所选 `ownerIds` 与主任务 owners 是否相交判断是否显示筛选提示。成员只读事项跟踪没有成员目录，不提供该参数；看板 `memberIds` 保持只统计主任务 owner 的独立口径。设计文档同时补充派生索引 `parentBySubtaskId`、`activeSubtaskOwnersByTask`，并把 `ownerIds` 写入管理页 URL 与前端 query key。
 
+## 实现状态
+
+管理端 `GET /admin/tasks` 已接受 `ownerIds`（逗号分隔或重复参数）：非空时在 current 聚合上按主任务/子任务有效 owner 判断，主任务命中返回整条任务，仅子任务命中只组装命中小任务；未知/归档成员不命中，非法 UUID 返回 400，过滤先于 cursor 分页。前端 `AssigneeFilter` 复用活跃成员目录，选中的 UUID 以稳定顺序写入 URL `owners`，`TaskCard` 在子任务被子集裁剪时显示说明，打开编辑浮窗前会按 id 重新拉取完整聚合，避免把裁剪结果保存回去。派生索引同时补 `parentBySubtaskId` 与 `activeSubtaskOwnersByTask`，与列表过滤口径一致。
+
 ## Alternatives considered
 
 未采用“主任务负责人”和“子任务负责人”两个独立筛选器，因为同一批成员被拆成两个入口，用户需要理解两套语义才能查全；未采用只隐藏不匹配子任务、仍显示所有主任务的做法，因为主任务没有任何匹配子任务时会出现空卡片；未把搜索扩展到子任务描述，因为这会改变既有搜索语义并引入“仅子任务命中时是否裁剪”的额外规则，超出本次筛选需求；未直接实现到 `apps/web`，因为本次交付只要求原型与截图，真实实现需要服务端查询能力配合。

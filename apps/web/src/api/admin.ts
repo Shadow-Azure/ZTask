@@ -83,6 +83,7 @@ export interface TaskListParams {
   includeDescendants?: boolean;
   q?: string;
   importance?: string;
+  ownerIds?: string[];
   cursor?: string;
 }
 
@@ -101,6 +102,7 @@ export const adminTaskApi = {
       includeDescendants: params.includeDescendants,
       q: params.q,
       importance: params.importance,
+      ownerIds: params.ownerIds?.length ? params.ownerIds.join(",") : undefined,
       cursor: params.cursor,
     };
     return requestJson<{ items: Task[]; nextCursor: string | null }>(`${API_PREFIX}/admin/tasks`, { query });

@@ -10,6 +10,10 @@ status: in-progress
 scope:
   - plan/m1-01-ui-prototype/**
   - plan/fullstack-design/**
+  - apps/server/**
+  - apps/web/**
+  - packages/shared/**
+  - tests/**
   - scripts/prototype-tracker.spec.mjs
   - scripts/doc-budgets.manifest.json
   - .agents/flow/roadmap*
@@ -35,6 +39,7 @@ github:
 - 负责人筛选与重要度、关键词搜索同时生效，三者取交集。
 - 保留修改前后的原型对比截图，供界面评审。
 - 同步更新 `plan/fullstack-design` 中任务管理筛选、列表 API、派生索引与前端实现的设计契约。
+- 在管理端任务列表 API 与 Vue 界面实现负责人多选筛选，并按设计文档补服务端与前端测试。
 
 ## 实现内容
 
@@ -43,6 +48,7 @@ github:
 - `scripts/prototype-tracker.spec.mjs`：覆盖主任务命中、子任务命中、未命中、多选并集与筛选后卡片渲染。
 - `plan/m1-01-ui-prototype/review/`：新增修改前后对比与筛选交互截图。
 - `plan/fullstack-design/`：补负责人筛选的功能口径、`ownerIds` 查询参数、服务端子任务裁剪与前端交互契约。
+- `apps/server/`、`apps/web/`、`packages/shared/`：实现 `ownerIds` 查询、紧凑多选筛选组件、URL 深链与子任务裁剪提示；`tests/` 补 API 与视图规格。
 
 ## 实施步骤
 

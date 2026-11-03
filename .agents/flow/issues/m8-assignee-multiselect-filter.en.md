@@ -10,6 +10,10 @@ status: in-progress
 scope:
   - plan/m1-01-ui-prototype/**
   - plan/fullstack-design/**
+  - apps/server/**
+  - apps/web/**
+  - packages/shared/**
+  - tests/**
   - scripts/prototype-tracker.spec.mjs
   - scripts/doc-budgets.manifest.json
   - .agents/flow/roadmap*
@@ -35,6 +39,7 @@ The task management prototype currently offers only importance and keyword searc
 - Combine the assignee filter with importance and keyword search using an intersection.
 - Retain before/after prototype screenshots for UI review.
 - Update the task-management filter, list API, derived-index, and frontend implementation contracts in `plan/fullstack-design`.
+- Implement the assignee filter in the admin task-list API and Vue UI, with server and frontend tests per the design contract.
 
 ## Implementation
 
@@ -43,6 +48,7 @@ The task management prototype currently offers only importance and keyword searc
 - `scripts/prototype-tracker.spec.mjs`: cover main-owner match, subtask-only match, no match, multi-select union, and filtered card rendering.
 - `plan/m1-01-ui-prototype/review/`: add before/after comparisons and interaction screenshots.
 - `plan/fullstack-design/`: add the feature semantics, `ownerIds` query parameter, server-side subtask pruning, and frontend interaction contract.
+- `apps/server/`, `apps/web/`, `packages/shared/`: implement the `ownerIds` query, compact multi-select filter, URL deep link, and partial-subtask note; add API and view specs under `tests/`.
 
 ## Steps
 

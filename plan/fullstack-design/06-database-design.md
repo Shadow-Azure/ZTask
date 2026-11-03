@@ -295,7 +295,7 @@ activeSubtaskOwnersByTask（主任务 id → 小任务 owner 集合）
 
 这些索引只服务查询，不独立持久化为权威数据。folder 后代通过内存遍历取得，主任务列表和 owner 过滤直接查索引；current 看板不全量读取 JSONL。
 
-任务列表的 `ownerIds` 过滤先查 `activeOwnersByTask` 判断主任务负责人命中；未命中时再查 `activeSubtaskOwnersByTask` 与 `parentBySubtaskId` 得到命中小任务及其主任务，按主任务去重，只组装命中的子任务。归档成员不进入 active 索引，因此已归档 ID 不会命中；该流程不扫描 JSONL，分页在过滤后的主任务集合上执行。
+任务列表的 `ownerIds` 过滤按 current 聚合的 assignments 判断，口径与 `activeOwnersByTask`/`activeSubtaskOwnersByTask` 一致；命中主任务负责人时保留整条任务，否则只组装命中小任务，按主任务去重。归档成员不进入 active 索引，因此已归档 ID 不会命中；该流程不扫描 JSONL，分页在过滤后的主任务集合上执行。派生索引保留同口径，供后续列表规模扩大时直接复用。
 
 历史查询只流式读取范围内任务的 revisions。若未来日志很大，可增加分段和稀疏时间索引，但索引必须能从 JSONL 重建。
 

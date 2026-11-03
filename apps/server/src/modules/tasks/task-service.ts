@@ -27,7 +27,14 @@ export interface TaskServiceDeps {
 
 /** 任务服务：列表/创建/读取/更新/编辑器/软删除（05 §3.4–3.9、07 §5）。 */
 export interface TaskService {
-  list(input: { folderId: string; includeDescendants?: boolean; q?: string; importance?: string; cursor?: string }): Promise<{ items: Task[]; nextCursor: string | null }>;
+  list(input: {
+    folderId: string;
+    includeDescendants?: boolean;
+    q?: string;
+    importance?: string;
+    ownerIds?: readonly string[];
+    cursor?: string;
+  }): Promise<{ items: Task[]; nextCursor: string | null }>;
   create(input: Record<string, unknown>): Promise<Task | { task: Subtask; parent: Task }>;
   get(id: string): Promise<Task | { task: Subtask; parent: Task }>;
   patch(id: string, input: Record<string, unknown>): Promise<Task | { task: Subtask; parent: Task }>;
@@ -104,7 +111,11 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
     return map;
   }
 
-  function toTask(aggregate: TaskAggregate, members: Map<string, MemberFile>): Task {
+  function toTask(
+    aggregate: TaskAggregate,
+    members: Map<string, MemberFile>,
+    visibleSubtaskIds?: ReadonlySet<string>,
+  ): Task {
     const summary = (id: string): { id: string; name: string; role: string; color: string } => {
       const file = members.get(id);
       return { id, name: file?.name ?? "待分配", role: file?.role ?? "", color: file?.color ?? "#9aa2ae" };
@@ -124,7 +135,7 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       createdAt: aggregate.task.createdAt,
       updatedAt: aggregate.updatedAt,
       subtasks: aggregate.subtasks
-        .filter((sub) => sub.deletedAt === null)
+        .filter((sub) => sub.deletedAt === null && (visibleSubtaskIds === undefined || visibleSubtaskIds.has(sub.id)))
         .map((sub) => ({
           id: sub.id,
           parentId: aggregate.taskId,
@@ -239,12 +250,34 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       const folderId = assertUuid(input.folderId, "folderId");
       const scope = input.includeDescendants === false ? [folderId] : await descendantsOf(folderId);
       const members = await memberMap();
+      const ownerIds = [...new Set((input.ownerIds ?? []).map((id) => assertUuid(id, "ownerIds")))];
+      const ownerSet = new Set(ownerIds);
       let items: Task[] = [];
       for (const aggregate of await allAggregates()) {
         if (aggregate.task.deletedAt !== null) continue;
         if (!scope.includes(aggregate.task.folderId)) continue;
         if (input.importance && aggregate.task.importance !== input.importance) continue;
         if (input.q && !aggregate.task.description.includes(input.q)) continue;
+        if (ownerSet.size > 0) {
+          const matchesOwner = (taskId: string): boolean =>
+            aggregate.assignments.some(
+              (assignment) =>
+                assignment.taskId === taskId &&
+                assignment.kind === "owner" &&
+                ownerSet.has(assignment.memberId) &&
+                members.get(assignment.memberId)?.archivedAt === null,
+            );
+          if (!matchesOwner(aggregate.taskId)) {
+            const visibleSubtaskIds = new Set(
+              aggregate.subtasks
+                .filter((subtask) => subtask.deletedAt === null && matchesOwner(subtask.id))
+                .map((subtask) => subtask.id),
+            );
+            if (visibleSubtaskIds.size === 0) continue;
+            items.push(toTask(aggregate, members, visibleSubtaskIds));
+            continue;
+          }
+        }
         items.push(toTask(aggregate, members));
       }
       items = items.sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : a.id < b.id ? -1 : 1));

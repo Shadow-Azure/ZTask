@@ -89,7 +89,7 @@ getDescendantIds(folderId: string): Promise<string[]>
 
 ### 5.1.1 负责人筛选
 
-`ownerIds` 为空或缺省表示不筛选；非空时先按主任务 owner 命中判断：任一 ID 在 `activeOwnersByTask` 中，则保留整条任务及全部小任务。否则通过 `activeSubtaskOwnersByTask` 与 `parentBySubtaskId` 找到命中小任务及其父任务，只把命中的小任务组装进 DTO；父任务没有任何命中小任务时丢弃。主任务的 `owners/collaborators` 始终完整返回。过滤在分页前完成，分页计数按过滤后的主任务，而不是按小任务；未知或归档成员 ID 不命中也不报错，非法 UUID 在 query 校验阶段返回 400。该参数只由管理员任务列表使用，分享域不暴露。
+`ownerIds` 为空或缺省表示不筛选；非空时从 current 聚合的 assignments 判断，口径与 `activeOwnersByTask`/`activeSubtaskOwnersByTask` 一致：任一 ID 是主任务有效 owner，则保留整条任务及全部小任务；否则只把该 ID 负责的有效小任务组装进 DTO，父任务没有任何命中小任务时丢弃。主任务的 `owners/collaborators` 始终完整返回。过滤在分页前完成，分页计数按过滤后的主任务，而不是按小任务；未知或归档成员 ID 不命中也不报错，非法 UUID 在 query 校验阶段返回 400。该参数只由管理员任务列表使用，分享域不暴露。
 
 `getTaskForAdmin` 返回完整聚合；`getTaskForMember(id,memberId)` 先通过 assignmentsByMember 和当前 member 状态确定范围。主任务 owner/collaborator 可看完整聚合；仅分配给小任务的成员只看父任务上下文和被分配的小任务，不看主任务 detail 或其他小任务。个人页分组按主任务分配，subtask-only 只出现在只读事项跟踪。不能把全量结果交给前端再过滤。`patchTaskForAdmin(id,input)` 分别校验主任务字段与小任务字段，主任务返回 Task，小任务返回 Subtask+parent。
 

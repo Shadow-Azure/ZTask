@@ -154,6 +154,104 @@ describe("GET /admin/tasks（列表）", () => {
     expect(high.json().items[0]!.importance).toBe("high");
   });
 
+  it("ownerIds：主任务负责人命中保留整条任务，仅子任务负责人命中裁剪子任务", async () => {
+    const mainA = await createMain();
+    const subB = await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: mainA.id, description: "由林悦负责的小任务", ownerIds: [ownerB], importance: "mid" }),
+    });
+    expect(subB.statusCode).toBe(201);
+    const subBId = subB.json().task.id;
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/tasks",
+      payload: createPayload({ description: "林悦的主任务", ownerIds: [ownerB], importance: "mid" }),
+    });
+
+    const byOwnerA = (
+      await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=${ownerA}` })
+    ).json();
+    expect(byOwnerA.items).toHaveLength(1);
+    expect(byOwnerA.items[0].id).toBe(mainA.id);
+    expect(byOwnerA.items[0].subtasks).toHaveLength(1);
+    expect(byOwnerA.items[0].subtasks[0].id).toBe(subBId);
+    expect(byOwnerA.items[0].owners.map((owner: { id: string }) => owner.id)).toEqual([ownerA]);
+
+    const byOwnerB = (
+      await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=${ownerB}` })
+    ).json();
+    expect(byOwnerB.items).toHaveLength(2);
+    const partialA = byOwnerB.items.find((task: { id: string }) => task.id === mainA.id);
+    expect(partialA.subtasks).toHaveLength(1);
+    expect(partialA.subtasks[0].id).toBe(subBId);
+    // 主任务分配保持完整，不因裁剪子任务而丢失 owner/collaborator。
+    expect(partialA.owners.map((owner: { id: string }) => owner.id)).toEqual([ownerA]);
+    expect(partialA.collaborators.map((member: { id: string }) => member.id)).toEqual([ownerB]);
+  });
+
+  it("ownerIds 与 importance/q 取交集，并支持重复参数与逗号分隔", async () => {
+    const mainA = await createMain();
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/tasks",
+      payload: createPayload({ parentId: mainA.id, description: "由林悦负责且供搜索的小任务", ownerIds: [ownerB], importance: "mid" }),
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/v1/admin/tasks",
+      payload: createPayload({ description: "林悦的中等任务", ownerIds: [ownerB], importance: "mid" }),
+    });
+
+    const combined = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=${ownerB}&importance=high&q=${encodeURIComponent("任务树")}`,
+      })
+    ).json();
+    expect(combined.items).toHaveLength(1);
+    expect(combined.items[0].id).toBe(mainA.id);
+    expect(combined.items[0].subtasks).toHaveLength(1);
+
+    const repeated = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=${ownerA}&ownerIds=${ownerB}`,
+      })
+    ).json();
+    expect(repeated.items).toHaveLength(2);
+
+    const comma = (
+      await app.inject({
+        method: "GET",
+        url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=${ownerA},${ownerB}`,
+      })
+    ).json();
+    expect(comma.items).toHaveLength(2);
+
+    expect(
+      (await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=not-a-uuid` })).statusCode,
+    ).toBe(400);
+  });
+
+  it("ownerIds 对未知或已归档成员不命中，也不报错", async () => {
+    await createMain();
+    const unknown = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=22222222-2222-4222-8222-222222222222`,
+    });
+    expect(unknown.statusCode).toBe(200);
+    expect(unknown.json().items).toEqual([]);
+
+    await app.inject({ method: "DELETE", url: `/api/v1/admin/members/${ownerA}` });
+    const archived = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/tasks?folderId=${folderId}&ownerIds=${ownerA}`,
+    });
+    expect(archived.statusCode).toBe(200);
+    expect(archived.json().items).toEqual([]);
+  });
+
   it("搜索 q 与游标分页", async () => {
     await createMain();
     await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload({ description: "虚拟滚动优化" }) });
