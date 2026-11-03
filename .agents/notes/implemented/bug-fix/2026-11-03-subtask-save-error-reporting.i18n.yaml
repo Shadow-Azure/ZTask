@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/notes/implemented/bug-fix/2026-11-03-subtask-save-error-reporting.md
-2026-11-03-subtask-save-error-reporting.md: 8cd2bfdafae3d033c835b02793568512b73ba978
-2026-11-03-subtask-save-error-reporting.en.md: bf39ce9da028c8fda9c3351a507b5362ca061990
+2026-11-03-subtask-save-error-reporting.md: d0f9104173dfcf4827e4c67fff117ce263acb9b0
+2026-11-03-subtask-save-error-reporting.en.md: 0ecb2cc820035b10843d8f43a1701d2cb1ab4ad1

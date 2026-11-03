@@ -6,9 +6,13 @@ English | [中文](2026-11-03-subtask-save-error-reporting.md)
 
 ## Problem
 
+On Windows, `appendJsonlLine` wrote a revision and then called `FileHandle.sync()` on a read-only handle. `FlushFileBuffers` requires write access, so the read-only handle returned `EPERM`. Every task save appends a revision, so every save failed on Windows and the unified error handler flattened it into “内部错误”.
+
 When a subtask save failed, users saw only “内部错误”. The server collapsed every unexpected exception into the same `INTERNAL_ERROR / 内部错误`, recording neither a request id nor a stack, and distinguishing neither storage corruption, an unwritable directory, nor a code defect. Admin subtask payloads had no structural validation: when `subtasks.create` was an object or contained empty entries, the iteration threw `TypeError` and the handler flattened it into a 500. The frontend also sent predictable form problems (missing subtask owner, empty progress) to the server, so the message users saw did not match the real cause.
 
 ## Decision
+
+Revision append now writes the complete line and calls `fsync` through an append-mode (`a`) handle instead of reopening the file read-only after writing. Windows cannot open a directory handle for `fsync`, so `fsyncDirQuietly` skips it on Windows while the file handle `sync` still persists the content. CI adds a `windows-storage` gate that builds and runs the JSONL/atomic-write tests on `windows-latest` to prevent the read-only-handle regression.
 
 The server validates subtask payload structure at task write entry points: `subtasks` must be an object, `create/update` must be arrays, `deleteIds` must be a string array, and every entry must be an object; invalid shapes return a 400 naming the field and reason and never reach the aggregate write. The unified error handler logs the request id, method, and stack, and returns a safe Chinese cause by error type: storage corruption, missing entry, unwritable directory, and low disk space each state the next action, while other cases return the request id with retry/feedback guidance. The frontend adds a unified error translator that turns error codes, AJV English validation messages, and the request id into readable text; the admin editor and subtask forms validate description, owner, and progress in place before submitting.
 
@@ -18,4 +22,4 @@ Returning the raw exception message to users was rejected: it can contain data-d
 
 ## Consequences
 
-Users can tell “invalid input”, “stale member”, “data corruption”, and “directory/disk problem” apart and get a searchable request id; maintainers can locate a stack in server logs by that id. The cost is maintaining the error-type-to-message map and updating it when a storage code is added. Old invalid clients change from 500 to 400, so external scripts relying on the old status need adjustment. The request id is diagnostic only and carries no data; responses still expose no file paths.
+Saves work on Windows again and Linux/macOS durability semantics stay unchanged; the new Windows job adds CI time. Directory `fsync` is skipped on Windows, so metadata durability relies on platform semantics, while crash windows remain covered by revision-tail recovery. Users can tell “invalid input”, “stale member”, “data corruption”, and “directory/disk problem” apart and get a searchable request id; maintainers can locate a stack in server logs by that id. The cost is maintaining the error-type-to-message map and updating it when a storage code is added. Old invalid clients change from 500 to 400, so external scripts relying on the old status need adjustment. The request id is diagnostic only and carries no data; responses still expose no file paths.

@@ -1,4 +1,4 @@
-import { copyFile, readFile, truncate } from "node:fs/promises";
+import { copyFile, open, readFile, truncate } from "node:fs/promises";
 import { createReadStream } from "node:fs";
 import { createInterface } from "node:readline";
 import { checksumOf } from "./checksum.js";
@@ -7,17 +7,20 @@ import { StorageCorruptionError } from "./errors.js";
 /**
  * 追加一条记录到 JSONL：整行一次写入 + 换行 + fsync（06 §7/§8.2，append+fsync 是逻辑提交点）。
  * 行内容为规范化 JSON，checksum 对剔除 checksum 字段后的记录计算后并入行内。
+ *
+ * fsync 必须使用带写权限的句柄：Windows 的 `FlushFileBuffers` 作用在只读句柄上
+ * 会返回 `EPERM`，会让每次 revision 追加都失败并表现为保存 500。因此这里用追加
+ * 模式（`a`）打开同一个文件完成写入与 sync，而不是写入后再用 `r` 重新打开。
  * @param filePath JSONL 文件路径（不存在则创建）。
  * @param record 不含 checksum 的记录对象。
  * @returns 本次写入记录的 checksum（供 current.revisionTip 与行内值保持一致）。
  */
 export async function appendJsonlLine(filePath: string, record: Record<string, unknown>): Promise<string> {
-  const { appendFile, open } = await import("node:fs/promises");
   const checksum = checksumOf(record);
   const withChecksum = { ...record, checksum };
-  await appendFile(filePath, `${JSON.stringify(withChecksum)}\n`, "utf8");
-  const handle = await open(filePath, "r");
+  const handle = await open(filePath, "a");
   try {
+    await handle.appendFile(`${JSON.stringify(withChecksum)}\n`, "utf8");
     await handle.sync();
   } finally {
     await handle.close();

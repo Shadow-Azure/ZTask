@@ -257,7 +257,7 @@ after  = recordedAt < end   的最后一条；同刻以 taskVersion 大者为准
   → 支持的平台上 fsync 父目录
 ```
 
-临时文件继承/设置 0600 权限。不能直接 writeFile 覆盖 current。Windows/POSIX 的 rename 差异由原子写封装统一处理并测试。
+临时文件继承/设置 0600 权限。不能直接 writeFile 覆盖 current。Windows/POSIX 的 rename 差异由原子写封装统一处理并测试。文件 `fsync` 必须使用带写权限的句柄；Windows 上只读句柄的 `FlushFileBuffers` 返回 `EPERM`，目录也不支持 `fsync`（跳过）。
 
 ### 8.2 任务提交顺序
 

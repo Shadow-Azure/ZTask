@@ -14,6 +14,7 @@ scope:
   - tests/**
   - .agents/flow/**
   - .agents/notes/**
+  - .github/**
   - plan/fullstack-design/**
   - reports/**
   - scripts/doc-budgets.manifest.json

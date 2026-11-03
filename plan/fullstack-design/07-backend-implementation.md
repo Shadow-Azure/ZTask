@@ -25,7 +25,7 @@
 
 ### 2.2 JsonlWriter/Reader
 
-- append 一次写入完整记录字节和换行，并 flush/fsync。
+- append 一次写入完整记录字节和换行，并 flush/fsync；使用追加写句柄（Windows 上只读句柄 `fsync` 会 `EPERM`）。
 - reader 流式逐行解析，支持按时间范围扫描，避免把全部 revision 读入内存。
 - checksum 校验用于损坏检测；尾部恢复先复制原文件到诊断区。
 - current.revisionTip 与尾部一致时启动走快路径；完整校验用于备份、恢复和显式 doctor 命令。
