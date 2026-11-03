@@ -6,7 +6,7 @@
 kind: issue
 milestone: m8
 priority: P1
-status: in-progress
+status: done
 scope:
   - plan/m1-01-ui-prototype/**
   - plan/fullstack-design/**
@@ -61,7 +61,7 @@ github:
 ## 依赖与交付边界
 
 - 依赖：m1 原型定稿与 m1 原型细化。
-- 交付边界：只改静态原型、规格测试与截图；不实现 `apps/web` 真实页面与服务端筛选。
+- 交付边界：覆盖静态原型、全栈设计、规格测试与截图，并按设计契约落地 `apps/web` 真实页面与服务端筛选。
 
 ## 独立验证
 
@@ -84,5 +84,4 @@ pnpm verify:flow
 
 ## 非目标
 
-- 不修改 `apps/web` 或其他真实实现。
 - 不改变任务树计数、情况看板统计与成员视图。

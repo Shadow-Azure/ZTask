@@ -6,7 +6,7 @@
 kind: milestone
 id: m8
 title: 阶段 8：任务管理原型筛选补充
-status: active
+status: done
 github:
   number: 8
   url: https://github.com/Shadow-Azure/ZTask/milestone/8
@@ -16,7 +16,7 @@ github:
 
 ## 交付边界
 
-- 只修改静态原型、全栈设计文档、规格测试与评审截图，不改 `apps/web` 实际实现、服务端接口与存储。
+- 改动覆盖静态原型、全栈设计文档、规格测试与评审截图，并按设计契约落地 `apps/web`、服务端接口与派生索引。
 - 筛选只作用于当前任务夹内的主任务与子任务，不改变任务树计数与情况看板统计口径。
 
 ## 阶段验收
