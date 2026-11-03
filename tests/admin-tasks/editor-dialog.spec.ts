@@ -56,7 +56,7 @@ afterEach(() => {
 
 async function mountEditor(task: Task | null) {
   const wrapper = mount(TaskEditorDialog, {
-    props: { open: true, folderId: "f-1", task, members: MEMBERS },
+    props: { open: true, folderId: "f-1", task, members: MEMBERS, folders: [] },
     global: { plugins: [[VueQueryPlugin, { queryClient: createAppQueryClient() }]] },
     attachTo: document.body,
   });
@@ -131,6 +131,36 @@ describe("TaskEditorDialog（08 §3 编辑器）", () => {
     wrapper.unmount();
   });
 
+  it("新建模式：小任务草稿进入 POST create 意图，而不是被静默丢弃", async () => {
+    mockFetch({ status: 201, body: taskFixture() });
+    const wrapper = await mountEditor(null);
+    const root = dialog();
+    await setInput(root.querySelector(".desc-input") as HTMLInputElement, "新主任务");
+    (root.querySelector('[aria-label="负责人"]') as HTMLElement).click();
+    await nextTick();
+    const ownerOption = [...document.body.querySelectorAll('[role="option"]')].find((el) => el.textContent?.includes("陈晨")) as HTMLElement;
+    ownerOption.click();
+    (root.querySelector(".desc-input") as HTMLElement).click();
+    await nextTick();
+    clickByText(root, "高");
+    const addInput = root.querySelector('[aria-label="新小任务描述"]') as HTMLInputElement;
+    await setInput(addInput, "首版小任务");
+    addInput.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    await nextTick();
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    const post = fetchCalls.find((call) => call.init?.method === "POST");
+    expect(post?.url).toContain("/admin/tasks");
+    const body = JSON.parse(String(post?.init?.body));
+    expect(body.description).toBe("新主任务");
+    expect(body.subtasks.create).toHaveLength(1);
+    expect(body.subtasks.create[0].description).toBe("首版小任务");
+    expect(body.subtasks.create[0].ownerId).toBe("m-1");
+    expect(body.subtasks.create[0].clientId).toMatch(/^client-/);
+    wrapper.unmount();
+  });
+
   it("409：保留草稿、显示冲突提示与重试入口，不发新请求即不清空", async () => {
     mockFetch({ status: 409 });
     const wrapper = await mountEditor(taskFixture());
@@ -148,7 +178,7 @@ describe("TaskEditorDialog（08 §3 编辑器）", () => {
   });
 
   it("删除：确认后发送 DELETE", async () => {
-    mockFetch({ status: 204 });
+    mockFetch({ status: 200, body: {} });
     const wrapper = await mountEditor(taskFixture());
     const root = dialog();
     clickByText(root, "删除任务");
@@ -160,6 +190,11 @@ describe("TaskEditorDialog（08 §3 编辑器）", () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
     const removed = fetchCalls.find((call) => call.init?.method === "DELETE");
     expect(removed?.url).toContain("/admin/tasks/t-1?version=3");
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(wrapper.emitted("close")).toBeTruthy();
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.body.textContent).not.toContain("删除任务将同时软删除");
+    expect(document.body.textContent).not.toContain("确认删除");
     wrapper.unmount();
   });
 });

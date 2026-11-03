@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZTask 全功能冒烟回归 v2</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --bg:#f4f7fb;--card:#fff;--ink:#16202f;--ink2:#55637a;--ink3:#7b869b;
+      --line:#dde4ee;--accent:#2563eb;--accent-wash:#e8efff;--good:#157347;
+      --good-wash:#e7f6ee;--warn:#b45309;--warn-wash:#fff2dd;--bad:#c9282e;
+      --bad-wash:#ffeded;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 8% 0,#dbe9ff 0,transparent 32rem),radial-gradient(circle at 92% 4%,#e7f1ff 0,transparent 28rem),var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}
+    main{max-width:1220px;margin:auto;padding:36px 28px 72px}
+    .hero{padding:30px 34px;border:1px solid #dbe3ee;border-radius:24px;background:rgba(255,255,255,.92);box-shadow:0 18px 44px #17202f12}
+    .eyebrow{margin:0;color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    h1{margin:10px 0 8px;font-size:clamp(28px,4vw,44px);letter-spacing:-.04em}
+    .summary{margin:0;max-width:850px;color:var(--ink2);font-size:15px}
+    .meta{display:block;margin-top:8px;color:var(--ink3);font-size:12px}
+    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:26px}
+    .metric{padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fafbfd}
+    .metric b{display:block;font-size:30px;letter-spacing:-.04em}
+    .metric span{display:block;margin-top:2px;color:var(--ink3);font-size:12px}
+    section{margin-top:28px}
+    .head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:0 4px 14px}
+    h2{margin:0;font-size:21px;letter-spacing:-.03em}
+    .head small{color:var(--ink3);white-space:nowrap}
+    .card{padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:0}
+    .fact{padding:13px 16px;border:1px solid #eceff5;border-radius:12px;background:#fafbfd}
+    .fact dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .fact dd{margin:3px 0 0;overflow-wrap:anywhere}
+    code{font-family:var(--mono);font-size:.9em;color:#29456d;overflow-wrap:anywhere}
+    .status{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;background:#eef1f6;color:var(--ink2)}
+    .status.pass,.status.fixed{background:var(--good-wash);color:var(--good)}
+    .status.warn,.status.manual{background:var(--warn-wash);color:var(--warn)}
+    .status.fail{background:var(--bad-wash);color:var(--bad)}
+    .tableWrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    table{width:100%;min-width:920px;border-collapse:collapse}
+    th,td{padding:12px 15px;border-bottom:1px solid #edf0f5;text-align:left;vertical-align:top}
+    th{position:sticky;top:0;background:#fafbfe;color:var(--ink2);font-size:12px}
+    tr:last-child td{border-bottom:0}
+    tr:hover{background:#fcfdff}
+    .num{color:var(--ink3);font-family:var(--mono);font-size:12px}
+    .evidence{color:var(--ink3);font-size:12px}
+    .issues{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+    .issueCard{padding:18px 21px;border:1px solid #ffcece;border-left:5px solid var(--bad);border-radius:16px;background:#fffbfb}
+    .issueCard h3{margin:0;color:#b91c1c;font-size:16px}
+    .issueCard p{margin:8px 0;color:var(--ink2)}
+    .issueCard dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .issueCard dd{margin:2px 0 0;color:var(--ink2)}
+    .tag{float:right;padding:3px 8px;border-radius:999px;background:#fee4e4;color:#9a1b21;font-size:11px;font-weight:800}
+    .fixed{display:inline-flex;gap:5px;align-items:center;margin-top:11px;padding:6px 10px;border-radius:999px;background:var(--good-wash);color:var(--good);font-size:12px;font-weight:800}
+    .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+    figure{margin:0;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 6px 22px #17202f08}
+    figure.wide{grid-column:1/-1}
+    img{display:block;width:100%;max-height:500px;object-fit:contain;background:#eef2f7}
+    figcaption{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-top:1px solid #edf0f5;background:#fafbfd;color:var(--ink2);font-size:12.5px}
+    figcaption b{flex:none;color:var(--ink)}
+    .issue-shot{border-color:#ffcece}
+    .conclusion{border:1px solid #c8e5d2;border-radius:20px;background:linear-gradient(135deg,#f2fbf6,white 54%)}
+    .conclusion.warn{border-color:#f1d9a4;background:linear-gradient(135deg,#fff8e8,white 54%)}
+    .conclusion.fail{border-color:#ffc9c9;background:linear-gradient(135deg,#fff5f5,white 54%)}
+    .conclusion ul{margin:12px 0 0;padding-left:20px;color:#344155}
+    .conclusion li+li{margin-top:7px}
+    .empty{padding:20px;text-align:center;color:var(--ink3);background:#fafbfd;border:1px dashed var(--line);border-radius:12px}
+    .foot{margin-top:24px;color:var(--ink3);font-size:12px;text-align:center}
+    @media(max-width:860px){main{padding:22px 14px 52px}.hero{padding:23px}.shots{grid-template-columns:1fr}.head{align-items:flex-start;flex-direction:column;gap:4px}}
+    @media print{body{background:white}main{max-width:none;padding:0}.card,.issueCard,figure,.tableWrap{box-shadow:none;break-inside:avoid}img{max-height:420px}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Computer Use Smoke</p>
+    <h1>ZTask 全功能冒烟回归 v2</h1>
+    <p class="summary">在隔离数据目录重新执行全功能 Chrome GUI 冒烟。27 个设计场景全部通过；首轮已修复的 3 个 P1 问题在当前构建中回归通过，未发现新的产品缺陷。备份、恢复、doctor 与重启持久化也在本轮完成。</p>
+    <span class="meta">2026-11-03 · Chrome + loopback/LAN · 隔离冒烟数据</span>
+    <div class="metrics"><div class="metric"><b>27</b><span>冒烟场景</span></div><div class="metric"><b>24</b><span>直接通过</span></div><div class="metric"><b>3</b><span>修复后通过</span></div><div class="metric"><b>21</b><span>GUI 证据</span></div><div class="metric"><b>401</b><span>自动化断言</span></div></div>
+  </header>
+
+  <section>
+    <div class="head"><h2>Environment and Artifact</h2><small>2026-11-03 · Chrome + loopback/LAN · 隔离冒烟数据</small></div>
+    <article class="card"><dl class="facts"><div class="fact"><dt>分支</dt><dd>codex/full-smoke-regression</dd></div><div class="fact"><dt>构建</dt><dd>95bd3f2 fix: preserve subtasks and smoke UI lifecycle (#16)</dd></div><div class="fact"><dt>服务</dt><dd>ztask serve · loopback 18131 · LAN 分享开启</dd></div><div class="fact"><dt>数据</dt><dd>一次性隔离目录；恢复使用独立新目录</dd></div><div class="fact"><dt>测试数据</dt><dd>2 个任务夹、3 个主任务、3 个成员、1 个软删除任务</dd></div></dl></article>
+  </section>
+
+  <section>
+    <div class="head"><h2>Scenario Matrix</h2><small>24 pass · 3 fixed</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>#</th><th>场景</th><th>结果</th><th>验证结论</th><th>证据</th></tr></thead><tbody><tr><td class="num">01</td><td>服务启动与空态</td><td><span class="status pass">PASS</span></td><td>隔离数据目录首次启动只开放 loopback；页面自动创建文件结构并显示任务空态。</td><td class="evidence">screenshots/01-initial-empty.png</td></tr><tr><td class="num">02</td><td>任务夹创建与任意嵌套</td><td><span class="status pass">PASS</span></td><td>创建父夹“产品”并在其下创建子夹“需求”；树层级、选择和后代计数正确。</td><td class="evidence">screenshots/02-child-folder.png</td></tr><tr><td class="num">03</td><td>任务夹展开/折叠与后代计数</td><td><span class="status pass">PASS</span></td><td>子夹折叠后任务隐藏，展开后恢复；父夹统计包含子夹内全部任务。</td><td class="evidence">screenshots/02-child-folder.png</td></tr><tr><td class="num">04</td><td>主任务创建与字段</td><td><span class="status pass">PASS</span></td><td>描述、负责人/协作人、重要度、预计日期、进度、详情、任务夹均可创建并回显。</td><td class="evidence">screenshots/05-create-subtask.png</td></tr><tr><td class="num">05</td><td>新建浮窗小任务</td><td><span class="status fixed">FAIL → FIXED</span></td><td>首轮小任务草稿被 POST 丢弃；当前构建创建后主任务与小任务同时保存并显示。</td><td class="evidence">screenshots/05-create-subtask.png</td></tr><tr><td class="num">06</td><td>主任务详情编辑</td><td><span class="status pass">PASS</span></td><td>编辑进度、详情、成员与业务字段后，任务卡、任务树和详情浮窗同步。</td><td class="evidence">screenshots/05-create-subtask.png<br>screenshots/06-filter-search.png</td></tr><tr><td class="num">07</td><td>小任务编辑与层级约束</td><td><span class="status pass">PASS</span></td><td>可为已有主任务新增一层小任务并更新成员视图；服务端阻止第三层任务。</td><td class="evidence">screenshots/05-create-subtask.png<br>screenshots/11-member-authoring.png</td></tr><tr><td class="num">08</td><td>删除确认与软删除</td><td><span class="status fixed">FAIL → FIXED</span></td><td>首轮确认弹层残留；当前构建删除成功后弹层关闭，普通树/看板隐藏但历史保留。</td><td class="evidence">screenshots/18-delete-dialog-fixed.png</td></tr><tr><td class="num">09</td><td>重要度筛选与描述搜索</td><td><span class="status pass">PASS</span></td><td>高/中/低筛选与精确搜索只返回匹配任务；列表计数与数据一致。</td><td class="evidence">screenshots/06-filter-search.png</td></tr><tr><td class="num">10</td><td>看板统计</td><td><span class="status pass">PASS</span></td><td>已完成、&gt;50%、≤50% 三类统计分别为 1、2、0；重要度拆分与任务数据一致。</td><td class="evidence">screenshots/07-dashboard.png</td></tr><tr><td class="num">11</td><td>看板成员多选筛选</td><td><span class="status pass">PASS</span></td><td>选择成员后统计切换为其负责/协作相关范围；不选时恢复整体口径。</td><td class="evidence">screenshots/08-dashboard-member-filter.png</td></tr><tr><td class="num">12</td><td>预计完成时间分布</td><td><span class="status pass">PASS</span></td><td>点击统计卡展开堆叠柱状图；过期/今天/未来与已完成任务按日期与重要度分桶。</td><td class="evidence">screenshots/09-due-distribution.png</td></tr><tr><td class="num">13</td><td>默认历史查询</td><td><span class="status pass">PASS</span></td><td>昨天 00:00 至当前时间返回创建、更新和删除变化，actor 与进度快照正确。</td><td class="evidence">screenshots/10-history-custom.png</td></tr><tr><td class="num">14</td><td>自定义历史区间边界</td><td><span class="status pass">PASS</span></td><td>起止日期解析为 [起点 00:00, 终点次日 00:00)，边界外修订不参与。</td><td class="evidence">screenshots/10-history-custom.png</td></tr><tr><td class="num">15</td><td>历史展开/折叠</td><td><span class="status pass">PASS</span></td><td>全部折叠保留任务行并隐藏详情 diff；全部展开恢复前后值与进展详情。</td><td class="evidence">screenshots/10-history-custom.png</td></tr><tr><td class="num">16</td><td>任务树宽度调节</td><td><span class="status pass">PASS</span></td><td>拖动 splitter 后布局保持可用，AX 值随宽度变化；无独立截图，原因：以 accessibility 数值验证。</td><td class="evidence">无截图 · AX splitter 值验证</td></tr><tr><td class="num">17</td><td>成员添加、编辑与计数</td><td><span class="status pass">PASS</span></td><td>新增成员后姓名、颜色、角色和负责/协作计数更新；编辑保存即时回显。</td><td class="evidence">screenshots/03-members-added.png<br>screenshots/16-member-archived.png</td></tr><tr><td class="num">18</td><td>局域网开启与状态</td><td><span class="status pass">PASS</span></td><td>管理端动态启动指定 LAN 监听；成员链接使用可达 shareBaseUrl，状态显示分享中。</td><td class="evidence">screenshots/04-lan-enabled.png<br>screenshots/17-lan-reopen.png</td></tr><tr><td class="num">19</td><td>成员链接生成、重置与吊销</td><td><span class="status pass">PASS</span></td><td>新链接可进入成员页；重置和吊销后旧链接与会话统一进入失效页。报告中不展示 token。</td><td class="evidence">screenshots/15-revoked-session.png</td></tr><tr><td class="num">20</td><td>成员归档</td><td><span class="status pass">PASS</span></td><td>归档立即吊销链接与会话；已有任务分配显示待分配语义，任务数据不删除。</td><td class="evidence">screenshots/16-member-archived.png</td></tr><tr><td class="num">21</td><td>成员负责人写权限</td><td><span class="status pass">PASS</span></td><td>owner 可更新自己负责主任务的进度、完整详情和一层小任务；其他字段无编辑入口。</td><td class="evidence">screenshots/11-member-authoring.png</td></tr><tr><td class="num">22</td><td>成员协作人只读</td><td><span class="status pass">PASS</span></td><td>collaborator 可见相关任务但进度、详情、小任务和管理控件只读；写请求被服务端拒绝。</td><td class="evidence">screenshots/14-member-collaborator.png</td></tr><tr><td class="num">23</td><td>成员只读事项跟踪</td><td><span class="status pass">PASS</span></td><td>成员 tracker 过滤为相关任务，树计数按可见范围；所有编辑入口不渲染或禁用。</td><td class="evidence">screenshots/12-member-readonly-tracker.png<br>screenshots/13-member-readonly-detail.png</td></tr><tr><td class="num">24</td><td>LAN Admin API 边界</td><td><span class="status pass">PASS</span></td><td>成员访问管理员路由/API 返回拒绝；猜测他人任务 ID 返回 404 且不确认存在。无截图，原因：以 API 响应验证。</td><td class="evidence">无截图 · API 403/404 响应验证</td></tr><tr><td class="num">25</td><td>关闭后重开 LAN</td><td><span class="status fixed">FAIL → FIXED</span></td><td>首轮关闭后默认端口残留；当前构建重开使用实际 loopback 端口，LAN 重启可达。</td><td class="evidence">screenshots/17-lan-reopen.png</td></tr><tr><td class="num">26</td><td>在线备份</td><td><span class="status pass">PASS</span></td><td>运行中服务完成写入暂停与快照校验；备份 20 个文件、20210 字节，validation 通过。无截图，原因：以 CLI 输出验证。</td><td class="evidence">screenshots/19-persistence-before-restart.png<br>无截图 · CLI 备份报告验证</td></tr><tr><td class="num">27</td><td>离线恢复、doctor 与重启持久化</td><td><span class="status pass">PASS</span></td><td>恢复到空新目录后 doctor 健康；重启保留任务树、成员、LAN 状态与被吊销链接语义。</td><td class="evidence">screenshots/20-restored-admin.png<br>screenshots/21-restored-lan-member.png</td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Issues and Observations</h2><small>P1 新建任务时小任务被静默丢弃<br>P1 删除成功后确认弹层残留<br>P1 关闭后重开 LAN 使用错误端口</small></div>
+    <div class="issues"><article class="issueCard"><span class="tag">P1</span><h3>新建任务时小任务被静默丢弃</h3><dl><div><dt>首轮现象</dt><dd>新建浮窗可录入小任务，但 POST body 不含小任务，保存后显示 0 个。</dd></div><div><dt>期望</dt><dd>主任务和小任务草稿在创建时一起持久化。</dd></div><div><dt>根因</dt><dd>create mutation 只发送主任务字段；POST 服务端没有创建小任务意图。</dd></div></dl><div class="fixed">Fixed · API + 组件看护 + v2 回归通过</div></article><article class="issueCard"><span class="tag">P1</span><h3>删除成功后确认弹层残留</h3><dl><div><dt>首轮现象</dt><dd>任务已从树和列表消失，但确认层仍覆盖页面。</dd></div><div><dt>期望</dt><dd>删除成功后确认层与编辑器一起关闭。</dd></div><div><dt>根因</dt><dd>delete mutation success 只关闭外层编辑意图，未复位内层确认状态。</dd></div></dl><div class="fixed">Fixed · 组件看护 + v2 回归通过</div></article><article class="issueCard"><span class="tag">P1</span><h3>关闭后重开 LAN 使用错误端口</h3><dl><div><dt>首轮现象</dt><dd>服务实际运行 18131，重开 LAN 仍默认提交旧端口，成员基址不可达。</dd></div><div><dt>期望</dt><dd>重新开启时默认端口应回到 loopback 实际端口。</dd></div><div><dt>根因</dt><dd>关闭操作未同步 LAN 表单端口，旧 shareBaseUrl 残留。</dd></div></dl><div class="fixed">Fixed · GUI/组件看护 + v2 回归通过</div></article></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Evidence</h2><small>21 screenshots</small></div>
+    <div class="shots"><figure class="wide"><img loading="lazy" src="screenshots/01-initial-empty.png" alt="首次启动空态"><figcaption><b>01 · 启动</b><span>隔离数据首次启动显示任务空态。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/02-child-folder.png" alt="父任务夹与子任务夹"><figcaption><b>02 · 任务夹</b><span>任务夹嵌套、展开状态与后代计数。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/03-members-added.png" alt="成员管理列表"><figcaption><b>03 · 成员</b><span>新增成员后的列表、颜色与协作计数。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/04-lan-enabled.png" alt="局域网分享开启"><figcaption><b>04 · LAN</b><span>管理端显示 LAN 分享中并生成成员入口。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/05-create-subtask.png" alt="主任务和小任务创建"><figcaption><b>05 · 创建</b><span>创建意图中的主任务字段与一层小任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/06-filter-search.png" alt="筛选与搜索"><figcaption><b>06 · 筛选</b><span>重要度筛选与描述搜索结果。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/07-dashboard.png" alt="情况看板"><figcaption><b>07 · 看板</b><span>整体进度统计与重要度分布。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/08-dashboard-member-filter.png" alt="看板成员筛选"><figcaption><b>08 · 成员筛选</b><span>按成员相关范围切换统计。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/09-due-distribution.png" alt="预计完成时间分布"><figcaption><b>09 · 分布</b><span>统计卡展开后的日期与重要度堆叠柱状图。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/10-history-custom.png" alt="历史 diff"><figcaption><b>10 · 历史</b><span>自定义区间的创建、更新和删除 diff。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/11-member-authoring.png" alt="成员负责人编辑"><figcaption><b>11 · Owner</b><span>负责人可更新进度、详情和小任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/12-member-readonly-tracker.png" alt="成员只读事项跟踪"><figcaption><b>12 · Tracker</b><span>成员事项跟踪仅显示相关任务且只读。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/13-member-readonly-detail.png" alt="成员只读详情"><figcaption><b>13 · 只读详情</b><span>只读浮窗没有保存或进度编辑入口。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/14-member-collaborator.png" alt="协作人只读视图"><figcaption><b>14 · Collaborator</b><span>协作人可见但不可写相关任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/15-revoked-session.png" alt="链接吊销后失效页"><figcaption><b>15 · 吊销</b><span>旧会话统一进入链接失效页，不含 token。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/16-member-archived.png" alt="成员归档"><figcaption><b>16 · 归档</b><span>归档成员不再出现在活跃成员列表。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/17-lan-reopen.png" alt="LAN 关闭后重开"><figcaption><b>17 · LAN 回归</b><span>重开使用实际端口且成员页面可达。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/18-delete-dialog-fixed.png" alt="删除弹层关闭"><figcaption><b>18 · 删除回归</b><span>删除成功后确认弹层不再残留。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/19-persistence-before-restart.png" alt="备份前任务数据"><figcaption><b>19 · 备份前</b><span>在线备份前的任务树与进度基线。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/20-restored-admin.png" alt="恢复后管理端"><figcaption><b>20 · 恢复</b><span>新目录重启后任务、成员和 LAN 状态保留。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/21-restored-lan-member.png" alt="恢复后失效成员链接"><figcaption><b>21 · 会话语义</b><span>已吊销链接在恢复数据重启后仍正确失效。</span></figcaption></figure></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Automated Coverage Assessment</h2><small>6 areas reviewed</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>领域</th><th>自动化看护</th><th>结论</th><th>建议</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Conclusion</h2><small>修复后全功能通过</small></div>
+    <article class="card conclusion pass"><p><strong>v2 冒烟覆盖 02-features 的管理端、成员端、链接网络、看板历史与恢复能力；27 个场景全部通过，未新增产品缺陷。</strong></p><ul><li>首轮 3 个 P1 问题均有失败证据、修复代码、自动化看护和当前 GUI 回归证据。</li><li>在线备份 20 个文件校验通过；恢复到新目录后 doctor 健康并成功重启持久化。</li><li>完整 pnpm test 需在允许监听端口的门禁环境执行，沙箱内端口监听会导致既有套件误报 EPERM。</li></ul></article>
+  </section>
+
+  <p class="foot">Generated by Computer Use smoke reporting workflow · screenshots contain test data only</p>
+</main>
+</body>
+</html>

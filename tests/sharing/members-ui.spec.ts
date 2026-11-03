@@ -148,7 +148,9 @@ async function handleRequest(path: string, init?: RequestInit): Promise<Response
     return jsonResponse(200, JSON.parse(JSON.stringify(net)));
   }
   if (path === `${API}/network/share-listener` && method === "DELETE") {
+    const loopbackUrl = net.loopbackUrl;
     net = networkWith();
+    net.loopbackUrl = loopbackUrl;
     return new Response(null, { status: 204 });
   }
   if (path === `${API}/members` && method === "GET") {
@@ -577,6 +579,28 @@ describe("NetworkSharePanel（08 §5、05 §4.9）", () => {
     );
     await vi.waitFor(() => expect(wrapper.text()).toContain("已关闭 · 仅本机可用"));
     expect(wrapper.find(".network-panel .net-base-url").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("关闭后重新开启默认端口恢复 loopback 端口，而不是停留在旧 LAN 端口", async () => {
+    net = networkWith({ enabled: true, running: true, host: "192.168.1.5", port: 8123, shareBaseUrl: "http://192.168.1.5:8123" });
+    net.loopbackUrl = "http://127.0.0.1:9000";
+    const { wrapper } = await mountApp();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("关闭分享"));
+
+    await wrapper.find(".network-panel .net-close").trigger("click");
+    await nextTick();
+    dialogButton(".net-confirm-close").click();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("已关闭 · 仅本机可用"));
+    await vi.waitFor(() => expect(document.body.textContent).toContain("已关闭局域网分享"));
+    await nextTick();
+    expect((wrapper.find(".network-panel input.net-port").element as HTMLInputElement).value).toBe("9000");
+
+    await wrapper.find(".network-panel .net-enable").trigger("click");
+    await vi.waitFor(() => {
+      const put = fetchCalls.find((call) => call.path === `${API}/network/share-listener` && call.method === "PUT");
+      expect(put?.body).toEqual({ host: "192.168.1.5", port: 9000 });
+    });
     wrapper.unmount();
   });
 

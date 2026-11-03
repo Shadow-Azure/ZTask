@@ -1,0 +1,593 @@
+{
+  "title": "ZTask 全功能冒烟报告",
+  "eyebrow": "Full-stack GUI smoke",
+  "summary": "基于 main 最新提交构建，通过 Chrome 对管理端、成员端、看板历史、分享生命周期和备份恢复做真实 GUI 冒烟；发现 3 个 P1 回归，已按 TDD 修复并回归通过。",
+  "meta": "2026-11-03 · macOS · Chrome · ZTask 0.1.0",
+  "metrics": [
+    {
+      "value": "27",
+      "label": "冒烟场景"
+    },
+    {
+      "value": "24",
+      "label": "直接通过"
+    },
+    {
+      "value": "3",
+      "label": "修复后通过"
+    },
+    {
+      "value": "401",
+      "label": "自动化断言"
+    }
+  ],
+  "facts": [
+    {
+      "label": "分支",
+      "value": "codex/full-smoke-regression"
+    },
+    {
+      "label": "Base commit",
+      "value": "6d8128a"
+    },
+    {
+      "label": "服务",
+      "value": "ztask serve · loopback 18123"
+    },
+    {
+      "label": "数据",
+      "value": "一次性隔离目录，备份/恢复使用独立目标"
+    },
+    {
+      "label": "测试数据",
+      "value": "2 任务夹、3 持久任务、2 活跃成员、1 已归档成员"
+    }
+  ],
+  "matrix": {
+    "columns": [
+      "#",
+      "场景",
+      "结果",
+      "详情",
+      "证据"
+    ],
+    "rows": [
+      {
+        "id": "01",
+        "name": "服务启动与空态",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "隔离数据目录首次启动；loopback 管理端、导航、空任务夹提示与禁用新建任务按钮正常。",
+        "evidence": [
+          "screenshots/01-initial-empty.png"
+        ]
+      },
+      {
+        "id": "02",
+        "name": "任务夹树创建与嵌套",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "创建根任务夹「产品」和子任务夹「需求」，父子层级、选中范围与后代任务聚合正确。",
+        "evidence": [
+          "screenshots/06-child-folder-task.png"
+        ]
+      },
+      {
+        "id": "03",
+        "name": "任务夹展开/折叠与后代计数",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "折叠后子夹不可见，展开后恢复；父夹计数包含子夹任务。",
+        "evidence": [
+          "screenshots/06-child-folder-task.png"
+        ]
+      },
+      {
+        "id": "04",
+        "name": "主任务创建与字段",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "主任务描述、负责人/协作人、重要度、日期、进度、详情和任务夹均可保存并回显。",
+        "evidence": [
+          "screenshots/06-child-folder-task.png"
+        ]
+      },
+      {
+        "id": "05",
+        "name": "新建浮窗小任务",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "初始构建中新建浮窗的小任务被 POST 丢弃；修复后主任务与小任务意图一次创建并显示 1 个小任务。",
+        "evidence": [
+          "screenshots/04-task-editor-filled.png",
+          "screenshots/24-create-subtask-fixed.png"
+        ]
+      },
+      {
+        "id": "06",
+        "name": "任务详情编辑",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "编辑已有任务的进度、详情、成员与字段；保存后任务卡和树同步为 75%。",
+        "evidence": [
+          "screenshots/08-task-progress-update.png"
+        ]
+      },
+      {
+        "id": "07",
+        "name": "小任务编辑",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "编辑模式可为已有任务新增一层小任务；成员个人页新增的小任务同步到管理与成员视图。",
+        "evidence": [
+          "screenshots/05-edit-subtask-added.png",
+          "screenshots/15-alice-owner-write.png"
+        ]
+      },
+      {
+        "id": "08",
+        "name": "任务删除确认与软删除",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "初始构建删除成功后确认弹层残留并挡住看板；修复后弹层关闭且可直接切换到看板。",
+        "evidence": [
+          "screenshots/09-task-delete-confirm.png",
+          "screenshots/25-delete-dialog-fixed.png"
+        ]
+      },
+      {
+        "id": "09",
+        "name": "重要度筛选与描述搜索",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "全部/高/中/低分别命中 3/1/1/1 条；搜索 API 精确命中实现任务。",
+        "evidence": [
+          "screenshots/07-task-filter-search.png"
+        ]
+      },
+      {
+        "id": "10",
+        "name": "看板统计",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "整体口径为已完成 1、>50% 2、≤50% 0，重要度拆分与任务数据一致。",
+        "evidence": [
+          "screenshots/10-dashboard-overview.png"
+        ]
+      },
+      {
+        "id": "11",
+        "name": "看板成员筛选",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "选择艾莉丝后仅统计其负责/协作范围：已完成 1、>50% 1、≤50% 0。",
+        "evidence": [
+          "screenshots/11-dashboard-member-distribution.png"
+        ]
+      },
+      {
+        "id": "12",
+        "name": "预计完成时间分布",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "点击已完成统计卡展开堆叠柱状图，今天以前低重要度 1 项，其余桶为 0。",
+        "evidence": [
+          "screenshots/11-dashboard-member-distribution.png"
+        ]
+      },
+      {
+        "id": "13",
+        "name": "默认历史查询",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "昨天 00:00 至当前时间的 4 个变化包含创建、更新和已删除任务；进度与详情 diff 正确。",
+        "evidence": [
+          "screenshots/12-history-custom-range.png"
+        ]
+      },
+      {
+        "id": "14",
+        "name": "自定义历史区间与边界",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "2026-11-02/2026-11-04 解析为 [起点 00:00, 终点次日 00:00)，创建/更新/删除均呈现。",
+        "evidence": [
+          "screenshots/12-history-custom-range.png"
+        ]
+      },
+      {
+        "id": "15",
+        "name": "历史展开/折叠",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "全部折叠保留行并隐藏 diff，全部展开恢复详情 diff。",
+        "evidence": [
+          "screenshots/12-history-custom-range.png"
+        ]
+      },
+      {
+        "id": "16",
+        "name": "面板宽度调节",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "任务树 splitter 键盘 ArrowRight 后 aria 值从 340 到 356，布局无遮挡。",
+        "evidence": [
+          "screenshots/13-pane-resizer.png"
+        ]
+      },
+      {
+        "id": "17",
+        "name": "成员添加与编辑",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "添加艾莉丝/鲍勃与临时成员；编辑鲍勃角色后表格和成员计数即时刷新。",
+        "evidence": [
+          "screenshots/20-member-archived.png"
+        ]
+      },
+      {
+        "id": "18",
+        "name": "局域网分享开启与状态",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "选择具体网卡后 LAN chip、分享地址和成员链接基址一致。",
+        "evidence": [
+          "screenshots/02-members-lan-enabled.png"
+        ]
+      },
+      {
+        "id": "19",
+        "name": "成员链接生成/重置/吊销",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "生成、重置、吊销均可执行；重置和吊销后旧会话刷新都进入失效页。",
+        "evidence": [
+          "screenshots/18-reset-invalidates-session.png",
+          "screenshots/19-revoke-invalidates-session.png"
+        ]
+      },
+      {
+        "id": "20",
+        "name": "成员归档",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "移除后成员进入已归档态，负责/协作计数清零且无链接操作。",
+        "evidence": [
+          "screenshots/20-member-archived.png"
+        ]
+      },
+      {
+        "id": "21",
+        "name": "成员个人页权限",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "负责人可保存进度、详情并添加小任务；协作任务只读；无管理导航。",
+        "evidence": [
+          "screenshots/15-alice-owner-write.png"
+        ]
+      },
+      {
+        "id": "22",
+        "name": "成员只读事项跟踪",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "成员树/列表只包含相关任务，无新建/写控件，只读详情无保存或删除。",
+        "evidence": [
+          "screenshots/16-alice-readonly-tracker.png",
+          "screenshots/17-alice-readonly-detail.png"
+        ]
+      },
+      {
+        "id": "23",
+        "name": "局域网关闭/重开端口",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "初始构建关闭后重开沿用 8123 而非 loopback 18123；修复后关闭表单立即回到 18123，重开基址正确。",
+        "evidence": [
+          "screenshots/21-network-reopen-wrong-port.png",
+          "screenshots/23-network-reopen-fixed.png"
+        ]
+      },
+      {
+        "id": "24",
+        "name": "LAN Admin API 边界",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "LAN 监听访问 /admin/health 返回 403 ADMIN_LOCAL_ONLY，并带安全响应头。",
+        "evidence": []
+      },
+      {
+        "id": "25",
+        "name": "在线备份",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "CLI backup 暂停写入生成 17 文件快照，报告校验通过并排除锁/临时/旧备份。",
+        "evidence": []
+      },
+      {
+        "id": "26",
+        "name": "离线恢复与 doctor",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "恢复到空目录后 doctor 判定健康；任务、任务夹、成员与历史引用完整。",
+        "evidence": []
+      },
+      {
+        "id": "27",
+        "name": "重启持久化",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "恢复目录重启后管理端仍显示 2 个任务夹和 3 个任务，已归档成员保留。",
+        "evidence": [
+          "screenshots/22-restored-persistence.png"
+        ]
+      }
+    ]
+  },
+  "issues": [
+    {
+      "severity": "P1",
+      "title": "新建任务时小任务被静默丢弃",
+      "facts": [
+        {
+          "label": "Actual",
+          "value": "新建浮窗可录入小任务，但 POST body 不含小任务，保存后显示 0 个。"
+        },
+        {
+          "label": "Expected",
+          "value": "主任务和小任务草稿在创建时一起持久化。"
+        },
+        {
+          "label": "Root cause",
+          "value": "create mutation 只发送主任务字段；POST 服务端也没有创建意图。"
+        }
+      ],
+      "state": {
+        "kind": "fixed",
+        "label": "Fixed · API + UI 回归覆盖"
+      }
+    },
+    {
+      "severity": "P1",
+      "title": "删除成功后确认弹层残留",
+      "facts": [
+        {
+          "label": "Actual",
+          "value": "任务已从树和列表消失，但「删除任务」确认层仍覆盖页面。"
+        },
+        {
+          "label": "Expected",
+          "value": "删除成功后确认层与编辑器一起关闭。"
+        },
+        {
+          "label": "Root cause",
+          "value": "delete mutation success 只关闭外层编辑意图，未复位内层 confirmDelete。"
+        }
+      ],
+      "state": {
+        "kind": "fixed",
+        "label": "Fixed · 组件回归覆盖"
+      }
+    },
+    {
+      "severity": "P1",
+      "title": "关闭后重开 LAN 使用错误端口",
+      "facts": [
+        {
+          "label": "Actual",
+          "value": "管理端启动在 18123 且 LAN 原为 8123；关闭再开启默认提交 8123，生成不可访问的成员基址。"
+        },
+        {
+          "label": "Expected",
+          "value": "重新开启时默认端口应回到 loopback 实际端口 18123。"
+        },
+        {
+          "label": "Root cause",
+          "value": "端口只在 defaultPort 值变化时同步；关闭不会改变 loopbackUrl，旧 LAN 端口残留。"
+        }
+      ],
+      "state": {
+        "kind": "fixed",
+        "label": "Fixed · GUI + 组件回归覆盖"
+      }
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/01-initial-empty.png",
+      "alt": "ZTask 初始空态",
+      "label": "01 · 启动",
+      "caption": "首启空态、管理导航与禁用新建任务按钮。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/04-task-editor-filled.png",
+      "alt": "新建任务浮窗和小任务草稿",
+      "label": "04 · 修复前",
+      "caption": "新建浮窗中已录入小任务草稿。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/24-create-subtask-fixed.png",
+      "alt": "创建任务后小任务保留",
+      "label": "24 · 创建回归",
+      "caption": "修复后新建任务卡显示小任务「冒烟看护」。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/09-task-delete-confirm.png",
+      "alt": "删除确认浮窗",
+      "label": "09 · 删除确认",
+      "caption": "删除会软删小任务并保留历史。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/25-delete-dialog-fixed.png",
+      "alt": "删除后看板可用",
+      "label": "25 · 删除回归",
+      "caption": "修复后确认层关闭，可直接切换到情况看板。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/21-network-reopen-wrong-port.png",
+      "alt": "LAN 重开后端口为 8123",
+      "label": "21 · 端口缺陷",
+      "caption": "管理端口 18123 时 LAN 重开错误使用 8123。",
+      "variant": "issue"
+    },
+    {
+      "src": "screenshots/23-network-reopen-fixed.png",
+      "alt": "LAN 重开后端口为 18123",
+      "label": "23 · 端口回归",
+      "caption": "关闭后端口表单恢复 loopback 端口，重开基址正确。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/10-dashboard-overview.png",
+      "alt": "看板总览",
+      "label": "10 · 统计",
+      "caption": "整体完成度和重要度分布与任务数据一致。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/11-dashboard-member-distribution.png",
+      "alt": "成员筛选与分布图",
+      "label": "11 · 筛选",
+      "caption": "艾莉丝范围统计与预计完成分布。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/12-history-custom-range.png",
+      "alt": "自定义历史区间",
+      "label": "12 · 历史",
+      "caption": "自定义区间覆盖创建、更新和已删除任务。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/15-alice-owner-write.png",
+      "alt": "成员个人页写入",
+      "label": "15 · 成员端",
+      "caption": "负责人保存详情并新增小任务。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/16-alice-readonly-tracker.png",
+      "alt": "成员只读跟踪",
+      "label": "16 · 只读范围",
+      "caption": "成员只看到相关任务且无写入口。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/22-restored-persistence.png",
+      "alt": "恢复后持久化数据",
+      "label": "22 · 恢复",
+      "caption": "恢复目录重启后任务夹与任务完整。",
+      "variant": "wide"
+    }
+  ],
+  "coverage": {
+    "columns": [
+      "领域",
+      "自动化看护",
+      "结论",
+      "建议"
+    ],
+    "rows": [
+      {
+        "area": "创建主任务 + 小任务",
+        "coverage": "API 集成 + 组件 UT",
+        "conclusion": "成功映射、无效 owner 不写入、POST 意图均已固化。",
+        "recommendation": "保留真实 GUI 创建链路作为发布冒烟。"
+      },
+      {
+        "area": "删除确认生命周期",
+        "coverage": "组件 UT",
+        "conclusion": "DELETE 成功后确认层关闭。",
+        "recommendation": "后续端到端测试可覆盖真实遮罩点击。"
+      },
+      {
+        "area": "LAN 端口恢复",
+        "coverage": "组件 UT",
+        "conclusion": "关闭成功后端口恢复 loopback 值并提交正确 PUT。",
+        "recommendation": "发布冒烟保留 close/reopen 场景。"
+      },
+      {
+        "area": "备份/恢复/doctor",
+        "coverage": "既有测试 + CLI 冒烟",
+        "conclusion": "401 个自动化断言全绿；真实临时目录备份恢复健康。",
+        "recommendation": "继续在发布门禁运行完整 pnpm test。"
+      },
+      {
+        "area": "任务夹双击重命名",
+        "coverage": "当前无专项测试",
+        "conclusion": "Chrome 自动化双击未触发行内输入；该能力不是 02 F2 的验收字段。",
+        "recommendation": "若要作为承诺交互，补 dblclick 组件测试或改为显式编辑按钮。"
+      }
+    ]
+  },
+  "conclusion": {
+    "kind": "pass",
+    "label": "修复后全功能通过",
+    "summary": "设计功能点除未列入 F2 验收的双击重命名外全部通过；3 个冒烟发现的 P1 问题均有失败证据、修复代码、自动化看护和 GUI 回归证据。",
+    "points": [
+      "pnpm verify:docs、pnpm test 全绿：54 个测试文件、401 个测试。",
+      "删除、创建小任务、LAN 端口三处已完成失败→修复→回归闭环。",
+      "任务夹双击重命名的自动化触发问题被单独记录为 warn，不作为 F2 验收失败。"
+    ]
+  },
+  "footer": "Evidence captured with Computer Use against an isolated local data directory; all share tokens redacted and not embedded in report JSON."
+}

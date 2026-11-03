@@ -279,12 +279,45 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       const detail = typeof input.detail === "string" ? input.detail : "";
 
       if (input.parentId === null || input.parentId === undefined) {
+        const subtaskCreateIntent = (input.subtasks as { create?: unknown } | undefined)?.create;
+        if (subtaskCreateIntent !== undefined && subtaskCreateIntent !== null && !Array.isArray(subtaskCreateIntent)) {
+          throw new ApiError(400, "INVALID_REQUEST", "subtasks.create 须为数组");
+        }
         const activeMembers = await activeMemberIds();
         const ownerIds = assertMembersActiveSync(input.ownerIds, "ownerIds", activeMembers);
         if (ownerIds.length === 0) throw new ApiError(422, "INVALID_REQUEST", "主任务至少需要一个有效 owner");
         const collaboratorIds = assertMembersActiveSync(input.collaboratorIds ?? [], "collaboratorIds", activeMembers);
+        // 创建时就原子解析小任务草稿；任一字段/owner 失败都不会先写入主任务。
         const now = clock().toISOString();
         const taskId = randomUUID();
+        const pendingSubtasks: Array<{
+          id: string;
+          parentId: string;
+          folderId: string;
+          description: string;
+          progress: number;
+          importance: Importance;
+          dueDate: string | null;
+          createdAt: string;
+          deletedAt: null;
+        }> = [];
+        const pendingSubtaskAssignments: Array<{ taskId: string; memberId: string; kind: "owner" }> = [];
+        for (const create of (subtaskCreateIntent ?? []) as Array<Record<string, unknown>>) {
+          const subId = randomUUID();
+          const ownerId = assertMembersActiveSync([create.ownerId], "小任务 owner", activeMembers)[0]!;
+          pendingSubtasks.push({
+            id: subId,
+            parentId: taskId,
+            folderId,
+            description: assertDescription(create.description),
+            progress: assertProgress(create.progress ?? 0),
+            importance: assertImportance(create.importance ?? "mid"),
+            dueDate: assertDueDate(create.dueDate),
+            createdAt: now,
+            deletedAt: null,
+          });
+          pendingSubtaskAssignments.push({ taskId: subId, memberId: ownerId, kind: "owner" });
+        }
         const aggregate = await taskStore.createAggregate({
           taskId,
           task: {
@@ -298,10 +331,11 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
             createdAt: now,
             deletedAt: null,
           },
-          subtasks: [],
+          subtasks: pendingSubtasks,
           assignments: [
             ...ownerIds.map((memberId: string) => ({ taskId, memberId, kind: "owner" as const })),
             ...collaboratorIds.map((memberId: string) => ({ taskId, memberId, kind: "collaborator" as const })),
+            ...pendingSubtaskAssignments,
           ],
           actor: { kind: "admin", memberId: null, name: "管理员" },
         });
