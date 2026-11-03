@@ -6,7 +6,7 @@ English | [中文](m6-smoke-regression-fixes.md)
 kind: issue
 milestone: m6
 priority: P2
-status: in-progress
+status: done
 scope:
   - .agents/flow/**
   - apps/server/**
