@@ -6,7 +6,7 @@ English | [中文](m6-ui-parity.md)
 kind: issue
 milestone: m6
 priority: P2
-status: in-progress
+status: done
 scope:
   - apps/web/**
   - apps/server/**
