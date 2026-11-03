@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/milestones/m9-subtask-error-reporting.md
-m9-subtask-error-reporting.md: ce3d8fdfa760a942978a03d2d302a6dc58141e00
-m9-subtask-error-reporting.en.md: f02de5b9e38cb009663698a8ba5fd736ce724317
+m9-subtask-error-reporting.md: fea56d39605deaace1c67af590775af9f2a763d2
+m9-subtask-error-reporting.en.md: a5c40d2bc3ac6ac91d37904d0cffba280fde8496
