@@ -28,7 +28,7 @@ The task management prototype currently offers only importance and keyword searc
 
 ## Goals
 
-- Add a multi-select assignee dropdown to the toolbar between "New task" and "Importance", with member search, multi-select, and clear.
+- Add a multi-select assignee dropdown to the right of the importance filter and left of the search box, with member search, multi-select, and clear.
 - When a main-task owner matches, keep the whole task and all of its subtasks even if other people own some subtasks.
 - When only a subtask owner matches, keep the main task but show only the subtasks owned by that person, and note the filtering inside the card.
 - Combine the assignee filter with importance and keyword search using an intersection.

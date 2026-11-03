@@ -482,3 +482,21 @@ test('filtered task card shows only the matching subtasks and explains the subse
   assert.match(rendered, /0\/1 已完成/);
   assert.match(rendered, /负责人 · zhao/);
 });
+
+test('task toolbar places the assignee filter after importance and before search', () => {
+  const start = html.indexOf('<div class="toolbar">');
+  const end = html.indexOf('<div class="task-list"', start);
+  assert.notEqual(start, -1, 'task toolbar must exist');
+  assert.notEqual(end, -1, 'task list must follow the toolbar');
+  const toolbar = html.slice(start, end);
+
+  const importance = toolbar.indexOf('重要度');
+  const assignee = toolbar.indexOf('id="assignee-filter"');
+  const search = toolbar.indexOf('id="task-search"');
+
+  assert.ok(importance !== -1, 'importance label must exist');
+  assert.ok(assignee !== -1, 'assignee filter must exist');
+  assert.ok(search !== -1, 'search box must exist');
+  assert.ok(importance < assignee, 'assignee filter must follow importance');
+  assert.ok(assignee < search, 'assignee filter must precede search');
+});

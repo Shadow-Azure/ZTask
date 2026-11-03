@@ -222,6 +222,7 @@
     background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
     box-shadow: 0 10px 30px rgba(20,26,38,.16); overflow: hidden;
   }
+  .fsel.align-right .fsel-panel { left: auto; right: 0; }
   .fsel-search { width: 100%; font: inherit; font-size: 12px; padding: 8px 12px; border: none; border-bottom: 1px solid var(--border); outline: none; }
   .fsel-list { max-height: 228px; overflow-y: auto; padding: 4px; }
   .fsel-opt {
@@ -662,13 +663,13 @@
           <div class="toolbar">
             <button class="btn primary" id="btn-new-task">＋ 新建任务</button>
             <span class="spacer"></span>
-            <span class="toolbar-label">负责人</span>
-            <div class="fsel" id="assignee-filter"></div>
             <span class="toolbar-label">重要度</span>
             <button class="fchip active" data-imp="all">全部</button>
             <button class="fchip" data-imp="high">高</button>
             <button class="fchip" data-imp="mid">中</button>
             <button class="fchip" data-imp="low">低</button>
+            <span class="toolbar-label">负责人</span>
+            <div class="fsel" id="assignee-filter"></div>
             <input class="search-box" id="task-search" placeholder="搜索任务描述…">
           </div>
           <div class="task-list" id="task-rows"></div>
@@ -1229,6 +1230,10 @@ function renderAssigneeFilter() {
   const first = selected[0];
   const extra = selected.length - 1;
   const list = MEMBERS.filter(m => !assigneeQuery || m.name.includes(assigneeQuery) || m.role.includes(assigneeQuery));
+  const boardRect = el.closest('.board-body')?.getBoundingClientRect();
+  const triggerRect = el.getBoundingClientRect();
+  const alignRight = !!boardRect && triggerRect.left + 268 > boardRect.right - 12;
+  el.classList.toggle('align-right', alignRight);
   el.classList.toggle('open', assigneePanelOpen);
   el.innerHTML = `<button class="fsel-trigger${selected.length ? ' has-value' : ''}" type="button" aria-haspopup="true" aria-expanded="${assigneePanelOpen}" title="${selected.length ? '已选负责人：' + esc(selected.map(m => m.name).join('、')) : '按负责人筛选任务'}">
       ${selected.length
