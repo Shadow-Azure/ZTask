@@ -48,6 +48,20 @@ describe("TaskCard（统一只读卡）", () => {
     expect(empty.text()).toContain("0 条记录");
   });
 
+  it("负责人筛选裁剪子任务时显示说明，并按可见子任务计数", () => {
+    const wrapper = mount(TaskCard, {
+      props: {
+        task: model({
+          subtasksFiltered: true,
+          subtasks: [{ id: "s-2", description: "大数据量虚拟滚动", progress: 40, ownerName: "林悦" }],
+        }),
+      },
+    });
+    expect(wrapper.text()).toContain("已按负责人筛选");
+    expect(wrapper.text()).toContain("0/1 已完成");
+    expect(wrapper.text()).not.toContain("树节点拖拽交互");
+  });
+
   it("只读：卡内不存在任何编辑控件", () => {
     const wrapper = mount(TaskCard, { props: { task: model() } });
     expect(wrapper.findAll("button").length).toBe(0);

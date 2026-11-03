@@ -89,6 +89,7 @@ function onHeaderKeydown(event: KeyboardEvent): void {
           <span>子任务进展</span>
           <span class="count">{{ doneCount }}/{{ task.subtasks.length }} 已完成</span>
         </div>
+        <p v-if="task.subtasksFiltered" class="pane-filter-note">已按负责人筛选，仅显示所选负责人负责的子任务</p>
         <div v-if="task.subtasks.length" class="subtask-lines">
           <div v-for="subtask in task.subtasks" :key="subtask.id" class="subtask-line" :class="{ done: subtask.progress >= 100 }">
             <ProgressRing :value="subtask.progress" :label="subtask.description" />
@@ -312,6 +313,14 @@ function onHeaderKeydown(event: KeyboardEvent): void {
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 500;
+}
+
+/* 原型 2026-11-03 负责人筛选：子任务被子集裁剪时说明可见范围。 */
+.pane-filter-note {
+  margin: -5px 0 9px;
+  color: var(--text-dim);
+  font-size: 10.5px;
+  line-height: 1.4;
 }
 
 .subtask-lines {

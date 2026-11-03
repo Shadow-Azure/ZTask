@@ -20,6 +20,7 @@
 | 双击/浮窗维护 | [03 §5](03-frontend-architecture.md) + [08 §3](08-frontend-implementation.md) | 单击标题或双击卡片打开，浮窗统一编辑 |
 | 任务管理/纯查询看板双 tab | [02 §3/§7](02-features.md) + [08 §4](08-frontend-implementation.md) | 看板无编辑 mutation |
 | 成员多选，不选看整体 | [02 §7](02-features.md) + [07 §8](07-backend-implementation.md) | owner OR 过滤，空=全部 |
+| 任务管理按负责人多选筛选，区分主任务/子任务命中 | [02 §3.2](02-features.md) + [05 §3.4](05-api-design.md) + [07 §5.1.1](07-backend-implementation.md) + [08 §2.4](08-frontend-implementation.md) | 服务端 `ownerIds`；主任务负责人命中整条，子任务负责人命中裁剪；与重要度/搜索 AND |
 | 原型中的统计卡与时间分布 | [02 §7](02-features.md) + [07 §8.1](07-backend-implementation.md) | current 聚合统计 |
 | 原型中的历史进度与详情 diff | [01 §5.3](01-architecture.md) + [06 §7](06-database-design.md) + [08 §4.3](08-frontend-implementation.md) | 每次变更完整快照 + as-of 查询 + jsdiff/Vue 双列 |
 | 原型中的链接重置/吊销/失效页 | [02 §3.3/§6](02-features.md) + [07 §7](07-backend-implementation.md) | link 文件 + auth-session 联动 |
@@ -62,6 +63,10 @@
 
 代价：一个主任务组内的并发编辑更容易冲突，但小团队可接受，且冲突 UI 保留草稿。这里的原子性由 revision 先行 + current 原子替换 + 启动恢复保证，不声称文件系统有通用多文件事务。
 
+### Q8 · 任务管理负责人筛选与看板成员筛选的关系（已确认）
+
+任务管理的 `ownerIds` 是列表筛选：同时检查主任务和子任务负责人；主任务负责人命中时保留整条任务，只有子任务负责人命中时保留主任务并裁剪子任务。看板的 `memberIds` 仍是统计口径：只按主任务 owner 过滤，不改变任务卡内容。两个入口的命中集合不能互相复用，否则会出现看板数字随子任务筛选变化、或列表卡片被看板口径误导。筛选在服务端执行，与重要度、搜索取 AND，并在 cursor 分页前完成；成员只读事项跟踪因没有成员目录而不提供该入口。
+
 ## 3. 风险清单
 
 | 风险 | 后果 | 设计缓解 |
@@ -71,6 +76,7 @@
 | LAN 动态启动失败仍生成链接 | 成员拿到不可达 URL | bind 成功后才保存 running/shareBaseUrl；失败回滚并显示 degraded |
 | IP 变化后仍使用旧 base | 旧链接失效、配置漂移 | 启动检测并要求重选；新 URL 动态派生，token 不变但重新分发 |
 | 只在前端过滤 A/B | 响应中仍含他人任务 | share Service/派生索引强制 memberId 范围，契约测试固定 |
+| 负责人筛选只在前端或当前页执行 | 分页后漏结果，子任务裁剪与计数不一致 | `ownerIds` 进入服务端列表查询，过滤先于 cursor 分页；响应只含裁剪后的子任务 |
 | 成员事项跟踪误开放个人页写能力 | 页面边界失效，成员可管理任务 | 写 API 仅校验 owner 主任务 progress/detail/subtasks；事项跟踪只有 GET，主任务其他字段拒绝 |
 | collaborator 或第三层任务伪造写请求 | 越权修改进度/详情 | service 校验角色与资源类型，403 且无文件变化 |
 | 向成员开放成员管理/目录 | 泄露链接状态或分享凭证 | 不提供页面和 /share/members；任务内仅含脱敏成员摘要 |
@@ -98,7 +104,7 @@
 本轮按“没有看过对话的实现者能否继续”检查：
 
 - 已回答：运行形态、技术栈、角色边界、数据范围、任务层级、字段、看板口径、历史算法、主要端点、文件布局、原子写、恢复和测试主链路。
-- 已确认：分聚合 JSON + JSONL；每次有效任务变更保存完整聚合快照；时间段 diff 取 before/after，以 jsdiff diffLines 计算并由 Vue 自研双列渲染；auth-session 只保存认证会话；成员个人页 owner 更新进度/完整详情并管理小任务、协作只读，成员事项跟踪完全只读且无成员管理页；默认 loopback，按需动态启用具体 LAN IP 并派生分享 URL。
+- 已确认：分聚合 JSON + JSONL；每次有效任务变更保存完整聚合快照；时间段 diff 取 before/after，以 jsdiff diffLines 计算并由 Vue 自研双列渲染；auth-session 只保存认证会话；成员个人页 owner 更新进度/完整详情并管理小任务、协作只读，成员事项跟踪完全只读且无成员管理页；默认 loopback，按需动态启用具体 LAN IP 并派生分享 URL；任务管理负责人筛选采用服务端 `ownerIds`，主任务负责人命中保留整条任务，仅子任务负责人命中只保留对应子任务，且与重要度/搜索取交集。
 - 设计者自行决定的小项：UUID、API v1 前缀、15 秒轮询、hash 路由、模块目录、token 32 字节、CSS/SVG 图表、JSONL checksum。实现可调整细节但不能破坏文件恢复边界。
 - 仍需用户回答：Q2 会改变安全与 UI 契约；Q3/Q4/Q5/Q6/Q7 会改变字段、交互或统计口径。未确认前不应开始完整实现。
 - 无实施排期：遵守仓库流程树未初始化的约定，本稿不创建 roadmap、milestone 或 issue。

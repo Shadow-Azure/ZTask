@@ -36,7 +36,12 @@ function mockFetch(): void {
       return new Response(JSON.stringify(TREE), { status: 200, headers: { "content-type": "application/json" } });
     }
     if (url.includes("/admin/members")) {
-      return new Response(JSON.stringify({ items: [] }), { status: 200, headers: { "content-type": "application/json" } });
+      return new Response(JSON.stringify({
+        items: [
+          { id: "m-1", name: "陈晨", role: "前端工程师", color: "#2f6fe0", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+          { id: "m-2", name: "林悦", role: "后端工程师", color: "#1f9d6b", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+        ],
+      }), { status: 200, headers: { "content-type": "application/json" } });
     }
     return new Response(JSON.stringify(TASKS), { status: 200, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
@@ -47,12 +52,12 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountView(query: Record<string, string> = {}) {
+async function mountView(query: Record<string, string> = {}, props: { access?: "admin" | "readonly"; scope?: "admin" | "share" } = { access: "admin" }) {
   const router = createAppRouter();
   await router.push({ path: "/tracker", query });
   await router.isReady();
   const wrapper = mount(TrackerView, {
-    props: { access: "admin" },
+    props,
     global: { plugins: [router, [VueQueryPlugin, { queryClient: createAppQueryClient() }]] },
     attachTo: document.body,
   });
@@ -89,6 +94,39 @@ describe("TrackerView（事项跟踪体验）", () => {
       vi.useRealTimers();
       wrapper.unmount();
     }
+  });
+
+  it("负责人多选触发带 ownerIds 的服务端查询并写入 URL", async () => {
+    mockFetch();
+    const { wrapper, router } = await mountView({ folder: "f-1" });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    await wrapper.find(".fsel-trigger").trigger("click");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const option = wrapper.findAll(".fsel-opt").find((item) => item.text().includes("陈晨"));
+    expect(option).toBeTruthy();
+    await option!.trigger("click");
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(listCalls.some((call) => call.url.includes("ownerIds=m-1"))).toBe(true);
+    expect(router.currentRoute.value.query.owners).toBe("m-1");
+    wrapper.unmount();
+  });
+
+  it("owners 深链恢复负责人筛选并发送查询参数", async () => {
+    mockFetch();
+    const { wrapper, router } = await mountView({ folder: "f-1", owners: "m-1" });
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(listCalls.some((call) => call.url.includes("ownerIds=m-1"))).toBe(true);
+    expect(wrapper.find(".fsel-trigger").text()).toContain("陈晨");
+    expect(router.currentRoute.value.query.owners).toBe("m-1");
+    wrapper.unmount();
+  });
+
+  it("成员只读视图不渲染负责人筛选", async () => {
+    mockFetch();
+    const { wrapper } = await mountView({ folder: "f-1" }, { access: "readonly", scope: "share" });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(wrapper.find(".fsel-trigger").exists()).toBe(false);
+    wrapper.unmount();
   });
 
   it("卡片点击打开编辑浮窗（编辑仅经明确入口）", async () => {

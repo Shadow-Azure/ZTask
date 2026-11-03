@@ -1,0 +1,337 @@
+{
+  "title": "任务管理负责人筛选 · 集成冒烟报告",
+  "eyebrow": "ZTask · 2026-11-03 · PR #63",
+  "summary": "在真实构建产物与真实 API 数据上验证负责人多选筛选：工具栏顺序、成员搜索、多选与 URL 深链、主任务/子任务两种命中、组合筛选、空态、编辑浮窗完整聚合、窄屏下拉均通过。",
+  "meta": "2026-11-03 · macOS · Chrome headless 1440×1000（窄屏另测 1024×1000）",
+  "metrics": [
+    {
+      "value": "13",
+      "label": "冒烟场景"
+    },
+    {
+      "value": "0",
+      "label": "失败"
+    },
+    {
+      "value": "2",
+      "label": "浏览器视口"
+    },
+    {
+      "value": "412",
+      "label": "自动化测试"
+    }
+  ],
+  "facts": [
+    {
+      "label": "Commit",
+      "value": "48b7e96"
+    },
+    {
+      "label": "Branch",
+      "value": "agent/add-assignee-filter-f05e2ec57fa1"
+    },
+    {
+      "label": "App",
+      "value": "Vite production build + Fastify serve"
+    },
+    {
+      "label": "API",
+      "value": "真实 /api/v1/admin/tasks（临时数据目录）"
+    },
+    {
+      "label": "Baseline",
+      "value": "origin/main 7065282"
+    },
+    {
+      "label": "Viewport",
+      "value": "1440×1000；窄屏 1024×1000"
+    }
+  ],
+  "matrix": {
+    "columns": [
+      "#",
+      "场景",
+      "结果",
+      "说明",
+      "证据"
+    ],
+    "rows": [
+      {
+        "id": "01",
+        "name": "基线应用无负责人筛选",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "origin/main 构建产物中不存在 .fsel-trigger。",
+        "evidence": [
+          "01-before.png"
+        ]
+      },
+      {
+        "id": "02",
+        "name": "工具栏顺序",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "重要度 chips → 负责人 → 搜索，与原型一致。",
+        "evidence": [
+          "02-after.png",
+          "00-compare-toolbar.png"
+        ]
+      },
+      {
+        "id": "03",
+        "name": "下拉与成员搜索",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "面板展示 4 名活跃成员；输入“赵”后仅剩赵敏。",
+        "evidence": [
+          "03-filter-open.png"
+        ]
+      },
+      {
+        "id": "04",
+        "name": "多选、URL 与请求参数",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "陈晨 + 赵敏触发“+1”；owners 写入 URL 且 ownerIds 请求包含两人。",
+        "evidence": [
+          "04-multiselect.png"
+        ]
+      },
+      {
+        "id": "05",
+        "name": "清除筛选",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "恢复 2 条任务，owners 参数被移除。",
+        "evidence": [
+          "05-main-owner.png"
+        ]
+      },
+      {
+        "id": "06",
+        "name": "主任务负责人命中",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "陈晨命中后保留整条任务与全部 2 个子任务，无裁剪提示。",
+        "evidence": [
+          "05-main-owner.png"
+        ]
+      },
+      {
+        "id": "07",
+        "name": "仅子任务负责人命中",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "赵敏命中后只显示 1 个对应子任务，提示“已按负责人筛选”，计数 0/1。",
+        "evidence": [
+          "06-subtask-owner.png"
+        ]
+      },
+      {
+        "id": "08",
+        "name": "负责人 + 重要度 + 搜索",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "赵敏 + 高 + “任务树”返回 1 条任务、1 个匹配子任务。",
+        "evidence": [
+          "07-combined.png"
+        ]
+      },
+      {
+        "id": "09",
+        "name": "无匹配负责人空态",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "周凯在客户端重构任务夹下无匹配，显示组合条件空态。",
+        "evidence": [
+          "08-empty.png"
+        ]
+      },
+      {
+        "id": "10",
+        "name": "编辑浮窗完整聚合",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "筛选后打开浮窗仍显示 2 个子任务，未把裁剪结果当完整聚合。",
+        "evidence": [
+          "09-editor-full.png"
+        ]
+      },
+      {
+        "id": "11",
+        "name": "owners 深链恢复",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "刷新 owners=赵敏 后触发框选中赵敏，列表为 1 条任务。",
+        "evidence": [
+          "06-subtask-owner.png"
+        ]
+      },
+      {
+        "id": "12",
+        "name": "窄屏下拉不溢出",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "1024px 下方面板右边界 1004，仍在可视区内，必要时右对齐。",
+        "evidence": [
+          "10-narrow.png"
+        ]
+      },
+      {
+        "id": "13",
+        "name": "页面运行错误",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "全程无 pageerror / console error。",
+        "evidence": [
+          "02-after.png"
+        ]
+      }
+    ]
+  },
+  "issues": [],
+  "screenshots": [
+    {
+      "src": "00-compare-toolbar.png",
+      "alt": "真实应用工具栏修改前后",
+      "label": "00 · 工具栏前后对比",
+      "caption": "上：origin/main 无负责人筛选；下：PR #63 实现，重要度右侧新增负责人多选。",
+      "variant": "wide"
+    },
+    {
+      "src": "01-before.png",
+      "alt": "origin/main 应用",
+      "label": "01 · 修改前",
+      "caption": "基线构建产物：工具栏只有重要度与搜索。",
+      "variant": "wide"
+    },
+    {
+      "src": "03-filter-open.png",
+      "alt": "负责人筛选下拉",
+      "label": "03 · 下拉",
+      "caption": "多选面板展示活跃成员，支持姓名/角色搜索。",
+      "variant": "wide"
+    },
+    {
+      "src": "04-multiselect.png",
+      "alt": "多选状态",
+      "label": "04 · 多选",
+      "caption": "陈晨 + 赵敏，触发框显示 +1，URL owners 与请求 ownerIds 同步。",
+      "variant": "wide"
+    },
+    {
+      "src": "05-main-owner.png",
+      "alt": "主任务负责人命中",
+      "label": "06 · 主任务命中",
+      "caption": "陈晨命中后保留整条任务与全部子任务。",
+      "variant": "wide"
+    },
+    {
+      "src": "06-subtask-owner.png",
+      "alt": "仅子任务负责人命中",
+      "label": "07 · 子任务命中",
+      "caption": "赵敏命中后只显示对应子任务，并说明已按负责人筛选。",
+      "variant": "wide"
+    },
+    {
+      "src": "07-combined.png",
+      "alt": "组合筛选",
+      "label": "08 · 组合筛选",
+      "caption": "负责人、重要度与搜索三者取交集。",
+      "variant": "wide"
+    },
+    {
+      "src": "08-empty.png",
+      "alt": "空态",
+      "label": "09 · 空态",
+      "caption": "无匹配负责人时显示组合条件空态。",
+      "variant": "wide"
+    },
+    {
+      "src": "09-editor-full.png",
+      "alt": "筛选后编辑浮窗",
+      "label": "10 · 编辑完整聚合",
+      "caption": "列表裁剪不影响编辑浮窗：打开后仍显示完整子任务。",
+      "variant": "wide"
+    },
+    {
+      "src": "10-narrow.png",
+      "alt": "窄屏下拉",
+      "label": "12 · 窄屏",
+      "caption": "1024px 下方面板右对齐，不溢出可视区。",
+      "variant": "wide"
+    }
+  ],
+  "coverage": {
+    "columns": [
+      "范围",
+      "覆盖",
+      "结论",
+      "建议"
+    ],
+    "rows": [
+      {
+        "area": "API 筛选语义",
+        "coverage": "集成测试",
+        "conclusion": "主任务命中、子任务命中、组合条件、重复/逗号参数、非法/归档/未知成员均有规格。",
+        "recommendation": "保持真实 API 冒烟。"
+      },
+      {
+        "area": "前端筛选组件",
+        "coverage": "组件 + 视图测试",
+        "conclusion": "多选、搜索、清除、URL 深链、成员视图不渲染筛选均有规格。",
+        "recommendation": "保留浏览器冒烟覆盖视觉与窄屏。"
+      },
+      {
+        "area": "任务卡与编辑边界",
+        "coverage": "单元 + 冒烟",
+        "conclusion": "裁剪提示按可见子任务计数；编辑前重新拉取完整聚合。",
+        "recommendation": "继续保留该回归场景。"
+      },
+      {
+        "area": "成员只读事项跟踪",
+        "coverage": "视图单元测试",
+        "conclusion": "scope=share 不渲染负责人筛选。",
+        "recommendation": "如后续开放分享域成员目录，再评估该入口。"
+      }
+    ]
+  },
+  "conclusion": {
+    "kind": "pass",
+    "label": "集成冒烟通过",
+    "summary": "13 个场景全部通过，未发现需要修复的集成问题。",
+    "points": [
+      "真实构建产物与真实 API 数据上的筛选语义与原型一致。",
+      "列表裁剪不会污染编辑浮窗的完整聚合。",
+      "负责人筛选在窄屏下不会溢出。",
+      "合并与 issue 闭环仍需按仓库交付规则由人工/已配置的合并入口执行。"
+    ]
+  },
+  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence; no private Feishu content or credentials included."
+}

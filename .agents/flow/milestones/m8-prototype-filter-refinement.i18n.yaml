@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/flow/milestones/m8-prototype-filter-refinement.md
+m8-prototype-filter-refinement.md: a24e80ef310495fde4f57db3735045c11e951531
+m8-prototype-filter-refinement.en.md: cb6f93be0f7671aa282125a08110732913b02997

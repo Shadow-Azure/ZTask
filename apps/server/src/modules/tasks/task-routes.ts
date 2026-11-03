@@ -16,6 +16,21 @@ function isConflict409(cause: unknown): cause is Conflict409 {
 }
 
 /**
+ * 解析任务列表的 ownerIds：支持逗号分隔与重复参数，空值表示不筛选。
+ * 具体 UUID 校验与归档成员判定留给 TaskService，保证筛选语义集中在一处。
+ * @param value query 中的 ownerIds 原始值。
+ * @returns 去空白后的成员 ID 列表；无有效值时 undefined。
+ */
+function parseOwnerIds(value: string | string[] | undefined): string[] | undefined {
+  if (value === undefined) return undefined;
+  const ids = (Array.isArray(value) ? value : [value])
+    .flatMap((item) => item.split(","))
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return ids.length > 0 ? ids : undefined;
+}
+
+/**
  * 管理端任务路由（05 §3.4–3.9）。Admin 本机专用守卫由 app 级 preHandler 统一执行；
  * VersionConflictError 统一映射 409 + 最新可见任务（details.current）。
  * @param app Fastify 实例。
@@ -55,7 +70,14 @@ export async function taskRoutes(
   app.get(
     "/api/v1/admin/tasks",
     async (request) => {
-      const query = request.query as { folderId?: string; includeDescendants?: string; q?: string; importance?: string; cursor?: string };
+      const query = request.query as {
+        folderId?: string;
+        includeDescendants?: string;
+        q?: string;
+        importance?: string;
+        ownerIds?: string | string[];
+        cursor?: string;
+      };
       if (!query.folderId) {
         const error = new Error("folderId 必填");
         (error as { statusCode?: number }).statusCode = 400;
@@ -66,6 +88,7 @@ export async function taskRoutes(
         includeDescendants: query.includeDescendants !== "false",
         q: query.q,
         importance: query.importance,
+        ownerIds: parseOwnerIds(query.ownerIds),
         cursor: query.cursor,
       });
     },

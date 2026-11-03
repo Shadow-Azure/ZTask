@@ -19,6 +19,10 @@ export interface DerivedIndexes {
   assignmentsByMember: Map<string, string[]>;
   /** 主任务的当前有效 owner：taskId → memberId 列表（已归档成员被剔除）。 */
   activeOwnersByTask: Map<string, string[]>;
+  /** 小任务 id → 所属主任务 id（含软删除小任务，便于历史/父级解析）。 */
+  parentBySubtaskId: Map<string, string>;
+  /** 主任务的当前有效小任务 owner：taskId → memberId 列表（已归档成员被剔除）。 */
+  activeSubtaskOwnersByTask: Map<string, string[]>;
 }
 
 function pushIndex<K extends string | null>(map: Map<K, string[]>, key: K, value: string): void {
@@ -47,6 +51,8 @@ export function buildIndexes(input: {
   const historyTasksByFolder = new Map<string, string[]>();
   const assignmentsByMember = new Map<string, string[]>();
   const activeOwnersByTask = new Map<string, string[]>();
+  const parentBySubtaskId = new Map<string, string>();
+  const activeSubtaskOwnersByTask = new Map<string, string[]>();
 
   for (const folder of input.folders) {
     pushIndex(folderChildren, folder.parentId, folder.id);
@@ -62,11 +68,28 @@ export function buildIndexes(input: {
       .filter((a) => a.taskId === aggregate.taskId && a.kind === "owner" && !archived.has(a.memberId))
       .map((a) => a.memberId);
     if (owners.length > 0) activeOwnersByTask.set(aggregate.taskId, owners);
+    for (const subtask of aggregate.subtasks) {
+      parentBySubtaskId.set(subtask.id, aggregate.taskId);
+      if (subtask.deletedAt !== null) continue;
+      const subtaskOwner = aggregate.assignments.find(
+        (a) => a.taskId === subtask.id && a.kind === "owner" && !archived.has(a.memberId),
+      );
+      if (subtaskOwner) pushIndex(activeSubtaskOwnersByTask, aggregate.taskId, subtaskOwner.memberId);
+    }
     for (const assignment of aggregate.assignments) {
       if (archived.has(assignment.memberId)) continue;
       pushIndex(assignmentsByMember, assignment.memberId, assignment.taskId);
     }
   }
 
-  return { byId, folderChildren, activeTasksByFolder, historyTasksByFolder, assignmentsByMember, activeOwnersByTask };
+  return {
+    byId,
+    folderChildren,
+    activeTasksByFolder,
+    historyTasksByFolder,
+    assignmentsByMember,
+    activeOwnersByTask,
+    parentBySubtaskId,
+    activeSubtaskOwnersByTask,
+  };
 }

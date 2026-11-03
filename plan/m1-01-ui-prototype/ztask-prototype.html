@@ -202,6 +202,48 @@
   .search-box { font: inherit; font-size: 12px; color: var(--text); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; outline: none; width: 170px; }
   .search-box:focus { border-color: var(--blue); }
 
+  /* 工具栏负责人多选筛选（Ant Select multiple / GitHub assignee 模式） */
+  .toolbar-label { font-size: 11px; color: var(--text-faint); }
+  .fsel { position: relative; }
+  .fsel-trigger {
+    display: inline-flex; align-items: center; gap: 6px; min-width: 132px; max-width: 216px; height: 29px;
+    font: inherit; font-size: 12px; color: var(--text-dim); cursor: pointer;
+    border: 1px solid var(--border); border-radius: 8px; padding: 3px 8px 3px 9px; background: var(--bg-card);
+  }
+  .fsel-trigger:hover { border-color: var(--border-strong); }
+  .fsel.open .fsel-trigger { border-color: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 12%, transparent); }
+  .fsel-trigger.has-value { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 45%, transparent); background: color-mix(in srgb, var(--blue) 7%, transparent); font-weight: 600; }
+  .fsel-trigger .ph { color: var(--text-faint); font-weight: 400; }
+  .fsel-trigger .names { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fsel-trigger .ava { width: 16px; height: 16px; font-size: 8.5px; }
+  .fsel-trigger .caret { margin-left: auto; color: var(--text-faint); font-size: 10px; padding-left: 2px; }
+  .fsel-panel {
+    position: absolute; top: calc(100% + 5px); left: 0; width: 268px; z-index: 40;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(20,26,38,.16); overflow: hidden;
+  }
+  .fsel.align-right .fsel-panel { left: auto; right: 0; }
+  .fsel-search { width: 100%; font: inherit; font-size: 12px; padding: 8px 12px; border: none; border-bottom: 1px solid var(--border); outline: none; }
+  .fsel-list { max-height: 228px; overflow-y: auto; padding: 4px; }
+  .fsel-opt {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; border-radius: 7px;
+    background: transparent; color: var(--text); cursor: pointer; font: inherit; font-size: 12.5px; text-align: left;
+  }
+  .fsel-opt:hover { background: var(--bg-inset); }
+  .fsel-opt.sel { background: color-mix(in srgb, var(--blue) 7%, transparent); }
+  .fsel-opt .role { color: var(--text-faint); font-size: 10.5px; margin-left: auto; }
+  .fsel-check {
+    width: 15px; height: 15px; flex-shrink: 0; display: grid; place-items: center;
+    border: 1px solid var(--border-strong); border-radius: 4px; color: #fff; font-size: 10px; line-height: 1;
+  }
+  .fsel-opt.sel .fsel-check { border-color: var(--blue); background: var(--blue); }
+  .fsel-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-top: 1px solid var(--border); background: #fafbfc; }
+  .fsel-foot .sum { font-size: 10.5px; color: var(--text-faint); }
+  .fsel-clear { font: inherit; font-size: 11px; color: var(--blue); background: transparent; border: none; border-radius: 5px; padding: 2px 5px; cursor: pointer; }
+  .fsel-clear:hover { background: color-mix(in srgb, var(--blue) 9%, transparent); }
+  .fsel-empty { padding: 14px; text-align: center; color: var(--text-faint); font-size: 11.5px; }
+  .pane-filter-note { margin: -5px 0 9px; color: var(--text-dim); font-size: 10.5px; line-height: 1.4; }
+
   .task-list { display: grid; gap: 14px; }
   .task-card { overflow: hidden; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 1px 2px rgba(30,40,60,.035); }
   .task-card-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); align-items: center; gap: 24px; padding: 16px 20px 15px; cursor: pointer; outline: none; }
@@ -621,15 +663,17 @@
           <div class="toolbar">
             <button class="btn primary" id="btn-new-task">＋ 新建任务</button>
             <span class="spacer"></span>
-            <span style="font-size:11px;color:var(--text-faint)">重要度</span>
+            <span class="toolbar-label">重要度</span>
             <button class="fchip active" data-imp="all">全部</button>
             <button class="fchip" data-imp="high">高</button>
             <button class="fchip" data-imp="mid">中</button>
             <button class="fchip" data-imp="low">低</button>
+            <span class="toolbar-label">负责人</span>
+            <div class="fsel" id="assignee-filter"></div>
             <input class="search-box" id="task-search" placeholder="搜索任务描述…">
           </div>
           <div class="task-list" id="task-rows"></div>
-          <p class="hint-line">任务进展为只读视图；点击任务标题区可在浮窗中查看或编辑完整任务。</p>
+          <p class="hint-line">任务进展为只读视图；点击任务标题区可在浮窗中查看或编辑完整任务。<br>负责人筛选与重要度、搜索同时生效：主任务负责人命中时显示整条任务，仅子任务负责人命中时只显示对应子任务。</p>
         </div>
         <!-- tab 2：情况看板 -->
         <div id="tab-dash" style="display:none">
@@ -809,7 +853,7 @@ const TASKS = {
     detail:'完成树组件基础结构搭建\n节点展开/收起完成\n接入新设计稿样式\n拖拽排序已完成，待自测\n虚拟滚动方案调研中',
     subs:[
       {id:'st1', desc:'树节点拖拽交互', owner:'chen', progress:100, imp:'high', due:'2026-10-24'},
-      {id:'st2', desc:'大数据量虚拟滚动', owner:'chen', progress:40, imp:'mid', due:'2026-11-03'},
+      {id:'st2', desc:'大数据量虚拟滚动', owner:'zhao', progress:40, imp:'mid', due:'2026-11-03'},
     ]},
   t2: {id:'t2', desc:'看板渲染性能优化', owners:['chen'], collabs:['zhou'], progress:30, imp:'mid', due:'2026-11-20',
     detail:'完成性能剖析，定位在长列表重渲染\n虚拟列表方案对比中', subs:[]},
@@ -972,6 +1016,7 @@ $('#confirm-overlay').addEventListener('click', e => { if (e.target.id === 'conf
 
 /* ════════════════ 原型导航 ════════════════ */
 function showPage(name) {
+  if (name !== 'tracker') assigneePanelOpen = false;
   document.querySelectorAll('.proto-nav button[data-page]').forEach(b =>
     b.classList.toggle('active', b.dataset.page === name));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -981,7 +1026,7 @@ function showPage(name) {
   else {
     $('#page-' + name).classList.add('active');
     if (name === 'members') renderMembers();
-    if (name === 'tracker') { renderTree(); renderTasks(); renderDashChips(); renderStats(); renderRangeQuery(); }
+    if (name === 'tracker') { renderTree(); renderAssigneeFilter(); renderTasks(); renderDashChips(); renderStats(); renderRangeQuery(); }
   }
 }
 document.querySelectorAll('.proto-nav button[data-page]').forEach(b =>
@@ -1166,6 +1211,101 @@ setTreeWidth(treeWidth);
 
 /* ════════════════ 事项跟踪 · 任务管理 tab ════════════════ */
 let impFilter = 'all', searchKw = '';
+let assigneeFilter = new Set();
+let assigneePanelOpen = false, assigneeQuery = '';
+
+/* 负责人筛选：主任务负责人命中 = 整条任务（含全部子任务）；仅子任务负责人命中 = 只保留对应子任务 */
+function taskAssigneeMatch(t, selected) {
+  const subs = t.subs || [];
+  if (!selected || selected.size === 0) return { match: true, whole: true, subs };
+  if ((t.owners || []).some(id => selected.has(id))) return { match: true, whole: true, subs };
+  const matchedSubs = subs.filter(st => selected.has(st.owner));
+  return { match: matchedSubs.length > 0, whole: false, subs: matchedSubs };
+}
+
+function renderAssigneeFilter() {
+  const el = $('#assignee-filter');
+  if (!el) return;
+  const selected = MEMBERS.filter(m => assigneeFilter.has(m.id));
+  const first = selected[0];
+  const extra = selected.length - 1;
+  const list = MEMBERS.filter(m => !assigneeQuery || m.name.includes(assigneeQuery) || m.role.includes(assigneeQuery));
+  const boardRect = el.closest('.board-body')?.getBoundingClientRect();
+  const triggerRect = el.getBoundingClientRect();
+  const alignRight = !!boardRect && triggerRect.left + 268 > boardRect.right - 12;
+  el.classList.toggle('align-right', alignRight);
+  el.classList.toggle('open', assigneePanelOpen);
+  el.innerHTML = `<button class="fsel-trigger${selected.length ? ' has-value' : ''}" type="button" aria-haspopup="true" aria-expanded="${assigneePanelOpen}" title="${selected.length ? '已选负责人：' + esc(selected.map(m => m.name).join('、')) : '按负责人筛选任务'}">
+      ${selected.length
+        ? `${ava(first.id, true)}<span class="names">${esc(first.name)}${extra > 0 ? ` +${extra}` : ''}</span>`
+        : '<span class="ph">全部</span>'}
+      <span class="caret">▾</span>
+    </button>
+    ${assigneePanelOpen ? `<div class="fsel-panel" role="dialog" aria-label="按负责人筛选">
+      <input class="fsel-search" placeholder="搜索成员姓名 / 角色…" value="${esc(assigneeQuery)}" aria-label="搜索成员">
+      <div class="fsel-list" role="listbox" aria-multiselectable="true">
+        ${list.map(m => {
+          const sel = assigneeFilter.has(m.id);
+          return `<button class="fsel-opt${sel ? ' sel' : ''}" type="button" role="option" aria-selected="${sel}" data-opt="${m.id}">
+            <span class="fsel-check">${sel ? '✓' : ''}</span>${ava(m.id, true)}<span>${esc(m.name)}</span><span class="role">${esc(m.role)}</span>
+          </button>`;
+        }).join('') || '<div class="fsel-empty">没有匹配的成员</div>'}
+      </div>
+      <div class="fsel-foot">
+        <span class="sum">${assigneeFilter.size ? `已选 ${assigneeFilter.size} 人` : '不筛选 = 全部负责人'}</span>
+        ${assigneeFilter.size ? '<button class="fsel-clear" type="button">清除</button>' : ''}
+      </div>
+    </div>` : ''}`;
+  const trigger = el.querySelector('.fsel-trigger');
+  trigger.addEventListener('click', e => {
+    e.stopPropagation();
+    assigneePanelOpen = !assigneePanelOpen;
+    renderAssigneeFilter();
+    if (assigneePanelOpen) {
+      const s = el.querySelector('.fsel-search');
+      if (s) s.focus();
+    }
+  });
+  const search = el.querySelector('.fsel-search');
+  if (search) search.addEventListener('input', () => {
+    assigneeQuery = search.value;
+    renderAssigneeFilter();
+    const s = el.querySelector('.fsel-search');
+    if (s) { s.focus(); s.setSelectionRange(s.value.length, s.value.length); }
+  });
+  el.querySelectorAll('.fsel-opt').forEach(opt => opt.addEventListener('click', e => {
+    e.stopPropagation();
+    const id = opt.dataset.opt;
+    assigneeFilter.has(id) ? assigneeFilter.delete(id) : assigneeFilter.add(id);
+    renderAssigneeFilter();
+    renderTasks();
+    const s = el.querySelector('.fsel-search');
+    if (s) s.focus();
+  }));
+  const clear = el.querySelector('.fsel-clear');
+  if (clear) clear.addEventListener('click', e => {
+    e.stopPropagation();
+    assigneeFilter.clear();
+    assigneeQuery = '';
+    renderAssigneeFilter();
+    renderTasks();
+  });
+}
+document.addEventListener('click', e => {
+  if (!e.target.isConnected) return;
+  if (assigneePanelOpen && !e.target.closest('#assignee-filter')) {
+    assigneePanelOpen = false;
+    renderAssigneeFilter();
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && assigneePanelOpen) {
+    assigneePanelOpen = false;
+    renderAssigneeFilter();
+    const trigger = $('#assignee-filter .fsel-trigger');
+    if (trigger) trigger.focus();
+  }
+});
 
 function directFolderOf(tid) {
   let name = '';
@@ -1186,19 +1326,25 @@ function renderTasks() {
   $('#crumb-cnt').textContent = ids.length + ' 个任务';
   const rows = $('#task-rows');
   const kw = searchKw.trim();
-  const shown = ids.filter(id => {
+  const shown = [];
+  ids.forEach(id => {
     const t = TASKS[id];
-    if (impFilter !== 'all' && t.imp !== impFilter) return false;
-    if (kw && !t.desc.includes(kw)) return false;
-    return true;
+    if (impFilter !== 'all' && t.imp !== impFilter) return;
+    if (kw && !t.desc.includes(kw)) return;
+    const hit = taskAssigneeMatch(t, assigneeFilter);
+    if (!hit.match) return;
+    shown.push({ t, subs: hit.subs, partial: !hit.whole });
   });
   if (!shown.length) {
-    rows.innerHTML = '<div class="empty-tip">当前条件下没有任务。点击工具栏「＋ 新建任务」创建第一条任务。</div>';
+    const filtered = assigneeFilter.size > 0 || impFilter !== 'all' || kw;
+    rows.innerHTML = filtered
+      ? '<div class="empty-tip">没有同时满足负责人、重要度和搜索条件的任务。调整筛选条件后再试。</div>'
+      : '<div class="empty-tip">当前条件下没有任务。点击工具栏「＋ 新建任务」创建第一条任务。</div>';
     return;
   }
-  rows.innerHTML = shown.map(id => {
-    const from = directFolderOf(id);
-    return taskRow(TASKS[id], false, from !== selName ? from : null);
+  rows.innerHTML = shown.map(({ t, subs, partial }) => {
+    const from = directFolderOf(t.id);
+    return taskRow(t, false, from !== selName ? from : null, { subs, partial });
   }).join('');
   bindTaskRows(rows);
 }
@@ -1229,8 +1375,10 @@ function setSubtaskPanePercent(value) {
   list.style.setProperty('--subtask-pane-width', subtaskPanePercent + '%');
   list.querySelectorAll('.task-pane-resizer').forEach(r => r.setAttribute('aria-valuenow', subtaskPanePercent));
 }
-function taskRow(t, isSub, fromFolder) {
-  const summary = subtaskSummary(t.subs);
+function taskRow(t, isSub, fromFolder, view) {
+  const shownSubs = view ? view.subs : (t.subs || []);
+  const partial = !!(view && view.partial);
+  const summary = subtaskSummary(shownSubs);
   const overdue = isOverdue(t);
   return `<article class="task-card" data-task-card="${t.id}">
     <header class="task-card-head" data-tid="${t.id}" tabindex="0" title="打开任务详情浮窗" aria-label="打开任务详情：${esc(t.desc)}">
@@ -1254,7 +1402,8 @@ function taskRow(t, isSub, fromFolder) {
     <div class="task-card-body">
       <section class="task-pane" aria-label="子任务进展">
         <div class="task-pane-title"><span>子任务进展</span><span class="count">${summary.done}/${summary.total} 已完成</span></div>
-        ${summary.total ? `<div class="subtask-lines">${t.subs.map(st => `<div class="subtask-line${st.progress === 100 ? ' done' : ''}">
+        ${partial ? '<p class="pane-filter-note">已按负责人筛选，仅显示所选负责人负责的子任务</p>' : ''}
+        ${summary.total ? `<div class="subtask-lines">${shownSubs.map(st => `<div class="subtask-line${st.progress === 100 ? ' done' : ''}">
           ${subtaskProgressHtml(st.progress, esc(st.desc))}
           <span class="subtask-copy">
             <span class="subtask-name" title="${esc(st.desc)}">${esc(st.desc)}</span>
@@ -1955,6 +2104,7 @@ function renderShareDead() {
 
 /* ════════════════ 初始化 ════════════════ */
 renderTree();
+renderAssigneeFilter();
 renderTasks();
 renderDashChips();
 renderStats();

@@ -9,11 +9,13 @@ import { shareApi } from "../../api/share";
 import TaskCard from "../../components/TaskCard.vue";
 import TaskEditorDialog from "../tasks/TaskEditorDialog.vue";
 import TaskDetailDialog from "./TaskDetailDialog.vue";
+import AssigneeFilter from "./AssigneeFilter.vue";
 import FolderTree from "../folders/FolderTree.vue";
 import DashboardPanel from "../dashboard/DashboardPanel.vue";
 import PaneResizer from "../../components/ui/PaneResizer.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
+import { useToast } from "../../components/ui/toast";
 import { isShareUnauthorized, useShareSession } from "../share/useShareSession";
 import { readPreference, writePreference } from "../../lib/preferences";
 
@@ -56,6 +58,29 @@ function switchTab(tab: "tasks" | "dash"): void {
 const importanceFilter = ref<"all" | "high" | "mid" | "low">("all");
 const searchText = ref("");
 const debouncedQ = ref("");
+/** 负责人筛选（仅管理员）：owners 逗号串写入 URL，刷新/后退可恢复。 */
+function readOwnerIds(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value.join(",") : value;
+  if (typeof raw !== "string" || raw === "") return [];
+  return [...new Set(raw.split(",").map((id) => id.trim()).filter(Boolean))];
+}
+const ownerFilter = ref<string[]>(readOwnerIds(route.query.owners));
+const ownerFilterKey = computed(() => [...ownerFilter.value].sort().join(","));
+
+watch(ownerFilter, (ids) => {
+  const next = ids.length > 0 ? [...ids].sort().join(",") : undefined;
+  if ((route.query.owners as string | undefined) === next) return;
+  void router.replace({ query: { ...route.query, owners: next } });
+});
+
+watch(
+  () => route.query.owners,
+  (value) => {
+    const next = readOwnerIds(value);
+    if (next.join(",") !== ownerFilter.value.join(",")) ownerFilter.value = next;
+  },
+);
+
 let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 
 watch(searchText, (value) => {
@@ -72,7 +97,7 @@ const accumulated = ref<Task[]>([]);
 const nextCursor = ref<string | null>(null);
 
 const tasksQuery = useQuery({
-  queryKey: [scopePrefix.value, "tasks", selectedFolderId, debouncedQ, importanceFilter, pageCursor],
+  queryKey: [scopePrefix.value, "tasks", selectedFolderId, debouncedQ, importanceFilter, ownerFilterKey, pageCursor],
   queryFn: () =>
     isShareScope.value
       ? shareApi.tracker({
@@ -86,6 +111,7 @@ const tasksQuery = useQuery({
           includeDescendants: true,
           q: debouncedQ.value || undefined,
           importance: importanceFilter.value === "all" ? undefined : importanceFilter.value,
+          ownerIds: ownerFilter.value.length > 0 ? [...ownerFilter.value].sort() : undefined,
         }),
   enabled: canLoadTasks,
   refetchInterval: 15_000,
@@ -107,7 +133,7 @@ watch(
 );
 
 // 切换任务夹/筛选/搜索会回到第一页，避免游标跨筛选条件复用（05 §6.4）。
-watch([selectedFolderId, debouncedQ, importanceFilter], () => {
+watch([selectedFolderId, debouncedQ, importanceFilter, ownerFilterKey], () => {
   pageCursor.value = null;
   nextCursor.value = null;
   accumulated.value = [];
@@ -139,6 +165,17 @@ watch(
 
 const activeMembers = computed<AdminMember[]>(() =>
   (membersQuery.data.value?.items ?? []).filter((member) => member.archivedAt === null),
+);
+
+/** URL 里可能残留已归档/不存在的成员 ID：成员目录加载成功后从筛选里剔除，避免“已筛选但无选项”。 */
+watch(
+  [activeMembers, () => membersQuery.isSuccess.value],
+  ([members, loaded]) => {
+    if (!isAdmin.value || !loaded) return;
+    const known = new Set(members.map((member) => member.id));
+    const next = ownerFilter.value.filter((id) => known.has(id));
+    if (next.length !== ownerFilter.value.length) ownerFilter.value = next;
+  },
 );
 
 const folderTree = computed<FolderTreeNode[]>(() => foldersQuery.data.value?.tree ?? []);
@@ -202,8 +239,11 @@ const showLoadMoreError = computed(
 /** D18（原型 1196）：列表空态为纯文本行，管理端提示新建，成员端说明只读范围。 */
 const emptyTip = computed(() => {
   if (isShareScope.value) return "当前范围内没有与你相关的任务；成员视图为只读。";
+  if (ownerFilter.value.length > 0) return "没有同时满足负责人、重要度和搜索条件的任务。调整筛选条件后再试。";
   return "当前条件下没有任务。点击工具栏「＋ 新建任务」创建第一条任务。";
 });
+
+const selectedOwnerIds = computed(() => new Set(ownerFilter.value));
 
 function toCardModel(task: Task): TaskCardModel {
   return {
@@ -217,6 +257,10 @@ function toCardModel(task: Task): TaskCardModel {
     dueDate: task.dueDate,
     progress: task.progress,
     detail: task.detail,
+    subtasksFiltered:
+      isAdmin.value &&
+      ownerFilter.value.length > 0 &&
+      !task.owners.some((owner) => selectedOwnerIds.value.has(owner.id)),
     subtasks: task.subtasks.map((sub) => ({
       id: sub.id,
       description: sub.description,
@@ -240,19 +284,35 @@ function retryLoadMore(): void {
 
 const editorOpen = ref(false);
 const editorTask = ref<Task | null>(null);
-
 const detailOpen = ref(false);
 const detailTaskId = ref<string | null>(null);
+const toast = useToast();
 
-function openEditor(task: Task): void {
-  editorTask.value = task;
-  editorOpen.value = true;
+/** 负责人筛选只命中子任务时，列表 DTO 是裁剪后的子集，编辑前必须取完整聚合。 */
+function needsFullAggregate(task: Task): boolean {
+  return isAdmin.value && ownerFilter.value.length > 0 && !task.owners.some((owner) => ownerFilter.value.includes(owner.id));
+}
+
+async function openEditor(task: Task): Promise<void> {
+  if (!needsFullAggregate(task)) {
+    editorTask.value = task;
+    editorOpen.value = true;
+    return;
+  }
+  try {
+    const detail = await adminTaskApi.get(task.id);
+    editorTask.value = "task" in detail ? detail.parent : detail;
+    editorOpen.value = true;
+  } catch (cause) {
+    // 绝不把裁剪后的子集当完整聚合打开并保存。
+    toast.show(cause instanceof Error ? cause.message : "任务加载失败");
+  }
 }
 
 function openEditorById(taskId: string): void {
   if (!isAdmin.value) return;
   const task = accumulated.value.find((item) => item.id === taskId);
-  if (task) openEditor(task);
+  if (task) void openEditor(task);
 }
 
 /**
@@ -266,14 +326,14 @@ async function openTreeTask(taskId: string): Promise<void> {
   }
   const local = accumulated.value.find((item) => item.id === taskId);
   if (local) {
-    openEditor(local);
+    void openEditor(local);
     return;
   }
   try {
     const detail = await adminTaskApi.get(taskId);
     // 树只列主任务；若 id 命中小任务（数据竞争），退回其父任务。
     const task = "task" in detail ? detail.parent : detail;
-    openEditor(task);
+    await openEditor(task);
   } catch {
     // 拉取失败（已删除/网络）不打断浏览：左侧列表仍是事实来源。
   }
@@ -415,6 +475,10 @@ function closeCreateFolder(): void {
             :class="importanceFilter === level ? 'fchip active' : 'fchip'"
             @click="importanceFilter = level"
           >{{ level === "all" ? "全部" : level === "high" ? "高" : level === "mid" ? "中" : "低" }}</button>
+          <template v-if="isAdmin">
+            <span class="flabel">负责人</span>
+            <AssigneeFilter v-model="ownerFilter" :members="activeMembers" aria-label="按负责人筛选" />
+          </template>
           <input v-model="searchText" class="search-box" type="search" placeholder="搜索任务描述…" aria-label="搜索任务描述">
         </div>
 
