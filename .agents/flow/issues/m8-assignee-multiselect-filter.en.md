@@ -6,7 +6,7 @@ English | [中文](m8-assignee-multiselect-filter.md)
 kind: issue
 milestone: m8
 priority: P1
-status: in-progress
+status: done
 scope:
   - plan/m1-01-ui-prototype/**
   - plan/fullstack-design/**
@@ -61,7 +61,7 @@ The task management prototype currently offers only importance and keyword searc
 ## Dependencies and boundary
 
 - Depends on: the m1 prototype baseline and m1 prototype refinement.
-- Boundary: static prototype, specification tests, and screenshots only; no real `apps/web` page or server-side filtering.
+- Boundary: the static prototype, full-stack design, specification tests, and screenshots, plus the real `apps/web` page and server-side filtering implemented to the design contract.
 
 ## Independent verification
 
@@ -84,5 +84,4 @@ pnpm verify:flow
 
 ## Non-goals
 
-- Do not change `apps/web` or other real implementations.
 - Do not change task-tree counts, dashboard statistics, or member views.
