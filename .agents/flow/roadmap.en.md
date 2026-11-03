@@ -12,6 +12,7 @@ milestones:
   - m5
   - m6
   - m7
+  - m8
 ```
 
 ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; `plan/fullstack-design/` is the baseline.
@@ -25,6 +26,7 @@ ZTask provides task collaboration through a local CLI, web service, and file sto
 - m5: Dashboard, two-column diffs, backup recovery, and end-to-end acceptance.
 - m6: Screen-by-screen parity with the prototype and a clean difference ledger.
 - m7: Project showcase image and repository front page.
+- m8: Assignee filter refinement for the task management prototype.
 
 ## Progression principles
 

@@ -384,3 +384,101 @@ test('currently deleted changes carry a badge and sort after active changes', ()
   assert.ok(box.innerHTML.indexOf('普通任务') < box.innerHTML.indexOf('已删除任务'));
   assert.ok(box.innerHTML.indexOf('已删除任务') > box.innerHTML.indexOf('id="btn-collapse-all"'));
 });
+
+test('assignee filter keeps the whole task when a main owner is selected', () => {
+  const taskAssigneeMatch = loadFunction('taskAssigneeMatch');
+  const task = {
+    owners: ['chen'],
+    subs: [
+      { id: 'st1', owner: 'chen' },
+      { id: 'st2', owner: 'zhao' },
+    ],
+  };
+
+  const result = taskAssigneeMatch(task, new Set(['chen']));
+
+  assert.deepEqual(result, { match: true, whole: true, subs: task.subs });
+  assert.equal(result.subs.length, 2);
+});
+
+test('assignee filter narrows subtasks when only a subtask owner is selected', () => {
+  const taskAssigneeMatch = loadFunction('taskAssigneeMatch');
+  const task = {
+    owners: ['chen'],
+    subs: [
+      { id: 'st1', owner: 'chen' },
+      { id: 'st2', owner: 'zhao' },
+    ],
+  };
+
+  const result = taskAssigneeMatch(task, new Set(['zhao']));
+
+  assert.equal(result.match, true);
+  assert.equal(result.whole, false);
+  assert.deepEqual(result.subs.map(st => st.id), ['st2']);
+});
+
+test('assignee filter excludes tasks without any matching owner or subtask', () => {
+  const taskAssigneeMatch = loadFunction('taskAssigneeMatch');
+  const task = { owners: ['chen'], subs: [{ id: 'st1', owner: 'chen' }] };
+
+  assert.equal(taskAssigneeMatch(task, new Set(['zhou'])).match, false);
+});
+
+test('assignee filter without a selection keeps every task and subtask', () => {
+  const taskAssigneeMatch = loadFunction('taskAssigneeMatch');
+  const task = { owners: ['chen'], subs: [{ id: 'st1', owner: 'zhao' }] };
+
+  assert.deepEqual(taskAssigneeMatch(task, new Set()), { match: true, whole: true, subs: task.subs });
+  assert.deepEqual(taskAssigneeMatch(task, null), { match: true, whole: true, subs: task.subs });
+});
+
+test('assignee filter treats multiple selected owners as a union', () => {
+  const taskAssigneeMatch = loadFunction('taskAssigneeMatch');
+  const task = {
+    owners: ['chen'],
+    subs: [
+      { id: 'st1', owner: 'chen' },
+      { id: 'st2', owner: 'zhao' },
+      { id: 'st3', owner: 'lin' },
+    ],
+  };
+
+  const subtaskOnly = taskAssigneeMatch(task, new Set(['zhao', 'lin']));
+  assert.equal(subtaskOnly.whole, false);
+  assert.deepEqual(subtaskOnly.subs.map(st => st.id), ['st2', 'st3']);
+
+  const withMainOwner = taskAssigneeMatch(task, new Set(['zhao', 'chen']));
+  assert.equal(withMainOwner.whole, true);
+  assert.equal(withMainOwner.subs.length, 3);
+});
+
+test('filtered task card shows only the matching subtasks and explains the subset', () => {
+  const taskRow = loadFunction('taskRow', {
+    subtaskSummary: loadFunction('subtaskSummary'),
+    esc: value => String(value),
+    subtaskProgressHtml: loadFunction('subtaskProgressHtml'),
+    ava: () => '<span class="ava"></span>',
+    isOverdue: () => false,
+    avaGroup: () => '',
+    member: id => ({ name: id }),
+    impName: { high: '高', mid: '中' },
+    fmtD: () => '11-06',
+  });
+  const visibleSub = { id: 'st2', desc: '大数据量虚拟滚动', owner: 'zhao', progress: 40, imp: 'mid', due: '2026-11-03' };
+  const rendered = taskRow(
+    { id: 't1', desc: '任务树组件重构', progress: 70, owners: ['chen'], imp: 'high', due: '2026-11-06', detail: '', subs: [
+      { id: 'st1', desc: '树节点拖拽交互', owner: 'chen', progress: 100, imp: 'high', due: '2026-10-24' },
+      visibleSub,
+    ] },
+    false,
+    null,
+    { subs: [visibleSub], partial: true },
+  );
+
+  assert.match(rendered, /已按负责人筛选/);
+  assert.match(rendered, /大数据量虚拟滚动/);
+  assert.doesNotMatch(rendered, /树节点拖拽交互/);
+  assert.match(rendered, /0\/1 已完成/);
+  assert.match(rendered, /负责人 · zhao/);
+});
