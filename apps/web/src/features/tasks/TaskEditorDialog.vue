@@ -198,6 +198,16 @@ const saveMutation = useMutation({
       detail: detail.value,
       importance: importance.value,
       dueDate: dueDate.value || null,
+      subtasks: {
+        create: subtasks.value.map((sub) => ({
+          clientId: sub.clientId,
+          description: sub.description.trim(),
+          ownerId: sub.ownerId,
+          progress: sub.progress,
+          importance: sub.importance,
+          dueDate: sub.dueDate,
+        })),
+      },
     });
   },
   onSuccess: (result) => {
@@ -242,6 +252,7 @@ const deleteMutation = useMutation({
     return await adminTaskApi.remove(props.task.id, props.task.version);
   },
   onSuccess: () => {
+    confirmDelete.value = false;
     void queryClient.invalidateQueries({ queryKey: ["admin", "tasks"] });
     void queryClient.invalidateQueries({ queryKey: ["admin", "folders"] });
     toast.show("任务已删除");

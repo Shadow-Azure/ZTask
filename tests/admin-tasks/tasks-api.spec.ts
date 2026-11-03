@@ -61,6 +61,38 @@ describe("POST /admin/tasks（创建）", () => {
     expect(task.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
   });
 
+  it("主任务可与小任务意图一次原子创建", async () => {
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({
+        subtasks: {
+          create: [
+            { clientId: "temp-1", description: "首版小任务", ownerId: ownerA, progress: 20, importance: "high", dueDate: "2026-11-12" },
+          ],
+        },
+      }),
+    });
+    expect(response.statusCode).toBe(201);
+    const task = response.json();
+    expect(task.version).toBe(1);
+    expect(task.subtasks).toHaveLength(1);
+    expect(task.subtasks[0]).toMatchObject({ description: "首版小任务", progress: 20, importance: "high", dueDate: "2026-11-12" });
+    expect(task.subtasks[0].owner).toMatchObject({ id: ownerA });
+  });
+
+  it("创建小任务引用无效成员时整次创建不写入", async () => {
+    const beforeCount = (await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}` })).json().items.length;
+    const response = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({
+        subtasks: { create: [{ clientId: "temp-bad", description: "坏 owner", ownerId: "22222222-2222-4222-8222-222222222222" }] },
+      }),
+    });
+    expect([400, 422]).toContain(response.statusCode);
+    const after = (await app.inject({ method: "GET", url: `/api/v1/admin/tasks?folderId=${folderId}` })).json();
+    expect(after.items).toHaveLength(beforeCount);
+  });
+
   it("小任务：201 返回 { task, parent }，父聚合 version 递增", async () => {
     const main = await createMain();
     const response = await app.inject({

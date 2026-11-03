@@ -179,6 +179,8 @@ const disableMutation = useMutation({
   onSuccess: () => {
     confirmCloseOpen.value = false;
     switching.value = false;
+    // 关闭后表单重新出现；defaultPort watch 不会因 loopback URL 未变化而触发，显式重置避免沿用旧 LAN 端口。
+    portInput.value = String(defaultPort.value);
     toast.show("已关闭局域网分享；token 未吊销，重新开启后旧链接仍可用");
     void queryClient.invalidateQueries({ queryKey: ["admin", "network"] });
   },

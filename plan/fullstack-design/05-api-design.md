@@ -153,11 +153,23 @@ NetworkState = {
   "progress": 0,
   "detail": "",
   "importance": "mid",
-  "dueDate": "2026-11-10"
+  "dueDate": "2026-11-10",
+  "subtasks": {
+    "create": [
+      {
+        "clientId": "browser-temp-id",
+        "description": "首版小任务",
+        "ownerId": "uuid",
+        "progress": 0,
+        "importance": "mid",
+        "dueDate": "2026-11-12"
+      }
+    ]
+  }
 }
 ```
 
-创建小任务时 folderId 不得与父任务冲突；父任务必须是无 parentId 的主任务。
+创建主任务时可携带小任务创建意图；服务端在一次聚合写入中校验并在任一小任务非法时拒绝整次创建。创建小任务时 folderId 不得与父任务冲突；父任务必须是无 parentId 的主任务。
 
 ### 3.6 `GET /admin/tasks/{id}`
 

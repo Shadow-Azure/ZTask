@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/flow/issues/m6-smoke-regression-fixes.md
+m6-smoke-regression-fixes.md: 5f74144dcd4ba8a06dc8a5d492951c040b83e0d2
+m6-smoke-regression-fixes.en.md: bd1ccfd32608cc5ef2fe3a393f6723f67c4a34b8

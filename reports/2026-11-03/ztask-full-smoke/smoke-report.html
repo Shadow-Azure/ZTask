@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ZTask 全功能冒烟报告</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --bg:#f4f7fb;--card:#fff;--ink:#16202f;--ink2:#55637a;--ink3:#7b869b;
+      --line:#dde4ee;--accent:#2563eb;--accent-wash:#e8efff;--good:#157347;
+      --good-wash:#e7f6ee;--warn:#b45309;--warn-wash:#fff2dd;--bad:#c9282e;
+      --bad-wash:#ffeded;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 8% 0,#dbe9ff 0,transparent 32rem),radial-gradient(circle at 92% 4%,#e7f1ff 0,transparent 28rem),var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}
+    main{max-width:1220px;margin:auto;padding:36px 28px 72px}
+    .hero{padding:30px 34px;border:1px solid #dbe3ee;border-radius:24px;background:rgba(255,255,255,.92);box-shadow:0 18px 44px #17202f12}
+    .eyebrow{margin:0;color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    h1{margin:10px 0 8px;font-size:clamp(28px,4vw,44px);letter-spacing:-.04em}
+    .summary{margin:0;max-width:850px;color:var(--ink2);font-size:15px}
+    .meta{display:block;margin-top:8px;color:var(--ink3);font-size:12px}
+    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:26px}
+    .metric{padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fafbfd}
+    .metric b{display:block;font-size:30px;letter-spacing:-.04em}
+    .metric span{display:block;margin-top:2px;color:var(--ink3);font-size:12px}
+    section{margin-top:28px}
+    .head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:0 4px 14px}
+    h2{margin:0;font-size:21px;letter-spacing:-.03em}
+    .head small{color:var(--ink3);white-space:nowrap}
+    .card{padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:0}
+    .fact{padding:13px 16px;border:1px solid #eceff5;border-radius:12px;background:#fafbfd}
+    .fact dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .fact dd{margin:3px 0 0;overflow-wrap:anywhere}
+    code{font-family:var(--mono);font-size:.9em;color:#29456d;overflow-wrap:anywhere}
+    .status{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;background:#eef1f6;color:var(--ink2)}
+    .status.pass,.status.fixed{background:var(--good-wash);color:var(--good)}
+    .status.warn,.status.manual{background:var(--warn-wash);color:var(--warn)}
+    .status.fail{background:var(--bad-wash);color:var(--bad)}
+    .tableWrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    table{width:100%;min-width:920px;border-collapse:collapse}
+    th,td{padding:12px 15px;border-bottom:1px solid #edf0f5;text-align:left;vertical-align:top}
+    th{position:sticky;top:0;background:#fafbfe;color:var(--ink2);font-size:12px}
+    tr:last-child td{border-bottom:0}
+    tr:hover{background:#fcfdff}
+    .num{color:var(--ink3);font-family:var(--mono);font-size:12px}
+    .evidence{color:var(--ink3);font-size:12px}
+    .issues{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+    .issueCard{padding:18px 21px;border:1px solid #ffcece;border-left:5px solid var(--bad);border-radius:16px;background:#fffbfb}
+    .issueCard h3{margin:0;color:#b91c1c;font-size:16px}
+    .issueCard p{margin:8px 0;color:var(--ink2)}
+    .issueCard dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .issueCard dd{margin:2px 0 0;color:var(--ink2)}
+    .tag{float:right;padding:3px 8px;border-radius:999px;background:#fee4e4;color:#9a1b21;font-size:11px;font-weight:800}
+    .fixed{display:inline-flex;gap:5px;align-items:center;margin-top:11px;padding:6px 10px;border-radius:999px;background:var(--good-wash);color:var(--good);font-size:12px;font-weight:800}
+    .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+    figure{margin:0;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 6px 22px #17202f08}
+    figure.wide{grid-column:1/-1}
+    img{display:block;width:100%;max-height:500px;object-fit:contain;background:#eef2f7}
+    figcaption{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-top:1px solid #edf0f5;background:#fafbfd;color:var(--ink2);font-size:12.5px}
+    figcaption b{flex:none;color:var(--ink)}
+    .issue-shot{border-color:#ffcece}
+    .conclusion{border:1px solid #c8e5d2;border-radius:20px;background:linear-gradient(135deg,#f2fbf6,white 54%)}
+    .conclusion.warn{border-color:#f1d9a4;background:linear-gradient(135deg,#fff8e8,white 54%)}
+    .conclusion.fail{border-color:#ffc9c9;background:linear-gradient(135deg,#fff5f5,white 54%)}
+    .conclusion ul{margin:12px 0 0;padding-left:20px;color:#344155}
+    .conclusion li+li{margin-top:7px}
+    .empty{padding:20px;text-align:center;color:var(--ink3);background:#fafbfd;border:1px dashed var(--line);border-radius:12px}
+    .foot{margin-top:24px;color:var(--ink3);font-size:12px;text-align:center}
+    @media(max-width:860px){main{padding:22px 14px 52px}.hero{padding:23px}.shots{grid-template-columns:1fr}.head{align-items:flex-start;flex-direction:column;gap:4px}}
+    @media print{body{background:white}main{max-width:none;padding:0}.card,.issueCard,figure,.tableWrap{box-shadow:none;break-inside:avoid}img{max-height:420px}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Full-stack GUI smoke</p>
+    <h1>ZTask 全功能冒烟报告</h1>
+    <p class="summary">基于 main 最新提交构建，通过 Chrome 对管理端、成员端、看板历史、分享生命周期和备份恢复做真实 GUI 冒烟；发现 3 个 P1 回归，已按 TDD 修复并回归通过。</p>
+    <span class="meta">2026-11-03 · macOS · Chrome · ZTask 0.1.0</span>
+    <div class="metrics"><div class="metric"><b>27</b><span>冒烟场景</span></div><div class="metric"><b>24</b><span>直接通过</span></div><div class="metric"><b>3</b><span>修复后通过</span></div><div class="metric"><b>401</b><span>自动化断言</span></div></div>
+  </header>
+
+  <section>
+    <div class="head"><h2>Environment and Artifact</h2><small>2026-11-03 · macOS · Chrome · ZTask 0.1.0</small></div>
+    <article class="card"><dl class="facts"><div class="fact"><dt>分支</dt><dd>codex/full-smoke-regression</dd></div><div class="fact"><dt>Base commit</dt><dd>6d8128a</dd></div><div class="fact"><dt>服务</dt><dd>ztask serve · loopback 18123</dd></div><div class="fact"><dt>数据</dt><dd>一次性隔离目录，备份/恢复使用独立目标</dd></div><div class="fact"><dt>测试数据</dt><dd>2 任务夹、3 持久任务、2 活跃成员、1 已归档成员</dd></div></dl></article>
+  </section>
+
+  <section>
+    <div class="head"><h2>Scenario Matrix</h2><small>24 pass · 3 fixed</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>#</th><th>场景</th><th>结果</th><th>详情</th><th>证据</th></tr></thead><tbody><tr><td class="num">01</td><td>服务启动与空态</td><td><span class="status pass">PASS</span></td><td>隔离数据目录首次启动；loopback 管理端、导航、空任务夹提示与禁用新建任务按钮正常。</td><td class="evidence">screenshots/01-initial-empty.png</td></tr><tr><td class="num">02</td><td>任务夹树创建与嵌套</td><td><span class="status pass">PASS</span></td><td>创建根任务夹「产品」和子任务夹「需求」，父子层级、选中范围与后代任务聚合正确。</td><td class="evidence">screenshots/06-child-folder-task.png</td></tr><tr><td class="num">03</td><td>任务夹展开/折叠与后代计数</td><td><span class="status pass">PASS</span></td><td>折叠后子夹不可见，展开后恢复；父夹计数包含子夹任务。</td><td class="evidence">screenshots/06-child-folder-task.png</td></tr><tr><td class="num">04</td><td>主任务创建与字段</td><td><span class="status pass">PASS</span></td><td>主任务描述、负责人/协作人、重要度、日期、进度、详情和任务夹均可保存并回显。</td><td class="evidence">screenshots/06-child-folder-task.png</td></tr><tr><td class="num">05</td><td>新建浮窗小任务</td><td><span class="status fixed">FAIL → FIXED</span></td><td>初始构建中新建浮窗的小任务被 POST 丢弃；修复后主任务与小任务意图一次创建并显示 1 个小任务。</td><td class="evidence">screenshots/04-task-editor-filled.png<br>screenshots/24-create-subtask-fixed.png</td></tr><tr><td class="num">06</td><td>任务详情编辑</td><td><span class="status pass">PASS</span></td><td>编辑已有任务的进度、详情、成员与字段；保存后任务卡和树同步为 75%。</td><td class="evidence">screenshots/08-task-progress-update.png</td></tr><tr><td class="num">07</td><td>小任务编辑</td><td><span class="status pass">PASS</span></td><td>编辑模式可为已有任务新增一层小任务；成员个人页新增的小任务同步到管理与成员视图。</td><td class="evidence">screenshots/05-edit-subtask-added.png<br>screenshots/15-alice-owner-write.png</td></tr><tr><td class="num">08</td><td>任务删除确认与软删除</td><td><span class="status fixed">FAIL → FIXED</span></td><td>初始构建删除成功后确认弹层残留并挡住看板；修复后弹层关闭且可直接切换到看板。</td><td class="evidence">screenshots/09-task-delete-confirm.png<br>screenshots/25-delete-dialog-fixed.png</td></tr><tr><td class="num">09</td><td>重要度筛选与描述搜索</td><td><span class="status pass">PASS</span></td><td>全部/高/中/低分别命中 3/1/1/1 条；搜索 API 精确命中实现任务。</td><td class="evidence">screenshots/07-task-filter-search.png</td></tr><tr><td class="num">10</td><td>看板统计</td><td><span class="status pass">PASS</span></td><td>整体口径为已完成 1、&gt;50% 2、≤50% 0，重要度拆分与任务数据一致。</td><td class="evidence">screenshots/10-dashboard-overview.png</td></tr><tr><td class="num">11</td><td>看板成员筛选</td><td><span class="status pass">PASS</span></td><td>选择艾莉丝后仅统计其负责/协作范围：已完成 1、&gt;50% 1、≤50% 0。</td><td class="evidence">screenshots/11-dashboard-member-distribution.png</td></tr><tr><td class="num">12</td><td>预计完成时间分布</td><td><span class="status pass">PASS</span></td><td>点击已完成统计卡展开堆叠柱状图，今天以前低重要度 1 项，其余桶为 0。</td><td class="evidence">screenshots/11-dashboard-member-distribution.png</td></tr><tr><td class="num">13</td><td>默认历史查询</td><td><span class="status pass">PASS</span></td><td>昨天 00:00 至当前时间的 4 个变化包含创建、更新和已删除任务；进度与详情 diff 正确。</td><td class="evidence">screenshots/12-history-custom-range.png</td></tr><tr><td class="num">14</td><td>自定义历史区间与边界</td><td><span class="status pass">PASS</span></td><td>2026-11-02/2026-11-04 解析为 [起点 00:00, 终点次日 00:00)，创建/更新/删除均呈现。</td><td class="evidence">screenshots/12-history-custom-range.png</td></tr><tr><td class="num">15</td><td>历史展开/折叠</td><td><span class="status pass">PASS</span></td><td>全部折叠保留行并隐藏 diff，全部展开恢复详情 diff。</td><td class="evidence">screenshots/12-history-custom-range.png</td></tr><tr><td class="num">16</td><td>面板宽度调节</td><td><span class="status pass">PASS</span></td><td>任务树 splitter 键盘 ArrowRight 后 aria 值从 340 到 356，布局无遮挡。</td><td class="evidence">screenshots/13-pane-resizer.png</td></tr><tr><td class="num">17</td><td>成员添加与编辑</td><td><span class="status pass">PASS</span></td><td>添加艾莉丝/鲍勃与临时成员；编辑鲍勃角色后表格和成员计数即时刷新。</td><td class="evidence">screenshots/20-member-archived.png</td></tr><tr><td class="num">18</td><td>局域网分享开启与状态</td><td><span class="status pass">PASS</span></td><td>选择具体网卡后 LAN chip、分享地址和成员链接基址一致。</td><td class="evidence">screenshots/02-members-lan-enabled.png</td></tr><tr><td class="num">19</td><td>成员链接生成/重置/吊销</td><td><span class="status pass">PASS</span></td><td>生成、重置、吊销均可执行；重置和吊销后旧会话刷新都进入失效页。</td><td class="evidence">screenshots/18-reset-invalidates-session.png<br>screenshots/19-revoke-invalidates-session.png</td></tr><tr><td class="num">20</td><td>成员归档</td><td><span class="status pass">PASS</span></td><td>移除后成员进入已归档态，负责/协作计数清零且无链接操作。</td><td class="evidence">screenshots/20-member-archived.png</td></tr><tr><td class="num">21</td><td>成员个人页权限</td><td><span class="status pass">PASS</span></td><td>负责人可保存进度、详情并添加小任务；协作任务只读；无管理导航。</td><td class="evidence">screenshots/15-alice-owner-write.png</td></tr><tr><td class="num">22</td><td>成员只读事项跟踪</td><td><span class="status pass">PASS</span></td><td>成员树/列表只包含相关任务，无新建/写控件，只读详情无保存或删除。</td><td class="evidence">screenshots/16-alice-readonly-tracker.png<br>screenshots/17-alice-readonly-detail.png</td></tr><tr><td class="num">23</td><td>局域网关闭/重开端口</td><td><span class="status fixed">FAIL → FIXED</span></td><td>初始构建关闭后重开沿用 8123 而非 loopback 18123；修复后关闭表单立即回到 18123，重开基址正确。</td><td class="evidence">screenshots/21-network-reopen-wrong-port.png<br>screenshots/23-network-reopen-fixed.png</td></tr><tr><td class="num">24</td><td>LAN Admin API 边界</td><td><span class="status pass">PASS</span></td><td>LAN 监听访问 /admin/health 返回 403 ADMIN_LOCAL_ONLY，并带安全响应头。</td><td class="evidence">—</td></tr><tr><td class="num">25</td><td>在线备份</td><td><span class="status pass">PASS</span></td><td>CLI backup 暂停写入生成 17 文件快照，报告校验通过并排除锁/临时/旧备份。</td><td class="evidence">—</td></tr><tr><td class="num">26</td><td>离线恢复与 doctor</td><td><span class="status pass">PASS</span></td><td>恢复到空目录后 doctor 判定健康；任务、任务夹、成员与历史引用完整。</td><td class="evidence">—</td></tr><tr><td class="num">27</td><td>重启持久化</td><td><span class="status pass">PASS</span></td><td>恢复目录重启后管理端仍显示 2 个任务夹和 3 个任务，已归档成员保留。</td><td class="evidence">screenshots/22-restored-persistence.png</td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Issues and Observations</h2><small>P1 新建任务时小任务被静默丢弃<br>P1 删除成功后确认弹层残留<br>P1 关闭后重开 LAN 使用错误端口</small></div>
+    <div class="issues"><article class="issueCard"><span class="tag">P1</span><h3>新建任务时小任务被静默丢弃</h3><dl><div><dt>Actual</dt><dd>新建浮窗可录入小任务，但 POST body 不含小任务，保存后显示 0 个。</dd></div><div><dt>Expected</dt><dd>主任务和小任务草稿在创建时一起持久化。</dd></div><div><dt>Root cause</dt><dd>create mutation 只发送主任务字段；POST 服务端也没有创建意图。</dd></div></dl><div class="fixed">Fixed · API + UI 回归覆盖</div></article><article class="issueCard"><span class="tag">P1</span><h3>删除成功后确认弹层残留</h3><dl><div><dt>Actual</dt><dd>任务已从树和列表消失，但「删除任务」确认层仍覆盖页面。</dd></div><div><dt>Expected</dt><dd>删除成功后确认层与编辑器一起关闭。</dd></div><div><dt>Root cause</dt><dd>delete mutation success 只关闭外层编辑意图，未复位内层 confirmDelete。</dd></div></dl><div class="fixed">Fixed · 组件回归覆盖</div></article><article class="issueCard"><span class="tag">P1</span><h3>关闭后重开 LAN 使用错误端口</h3><dl><div><dt>Actual</dt><dd>管理端启动在 18123 且 LAN 原为 8123；关闭再开启默认提交 8123，生成不可访问的成员基址。</dd></div><div><dt>Expected</dt><dd>重新开启时默认端口应回到 loopback 实际端口 18123。</dd></div><div><dt>Root cause</dt><dd>端口只在 defaultPort 值变化时同步；关闭不会改变 loopbackUrl，旧 LAN 端口残留。</dd></div></dl><div class="fixed">Fixed · GUI + 组件回归覆盖</div></article></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Evidence</h2><small>13 screenshots</small></div>
+    <div class="shots"><figure class="wide"><img loading="lazy" src="screenshots/01-initial-empty.png" alt="ZTask 初始空态"><figcaption><b>01 · 启动</b><span>首启空态、管理导航与禁用新建任务按钮。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/04-task-editor-filled.png" alt="新建任务浮窗和小任务草稿"><figcaption><b>04 · 修复前</b><span>新建浮窗中已录入小任务草稿。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/24-create-subtask-fixed.png" alt="创建任务后小任务保留"><figcaption><b>24 · 创建回归</b><span>修复后新建任务卡显示小任务「冒烟看护」。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/09-task-delete-confirm.png" alt="删除确认浮窗"><figcaption><b>09 · 删除确认</b><span>删除会软删小任务并保留历史。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/25-delete-dialog-fixed.png" alt="删除后看板可用"><figcaption><b>25 · 删除回归</b><span>修复后确认层关闭，可直接切换到情况看板。</span></figcaption></figure><figure class="issue"><img loading="lazy" src="screenshots/21-network-reopen-wrong-port.png" alt="LAN 重开后端口为 8123"><figcaption><b>21 · 端口缺陷</b><span>管理端口 18123 时 LAN 重开错误使用 8123。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/23-network-reopen-fixed.png" alt="LAN 重开后端口为 18123"><figcaption><b>23 · 端口回归</b><span>关闭后端口表单恢复 loopback 端口，重开基址正确。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/10-dashboard-overview.png" alt="看板总览"><figcaption><b>10 · 统计</b><span>整体完成度和重要度分布与任务数据一致。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/11-dashboard-member-distribution.png" alt="成员筛选与分布图"><figcaption><b>11 · 筛选</b><span>艾莉丝范围统计与预计完成分布。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/12-history-custom-range.png" alt="自定义历史区间"><figcaption><b>12 · 历史</b><span>自定义区间覆盖创建、更新和已删除任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/15-alice-owner-write.png" alt="成员个人页写入"><figcaption><b>15 · 成员端</b><span>负责人保存详情并新增小任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/16-alice-readonly-tracker.png" alt="成员只读跟踪"><figcaption><b>16 · 只读范围</b><span>成员只看到相关任务且无写入口。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/22-restored-persistence.png" alt="恢复后持久化数据"><figcaption><b>22 · 恢复</b><span>恢复目录重启后任务夹与任务完整。</span></figcaption></figure></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Automated Coverage Assessment</h2><small>5 areas reviewed</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>领域</th><th>自动化看护</th><th>结论</th><th>建议</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Conclusion</h2><small>修复后全功能通过</small></div>
+    <article class="card conclusion pass"><p><strong>设计功能点除未列入 F2 验收的双击重命名外全部通过；3 个冒烟发现的 P1 问题均有失败证据、修复代码、自动化看护和 GUI 回归证据。</strong></p><ul><li>pnpm verify:docs、pnpm test 全绿：54 个测试文件、401 个测试。</li><li>删除、创建小任务、LAN 端口三处已完成失败→修复→回归闭环。</li><li>任务夹双击重命名的自动化触发问题被单独记录为 warn，不作为 F2 验收失败。</li></ul></article>
+  </section>
+
+  <p class="foot">Evidence captured with Computer Use against an isolated local data directory; all share tokens redacted and not embedded in report JSON.</p>
+</main>
+</body>
+</html>
