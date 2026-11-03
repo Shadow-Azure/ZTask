@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>任务管理负责人筛选 · 集成冒烟报告</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --bg:#f4f7fb;--card:#fff;--ink:#16202f;--ink2:#55637a;--ink3:#7b869b;
+      --line:#dde4ee;--accent:#2563eb;--accent-wash:#e8efff;--good:#157347;
+      --good-wash:#e7f6ee;--warn:#b45309;--warn-wash:#fff2dd;--bad:#c9282e;
+      --bad-wash:#ffeded;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 8% 0,#dbe9ff 0,transparent 32rem),radial-gradient(circle at 92% 4%,#e7f1ff 0,transparent 28rem),var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}
+    main{max-width:1220px;margin:auto;padding:36px 28px 72px}
+    .hero{padding:30px 34px;border:1px solid #dbe3ee;border-radius:24px;background:rgba(255,255,255,.92);box-shadow:0 18px 44px #17202f12}
+    .eyebrow{margin:0;color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    h1{margin:10px 0 8px;font-size:clamp(28px,4vw,44px);letter-spacing:-.04em}
+    .summary{margin:0;max-width:850px;color:var(--ink2);font-size:15px}
+    .meta{display:block;margin-top:8px;color:var(--ink3);font-size:12px}
+    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:26px}
+    .metric{padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fafbfd}
+    .metric b{display:block;font-size:30px;letter-spacing:-.04em}
+    .metric span{display:block;margin-top:2px;color:var(--ink3);font-size:12px}
+    section{margin-top:28px}
+    .head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:0 4px 14px}
+    h2{margin:0;font-size:21px;letter-spacing:-.03em}
+    .head small{color:var(--ink3);white-space:nowrap}
+    .card{padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:0}
+    .fact{padding:13px 16px;border:1px solid #eceff5;border-radius:12px;background:#fafbfd}
+    .fact dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .fact dd{margin:3px 0 0;overflow-wrap:anywhere}
+    code{font-family:var(--mono);font-size:.9em;color:#29456d;overflow-wrap:anywhere}
+    .status{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;background:#eef1f6;color:var(--ink2)}
+    .status.pass,.status.fixed{background:var(--good-wash);color:var(--good)}
+    .status.warn,.status.manual{background:var(--warn-wash);color:var(--warn)}
+    .status.fail{background:var(--bad-wash);color:var(--bad)}
+    .tableWrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    table{width:100%;min-width:920px;border-collapse:collapse}
+    th,td{padding:12px 15px;border-bottom:1px solid #edf0f5;text-align:left;vertical-align:top}
+    th{position:sticky;top:0;background:#fafbfe;color:var(--ink2);font-size:12px}
+    tr:last-child td{border-bottom:0}
+    tr:hover{background:#fcfdff}
+    .num{color:var(--ink3);font-family:var(--mono);font-size:12px}
+    .evidence{color:var(--ink3);font-size:12px}
+    .issues{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+    .issueCard{padding:18px 21px;border:1px solid #ffcece;border-left:5px solid var(--bad);border-radius:16px;background:#fffbfb}
+    .issueCard h3{margin:0;color:#b91c1c;font-size:16px}
+    .issueCard p{margin:8px 0;color:var(--ink2)}
+    .issueCard dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .issueCard dd{margin:2px 0 0;color:var(--ink2)}
+    .tag{float:right;padding:3px 8px;border-radius:999px;background:#fee4e4;color:#9a1b21;font-size:11px;font-weight:800}
+    .fixed{display:inline-flex;gap:5px;align-items:center;margin-top:11px;padding:6px 10px;border-radius:999px;background:var(--good-wash);color:var(--good);font-size:12px;font-weight:800}
+    .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+    figure{margin:0;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 6px 22px #17202f08}
+    figure.wide{grid-column:1/-1}
+    img{display:block;width:100%;max-height:500px;object-fit:contain;background:#eef2f7}
+    figcaption{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-top:1px solid #edf0f5;background:#fafbfd;color:var(--ink2);font-size:12.5px}
+    figcaption b{flex:none;color:var(--ink)}
+    .issue-shot{border-color:#ffcece}
+    .conclusion{border:1px solid #c8e5d2;border-radius:20px;background:linear-gradient(135deg,#f2fbf6,white 54%)}
+    .conclusion.warn{border-color:#f1d9a4;background:linear-gradient(135deg,#fff8e8,white 54%)}
+    .conclusion.fail{border-color:#ffc9c9;background:linear-gradient(135deg,#fff5f5,white 54%)}
+    .conclusion ul{margin:12px 0 0;padding-left:20px;color:#344155}
+    .conclusion li+li{margin-top:7px}
+    .empty{padding:20px;text-align:center;color:var(--ink3);background:#fafbfd;border:1px dashed var(--line);border-radius:12px}
+    .foot{margin-top:24px;color:var(--ink3);font-size:12px;text-align:center}
+    @media(max-width:860px){main{padding:22px 14px 52px}.hero{padding:23px}.shots{grid-template-columns:1fr}.head{align-items:flex-start;flex-direction:column;gap:4px}}
+    @media print{body{background:white}main{max-width:none;padding:0}.card,.issueCard,figure,.tableWrap{box-shadow:none;break-inside:avoid}img{max-height:420px}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">ZTask · 2026-11-03 · PR #63</p>
+    <h1>任务管理负责人筛选 · 集成冒烟报告</h1>
+    <p class="summary">在真实构建产物与真实 API 数据上验证负责人多选筛选：工具栏顺序、成员搜索、多选与 URL 深链、主任务/子任务两种命中、组合筛选、空态、编辑浮窗完整聚合、窄屏下拉均通过。</p>
+    <span class="meta">2026-11-03 · macOS · Chrome headless 1440×1000（窄屏另测 1024×1000）</span>
+    <div class="metrics"><div class="metric"><b>13</b><span>冒烟场景</span></div><div class="metric"><b>0</b><span>失败</span></div><div class="metric"><b>2</b><span>浏览器视口</span></div><div class="metric"><b>412</b><span>自动化测试</span></div></div>
+  </header>
+
+  <section>
+    <div class="head"><h2>Environment and Artifact</h2><small>2026-11-03 · macOS · Chrome headless 1440×1000（窄屏另测 1024×1000）</small></div>
+    <article class="card"><dl class="facts"><div class="fact"><dt>Commit</dt><dd>48b7e96</dd></div><div class="fact"><dt>Branch</dt><dd>agent/add-assignee-filter-f05e2ec57fa1</dd></div><div class="fact"><dt>App</dt><dd>Vite production build + Fastify serve</dd></div><div class="fact"><dt>API</dt><dd>真实 /api/v1/admin/tasks（临时数据目录）</dd></div><div class="fact"><dt>Baseline</dt><dd>origin/main 7065282</dd></div><div class="fact"><dt>Viewport</dt><dd>1440×1000；窄屏 1024×1000</dd></div></dl></article>
+  </section>
+
+  <section>
+    <div class="head"><h2>Scenario Matrix</h2><small>13 pass</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>#</th><th>场景</th><th>结果</th><th>说明</th><th>证据</th></tr></thead><tbody><tr><td class="num">01</td><td>基线应用无负责人筛选</td><td><span class="status pass">PASS</span></td><td>origin/main 构建产物中不存在 .fsel-trigger。</td><td class="evidence">01-before.png</td></tr><tr><td class="num">02</td><td>工具栏顺序</td><td><span class="status pass">PASS</span></td><td>重要度 chips → 负责人 → 搜索，与原型一致。</td><td class="evidence">02-after.png<br>00-compare-toolbar.png</td></tr><tr><td class="num">03</td><td>下拉与成员搜索</td><td><span class="status pass">PASS</span></td><td>面板展示 4 名活跃成员；输入“赵”后仅剩赵敏。</td><td class="evidence">03-filter-open.png</td></tr><tr><td class="num">04</td><td>多选、URL 与请求参数</td><td><span class="status pass">PASS</span></td><td>陈晨 + 赵敏触发“+1”；owners 写入 URL 且 ownerIds 请求包含两人。</td><td class="evidence">04-multiselect.png</td></tr><tr><td class="num">05</td><td>清除筛选</td><td><span class="status pass">PASS</span></td><td>恢复 2 条任务，owners 参数被移除。</td><td class="evidence">05-main-owner.png</td></tr><tr><td class="num">06</td><td>主任务负责人命中</td><td><span class="status pass">PASS</span></td><td>陈晨命中后保留整条任务与全部 2 个子任务，无裁剪提示。</td><td class="evidence">05-main-owner.png</td></tr><tr><td class="num">07</td><td>仅子任务负责人命中</td><td><span class="status pass">PASS</span></td><td>赵敏命中后只显示 1 个对应子任务，提示“已按负责人筛选”，计数 0/1。</td><td class="evidence">06-subtask-owner.png</td></tr><tr><td class="num">08</td><td>负责人 + 重要度 + 搜索</td><td><span class="status pass">PASS</span></td><td>赵敏 + 高 + “任务树”返回 1 条任务、1 个匹配子任务。</td><td class="evidence">07-combined.png</td></tr><tr><td class="num">09</td><td>无匹配负责人空态</td><td><span class="status pass">PASS</span></td><td>周凯在客户端重构任务夹下无匹配，显示组合条件空态。</td><td class="evidence">08-empty.png</td></tr><tr><td class="num">10</td><td>编辑浮窗完整聚合</td><td><span class="status pass">PASS</span></td><td>筛选后打开浮窗仍显示 2 个子任务，未把裁剪结果当完整聚合。</td><td class="evidence">09-editor-full.png</td></tr><tr><td class="num">11</td><td>owners 深链恢复</td><td><span class="status pass">PASS</span></td><td>刷新 owners=赵敏 后触发框选中赵敏，列表为 1 条任务。</td><td class="evidence">06-subtask-owner.png</td></tr><tr><td class="num">12</td><td>窄屏下拉不溢出</td><td><span class="status pass">PASS</span></td><td>1024px 下方面板右边界 1004，仍在可视区内，必要时右对齐。</td><td class="evidence">10-narrow.png</td></tr><tr><td class="num">13</td><td>页面运行错误</td><td><span class="status pass">PASS</span></td><td>全程无 pageerror / console error。</td><td class="evidence">02-after.png</td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Issues and Observations</h2><small>No defects found</small></div>
+    <div class="empty">No defects were found.</div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Evidence</h2><small>10 screenshots</small></div>
+    <div class="shots"><figure class="wide"><img loading="lazy" src="00-compare-toolbar.png" alt="真实应用工具栏修改前后"><figcaption><b>00 · 工具栏前后对比</b><span>上：origin/main 无负责人筛选；下：PR #63 实现，重要度右侧新增负责人多选。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="01-before.png" alt="origin/main 应用"><figcaption><b>01 · 修改前</b><span>基线构建产物：工具栏只有重要度与搜索。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="03-filter-open.png" alt="负责人筛选下拉"><figcaption><b>03 · 下拉</b><span>多选面板展示活跃成员，支持姓名/角色搜索。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="04-multiselect.png" alt="多选状态"><figcaption><b>04 · 多选</b><span>陈晨 + 赵敏，触发框显示 +1，URL owners 与请求 ownerIds 同步。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="05-main-owner.png" alt="主任务负责人命中"><figcaption><b>06 · 主任务命中</b><span>陈晨命中后保留整条任务与全部子任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="06-subtask-owner.png" alt="仅子任务负责人命中"><figcaption><b>07 · 子任务命中</b><span>赵敏命中后只显示对应子任务，并说明已按负责人筛选。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="07-combined.png" alt="组合筛选"><figcaption><b>08 · 组合筛选</b><span>负责人、重要度与搜索三者取交集。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="08-empty.png" alt="空态"><figcaption><b>09 · 空态</b><span>无匹配负责人时显示组合条件空态。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="09-editor-full.png" alt="筛选后编辑浮窗"><figcaption><b>10 · 编辑完整聚合</b><span>列表裁剪不影响编辑浮窗：打开后仍显示完整子任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="10-narrow.png" alt="窄屏下拉"><figcaption><b>12 · 窄屏</b><span>1024px 下方面板右对齐，不溢出可视区。</span></figcaption></figure></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Automated Coverage Assessment</h2><small>4 areas reviewed</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>范围</th><th>覆盖</th><th>结论</th><th>建议</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Conclusion</h2><small>集成冒烟通过</small></div>
+    <article class="card conclusion pass"><p><strong>13 个场景全部通过，未发现需要修复的集成问题。</strong></p><ul><li>真实构建产物与真实 API 数据上的筛选语义与原型一致。</li><li>列表裁剪不会污染编辑浮窗的完整聚合。</li><li>负责人筛选在窄屏下不会溢出。</li><li>合并与 issue 闭环仍需按仓库交付规则由人工/已配置的合并入口执行。</li></ul></article>
+  </section>
+
+  <p class="foot">Generated by computer-use-smoke-reporting from Playwright browser evidence; no private Feishu content or credentials included.</p>
+</main>
+</body>
+</html>

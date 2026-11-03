@@ -14,6 +14,7 @@ scope:
   - apps/web/**
   - packages/shared/**
   - tests/**
+  - reports/**
   - scripts/prototype-tracker.spec.mjs
   - scripts/doc-budgets.manifest.json
   - .agents/flow/roadmap*

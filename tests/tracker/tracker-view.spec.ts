@@ -52,12 +52,12 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-async function mountView(query: Record<string, string> = {}) {
+async function mountView(query: Record<string, string> = {}, props: { access?: "admin" | "readonly"; scope?: "admin" | "share" } = { access: "admin" }) {
   const router = createAppRouter();
   await router.push({ path: "/tracker", query });
   await router.isReady();
   const wrapper = mount(TrackerView, {
-    props: { access: "admin" },
+    props,
     global: { plugins: [router, [VueQueryPlugin, { queryClient: createAppQueryClient() }]] },
     attachTo: document.body,
   });
@@ -118,6 +118,14 @@ describe("TrackerView（事项跟踪体验）", () => {
     expect(listCalls.some((call) => call.url.includes("ownerIds=m-1"))).toBe(true);
     expect(wrapper.find(".fsel-trigger").text()).toContain("陈晨");
     expect(router.currentRoute.value.query.owners).toBe("m-1");
+    wrapper.unmount();
+  });
+
+  it("成员只读视图不渲染负责人筛选", async () => {
+    mockFetch();
+    const { wrapper } = await mountView({ folder: "f-1" }, { access: "readonly", scope: "share" });
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(wrapper.find(".fsel-trigger").exists()).toBe(false);
     wrapper.unmount();
   });
 
