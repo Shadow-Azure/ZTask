@@ -39,6 +39,23 @@ jobs:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: node scripts/verify-flow.mjs --diff origin/${{ github.base_ref }}
 
+  windows-storage:
+    # Windows 门禁：只读句柄 fsync 在 FlushFileBuffers 上返回 EPERM，会让 revision 追加失败并表现为保存 500。
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: 生产构建（shared/server/cli/web）
+        run: pnpm build
+      - name: 存储持久化（Windows 写句柄与 fsync）
+        run: pnpm exec vitest run tests/storage/jsonl.spec.ts tests/storage/atomic-json.spec.ts tests/storage/task-store.spec.ts
+
   flow-online:
     # 在线 lane：流程树与 GitHub 双侧一致（只校验；写 GitHub 的唯一入口是 pnpm flow:sync）。
     if: github.event_name == 'pull_request'

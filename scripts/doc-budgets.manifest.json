@@ -24,5 +24,6 @@
   ".agents/flow/milestones/m5-insights-recovery-release.md": 480,
   ".agents/flow/milestones/m6-ui-parity.md": 480,
   ".agents/flow/milestones/m7-project-portal.md": 300,
-  ".agents/flow/milestones/m8-prototype-filter-refinement.md": 300
+  ".agents/flow/milestones/m8-prototype-filter-refinement.md": 300,
+  ".agents/flow/milestones/m9-subtask-error-reporting.md": 300
 }

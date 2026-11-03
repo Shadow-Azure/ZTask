@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>小任务保存错误提示修复 · 冒烟报告</title>
+  <style>
+    :root{
+      color-scheme:light;
+      --bg:#f4f7fb;--card:#fff;--ink:#16202f;--ink2:#55637a;--ink3:#7b869b;
+      --line:#dde4ee;--accent:#2563eb;--accent-wash:#e8efff;--good:#157347;
+      --good-wash:#e7f6ee;--warn:#b45309;--warn-wash:#fff2dd;--bad:#c9282e;
+      --bad-wash:#ffeded;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:radial-gradient(circle at 8% 0,#dbe9ff 0,transparent 32rem),radial-gradient(circle at 92% 4%,#e7f1ff 0,transparent 28rem),var(--bg);color:var(--ink);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Noto Sans CJK SC",sans-serif}
+    main{max-width:1220px;margin:auto;padding:36px 28px 72px}
+    .hero{padding:30px 34px;border:1px solid #dbe3ee;border-radius:24px;background:rgba(255,255,255,.92);box-shadow:0 18px 44px #17202f12}
+    .eyebrow{margin:0;color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    h1{margin:10px 0 8px;font-size:clamp(28px,4vw,44px);letter-spacing:-.04em}
+    .summary{margin:0;max-width:850px;color:var(--ink2);font-size:15px}
+    .meta{display:block;margin-top:8px;color:var(--ink3);font-size:12px}
+    .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:26px}
+    .metric{padding:16px 18px;border:1px solid var(--line);border-radius:16px;background:#fafbfd}
+    .metric b{display:block;font-size:30px;letter-spacing:-.04em}
+    .metric span{display:block;margin-top:2px;color:var(--ink3);font-size:12px}
+    section{margin-top:28px}
+    .head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:0 4px 14px}
+    h2{margin:0;font-size:21px;letter-spacing:-.03em}
+    .head small{color:var(--ink3);white-space:nowrap}
+    .card{padding:22px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    .facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:0}
+    .fact{padding:13px 16px;border:1px solid #eceff5;border-radius:12px;background:#fafbfd}
+    .fact dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .fact dd{margin:3px 0 0;overflow-wrap:anywhere}
+    code{font-family:var(--mono);font-size:.9em;color:#29456d;overflow-wrap:anywhere}
+    .status{display:inline-flex;padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;background:#eef1f6;color:var(--ink2)}
+    .status.pass,.status.fixed{background:var(--good-wash);color:var(--good)}
+    .status.warn,.status.manual{background:var(--warn-wash);color:var(--warn)}
+    .status.fail{background:var(--bad-wash);color:var(--bad)}
+    .tableWrap{overflow:auto;border:1px solid var(--line);border-radius:18px;background:var(--card);box-shadow:0 5px 22px #17202f08}
+    table{width:100%;min-width:920px;border-collapse:collapse}
+    th,td{padding:12px 15px;border-bottom:1px solid #edf0f5;text-align:left;vertical-align:top}
+    th{position:sticky;top:0;background:#fafbfe;color:var(--ink2);font-size:12px}
+    tr:last-child td{border-bottom:0}
+    tr:hover{background:#fcfdff}
+    .num{color:var(--ink3);font-family:var(--mono);font-size:12px}
+    .evidence{color:var(--ink3);font-size:12px}
+    .issues{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}
+    .issueCard{padding:18px 21px;border:1px solid #ffcece;border-left:5px solid var(--bad);border-radius:16px;background:#fffbfb}
+    .issueCard h3{margin:0;color:#b91c1c;font-size:16px}
+    .issueCard p{margin:8px 0;color:var(--ink2)}
+    .issueCard dt{color:var(--ink3);font-size:11px;font-weight:700}
+    .issueCard dd{margin:2px 0 0;color:var(--ink2)}
+    .tag{float:right;padding:3px 8px;border-radius:999px;background:#fee4e4;color:#9a1b21;font-size:11px;font-weight:800}
+    .fixed{display:inline-flex;gap:5px;align-items:center;margin-top:11px;padding:6px 10px;border-radius:999px;background:var(--good-wash);color:var(--good);font-size:12px;font-weight:800}
+    .shots{display:grid;grid-template-columns:repeat(auto-fit,minmax(430px,1fr));gap:16px}
+    figure{margin:0;overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 6px 22px #17202f08}
+    figure.wide{grid-column:1/-1}
+    img{display:block;width:100%;max-height:500px;object-fit:contain;background:#eef2f7}
+    figcaption{display:flex;gap:9px;align-items:flex-start;padding:11px 14px;border-top:1px solid #edf0f5;background:#fafbfd;color:var(--ink2);font-size:12.5px}
+    figcaption b{flex:none;color:var(--ink)}
+    .issue-shot{border-color:#ffcece}
+    .conclusion{border:1px solid #c8e5d2;border-radius:20px;background:linear-gradient(135deg,#f2fbf6,white 54%)}
+    .conclusion.warn{border-color:#f1d9a4;background:linear-gradient(135deg,#fff8e8,white 54%)}
+    .conclusion.fail{border-color:#ffc9c9;background:linear-gradient(135deg,#fff5f5,white 54%)}
+    .conclusion ul{margin:12px 0 0;padding-left:20px;color:#344155}
+    .conclusion li+li{margin-top:7px}
+    .empty{padding:20px;text-align:center;color:var(--ink3);background:#fafbfd;border:1px dashed var(--line);border-radius:12px}
+    .foot{margin-top:24px;color:var(--ink3);font-size:12px;text-align:center}
+    @media(max-width:860px){main{padding:22px 14px 52px}.hero{padding:23px}.shots{grid-template-columns:1fr}.head{align-items:flex-start;flex-direction:column;gap:4px}}
+    @media print{body{background:white}main{max-width:none;padding:0}.card,.issueCard,figure,.tableWrap{box-shadow:none;break-inside:avoid}img{max-height:420px}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="hero">
+    <p class="eyebrow">Computer Use Smoke · Before / After</p>
+    <h1>小任务保存错误提示修复 · 冒烟报告</h1>
+    <p class="summary">在真实构建与真实 API 上复现并对比小任务保存的两类失败：不可写数据目录触发 500“内部错误”，以及成员端空进度提交英文校验消息。修复后前者给出目录权限原因与请求编号，后者在本地拦下并给出中文提示；管理端缺少小任务负责人改为行内定位，合法小任务保存回归通过。当前主线上的常规点击链路未能复现用户原始 500，报告同时记录该限制与可复现的 500 载荷路径。</p>
+    <span class="meta">2026-11-03 · macOS · Chrome 156 · 1440×1000 · 真实构建 + 真实 API</span>
+    <div class="metrics"><div class="metric"><b>10</b><span>冒烟场景</span></div><div class="metric"><b>5</b><span>修复前后对比</span></div><div class="metric"><b>432</b><span>自动化测试</span></div><div class="metric"><b>1</b><span>复现限制</span></div></div>
+  </header>
+
+  <section>
+    <div class="head"><h2>Environment and Artifact</h2><small>2026-11-03 · macOS · Chrome 156 · 1440×1000 · 真实构建 + 真实 API</small></div>
+    <article class="card"><dl class="facts"><div class="fact"><dt>分支</dt><dd>agent/fix-subtask-save-error-5fab3efafcd6</dd></div><div class="fact"><dt>Before</dt><dd>origin/main @ 4ba8153（独立 worktree 构建）</dd></div><div class="fact"><dt>After</dt><dd>本工单工作树构建（含修复）</dd></div><div class="fact"><dt>服务</dt><dd>ztask serve · loopback 18140/18141 · LAN 18142/18143</dd></div><div class="fact"><dt>数据</dt><dd>两套一次性隔离目录；同结构种子数据</dd></div><div class="fact"><dt>视口</dt><dd>1440×1000</dd></div></dl></article>
+  </section>
+
+  <section>
+    <div class="head"><h2>Scenario Matrix</h2><small>4 fail · 4 fixed · 2 pass</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>#</th><th>场景</th><th>结果</th><th>验证结论</th><th>证据</th></tr></thead><tbody><tr><td class="num">01</td><td>Before：不可写目录保存小任务</td><td><span class="status fail">FAIL · 基线缺陷</span></td><td>任务目录 chmod 555 后保存，API 500，toast 仅“内部错误”。</td><td class="evidence">screenshots/01-before-storage-error.png</td></tr><tr><td class="num">02</td><td>After：不可写目录保存小任务</td><td><span class="status fixed">FAIL → FIXED</span></td><td>同一操作显示“保存失败：数据目录不可写，请检查 ZTask 数据目录的权限后重试（原因：EACCES，请求编号：…）”。</td><td class="evidence">screenshots/02-after-storage-error.png</td></tr><tr><td class="num">03</td><td>Before：非法 subtasks.create 载荷</td><td><span class="status fail">FAIL · 基线缺陷</span></td><td>PUT editor 的 subtasks.create 传对象，返回 500 INTERNAL_ERROR / 内部错误，版本不变。</td><td class="evidence">screenshots/09-api-before-after.png</td></tr><tr><td class="num">04</td><td>After：非法 subtasks.create 载荷</td><td><span class="status fixed">FAIL → FIXED</span></td><td>同一请求返回 400 INVALID_REQUEST / subtasks.create 须为列表，版本不变、无 revision。</td><td class="evidence">screenshots/09-api-before-after.png</td></tr><tr><td class="num">05</td><td>Before：成员端空进度</td><td><span class="status fail">FAIL · 英文技术消息</span></td><td>清空小任务进度提交，toast 显示 body/progress must be integer。</td><td class="evidence">screenshots/03-before-member-progress.png</td></tr><tr><td class="num">06</td><td>After：成员端空进度</td><td><span class="status fixed">FAIL → FIXED</span></td><td>提交前拦截，toast 显示“小任务进度必须是 0–100 的整数”，未发送请求。</td><td class="evidence">screenshots/04-after-member-progress.png</td></tr><tr><td class="num">07</td><td>Before：小任务未选负责人</td><td><span class="status fail">FAIL · 服务端笼统错误</span></td><td>新建任务内先加小任务后选主负责人，保存返回 400“小任务 owner 含非法成员 ID”。</td><td class="evidence">screenshots/05-before-subtask-owner.png</td></tr><tr><td class="num">08</td><td>After：小任务未选负责人</td><td><span class="status fixed">FAIL → FIXED</span></td><td>红字就地定位到“小任务「未选负责人小任务」还没有负责人，请选择负责人”，未发送请求。</td><td class="evidence">screenshots/06-after-subtask-owner.png</td></tr><tr><td class="num">09</td><td>合法保存回归（Before / After）</td><td><span class="status pass">PASS</span></td><td>编辑任务新增“正常保存小任务”，两版均显示“任务已保存”，卡片出现该小任务；主体与版本递增正确。</td><td class="evidence">screenshots/07-before-valid-save.png<br>screenshots/08-after-valid-save.png</td></tr><tr><td class="num">10</td><td>普通测试与冒烟回归</td><td><span class="status pass">PASS</span></td><td>pnpm test：57 个测试文件、432 个测试全绿；新增 API 错误报告、编辑器校验与错误翻译测试。</td><td class="evidence">screenshots/08-after-valid-save.png</td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Issues and Observations</h2><small>P1 保存失败只显示“内部错误”<br>P1 小任务载荷结构错误落入 500<br>P2 可预判表单错误被送到服务端<br>P2 原始用户 500 未能按常规点击链路复现</small></div>
+    <div class="issues"><article class="issueCard"><span class="tag">P1</span><h3>保存失败只显示“内部错误”</h3><dl><div><dt>现象</dt><dd>任务目录不可写时保存小任务，toast 只有“内部错误”，不知道是权限、磁盘还是代码问题。</dd></div><div><dt>期望</dt><dd>提示具体原因（目录不可写/EACCES）、下一步动作与请求编号。</dd></div><div><dt>根因</dt><dd>统一错误处理把未预期异常压成 INTERNAL_ERROR / 内部错误，且没有服务端日志。</dd></div></dl><div class="fixed">Fixed · 02/04/06 场景</div></article><article class="issueCard"><span class="tag">P1</span><h3>小任务载荷结构错误落入 500</h3><dl><div><dt>现象</dt><dd>PUT editor 的 subtasks.create 传对象时返回 500“内部错误”。</dd></div><div><dt>期望</dt><dd>返回 400 并指出 subtasks.create 须为列表，且不写盘。</dd></div><div><dt>根因</dt><dd>saveEditor 直接 for...of 未校验 create/update/deleteIds，对象或 null 条目抛 TypeError。</dd></div></dl><div class="fixed">Fixed · 400 + 不产生 revision</div></article><article class="issueCard"><span class="tag">P2</span><h3>可预判表单错误被送到服务端</h3><dl><div><dt>现象</dt><dd>成员端清空进度后提交，toast 显示 body/progress must be integer；管理端小任务未选负责人时显示“小任务 owner 含非法成员 ID”。</dd></div><div><dt>期望</dt><dd>提交前就地提示具体行与字段，并用中文说明。</dd></div><div><dt>根因</dt><dd>表单缺少小任务负责人/进度的本地校验。</dd></div></dl><div class="fixed">Fixed · 06/04 场景</div></article><article class="issueCard"><span class="tag">P2</span><h3>原始用户 500 未能按常规点击链路复现</h3><dl><div><dt>尝试</dt><dd>新建任务带小任务、编辑任务新增小任务、成员个人页添加小任务，均在主线构建与用户数据副本上成功。</dd></div><div><dt>结论</dt><dd>原始触发条件仍未知；本次修复覆盖可复现的 500 载荷与错误提示，后续可用请求编号定位用户侧真实原因。</dd></div></dl><div class="fixed">Open · 等待请求编号/截图</div></article></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Evidence</h2><small>9 screenshots</small></div>
+    <div class="shots"><figure class="issue"><img loading="lazy" src="screenshots/01-before-storage-error.png" alt="基线：任务目录不可写时仅提示内部错误"><figcaption><b>01 · Before</b><span>保存小任务失败，底部 toast 只有“内部错误”。</span></figcaption></figure><figure class="issue"><img loading="lazy" src="screenshots/02-after-storage-error.png" alt="修复后：目录不可写提示具体原因与请求编号"><figcaption><b>02 · After</b><span>同一操作提示数据目录不可写、EACCES 与请求编号。</span></figcaption></figure><figure class=""><img loading="lazy" src="screenshots/03-before-member-progress.png" alt="基线：成员端空进度显示英文校验消息"><figcaption><b>03 · Before</b><span>成员个人页提交空进度，toast 为 AJV 英文消息。</span></figcaption></figure><figure class=""><img loading="lazy" src="screenshots/04-after-member-progress.png" alt="修复后：成员端空进度显示中文提示"><figcaption><b>04 · After</b><span>提交前拦截并提示“小任务进度必须是 0–100 的整数”。</span></figcaption></figure><figure class="issue"><img loading="lazy" src="screenshots/05-before-subtask-owner.png" alt="基线：小任务未选负责人时服务端报错"><figcaption><b>05 · Before</b><span>保存后 toast 显示服务端“小任务 owner 含非法成员 ID”。</span></figcaption></figure><figure class="issue"><img loading="lazy" src="screenshots/06-after-subtask-owner.png" alt="修复后：小任务未选负责人在表单内就地提示"><figcaption><b>06 · After</b><span>红字定位到具体小任务行，保存请求未发出。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/07-before-valid-save.png" alt="基线：合法小任务保存成功"><figcaption><b>07 · Before</b><span>合法新增小任务保存成功，任务卡出现该小任务。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/08-after-valid-save.png" alt="修复后：合法小任务保存成功"><figcaption><b>08 · After</b><span>修复后合法小任务保存与回显保持不变。</span></figcaption></figure><figure class="wide"><img loading="lazy" src="screenshots/09-api-before-after.png" alt="同一非法小任务载荷在修复前后的 API 响应"><figcaption><b>09 · API</b><span>修复前 500 内部错误；修复后 400 指出 subtasks.create 须为列表，两者都不写盘。</span></figcaption></figure></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Automated Coverage Assessment</h2><small>4 areas reviewed</small></div>
+    <div class="tableWrap"><table><table><thead><tr><th>范围</th><th>自动化看护</th><th>结论</th><th>建议</th></tr></thead><tbody><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr><tr><td></td><td></td><td></td><td></td></tr></tbody></table></table></div>
+  </section>
+
+  <section>
+    <div class="head"><h2>Conclusion</h2><small>修复完成 · 原始触发仍待用户线索</small></div>
+    <article class="card conclusion warn"><p><strong>可复现的 500 载荷路径与错误提示已修复并通过 432 个自动化测试与浏览器前后对比；常规点击链路上未复现用户原始 500，需用户提供请求编号/截图继续定位。</strong></p><ul><li>不可写目录与非法小任务载荷两类 500 均已从“内部错误”变为可操作提示。</li><li>成员端空进度与管理端缺少负责人改为提交前中文本地提示。</li><li>合法小任务保存链路在修复前后均通过。</li><li>原始用户报错的触发条件未知，报告不宣称已修复该未知根因。</li></ul></article>
+  </section>
+
+  <p class="foot">由 computer-use-smoke-reporting 工作流生成；截图仅含一次性冒烟数据，不含私有 Feishu 内容或凭证。</p>
+</main>
+</body>
+</html>

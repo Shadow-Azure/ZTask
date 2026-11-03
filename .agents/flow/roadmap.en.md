@@ -13,20 +13,22 @@ milestones:
   - m6
   - m7
   - m8
+  - m9
 ```
 
-ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; `plan/fullstack-design/` is the baseline.
+ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; the baseline is `plan/fullstack-design/`.
 
 ## Delivery sequence
 
-- m1: Prototype, full-stack design, and engineering flow tree.
-- m2: Same-origin CLI service, reliable file writes, and shared Vue shells.
-- m3: Folder, member, and task management with a real tracker.
+- m1: Prototype, full-stack design, and flow tree.
+- m2: Same-origin CLI, reliable file writes, and shared Vue shells.
+- m3: Folder, member, and task management with a tracker.
 - m4: LAN sharing, secure sessions, and minimal owner writes.
 - m5: Dashboard, two-column diffs, backup recovery, and end-to-end acceptance.
 - m6: Screen-by-screen parity with the prototype and a clean difference ledger.
 - m7: Project showcase image and repository front page.
 - m8: Assignee filter refinement for the task management prototype.
+- m9: Subtask save errors and diagnosability.
 
 ## Progression principles
 

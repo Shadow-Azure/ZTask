@@ -1,4 +1,5 @@
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -15,7 +16,7 @@ const TASK_ID = "11111111-1111-4111-8111-111111111111";
 let dataDir: string;
 
 beforeEach(async () => {
-  dataDir = path.join("/tmp", `ztask-taskspec-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+  dataDir = await mkdtemp(path.join(tmpdir(), "ztask-taskspec-"));
   await mkdir(path.join(dataDir, "tasks"), { recursive: true });
 });
 

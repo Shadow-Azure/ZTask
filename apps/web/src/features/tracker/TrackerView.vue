@@ -18,6 +18,7 @@ import LoadingState from "../../components/ui/LoadingState.vue";
 import { useToast } from "../../components/ui/toast";
 import { isShareUnauthorized, useShareSession } from "../share/useShareSession";
 import { readPreference, writePreference } from "../../lib/preferences";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 事项跟踪视图（02 §3/§8、08 §6.3，管理端与成员只读共用）：
@@ -305,7 +306,7 @@ async function openEditor(task: Task): Promise<void> {
     editorOpen.value = true;
   } catch (cause) {
     // 绝不把裁剪后的子集当完整聚合打开并保存。
-    toast.show(cause instanceof Error ? cause.message : "任务加载失败");
+    toast.show(describeApiError(cause, "任务加载失败"));
   }
 }
 

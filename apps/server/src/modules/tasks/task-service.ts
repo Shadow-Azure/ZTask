@@ -49,39 +49,86 @@ function assertUuid(value: unknown, what: string): string {
   return value;
 }
 
-function assertDescription(value: unknown): string {
+function assertDescription(value: unknown, what = "任务"): string {
   if (typeof value !== "string" || value.trim() === "") {
-    throw new ApiError(400, "INVALID_REQUEST", "任务描述不能为空");
+    throw new ApiError(400, "INVALID_REQUEST", `${what}描述不能为空`);
   }
   return value.trim();
 }
 
-function assertProgress(value: unknown): number {
+function assertProgress(value: unknown, what = "任务"): number {
   if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 100) {
-    throw new ApiError(400, "INVALID_REQUEST", "progress 须为 0–100 整数");
+    throw new ApiError(400, "INVALID_REQUEST", `${what}进度须为 0–100 整数`);
   }
   return value;
 }
 
-function assertImportance(value: unknown): Importance {
+function assertImportance(value: unknown, what = "任务"): Importance {
   if (typeof value !== "string" || !IMPORTANCES.includes(value as Importance)) {
-    throw new ApiError(400, "INVALID_REQUEST", "importance 非法");
+    throw new ApiError(400, "INVALID_REQUEST", `${what}重要度非法`);
   }
   return value as Importance;
 }
 
-function assertDueDate(value: unknown): string | null {
+function assertDueDate(value: unknown, what = "任务"): string | null {
   if (value === null || value === undefined || value === "") return null;
   if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-    throw new ApiError(400, "INVALID_REQUEST", "dueDate 须为 YYYY-MM-DD 或 null");
+    throw new ApiError(400, "INVALID_REQUEST", `${what}预计完成时间须为 YYYY-MM-DD 或 null`);
   }
   // 05 §1 / 06 §3：dueDate 是日历日期，不接受 2026-02-31 这类形状合法但不存在的日期。
   const [year, month, day] = value.split("-").map(Number) as [number, number, number];
   const date = new Date(Date.UTC(year, month - 1, day));
   if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) {
-    throw new ApiError(400, "INVALID_REQUEST", "dueDate 不是有效日期");
+    throw new ApiError(400, "INVALID_REQUEST", `${what}预计完成时间不是有效日期`);
   }
   return value;
+}
+
+/** 小任务草稿/更新条目：非对象条目在校验阶段就返回 400，而不是遍历时抛 TypeError。 */
+function subtaskObjects(value: unknown, what: string): Array<Record<string, unknown>> {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new ApiError(400, "INVALID_REQUEST", `${what} 须为列表`);
+  }
+  return value.map((entry, index) => {
+    if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+      throw new ApiError(400, "INVALID_REQUEST", `${what} 第 ${index + 1} 项须为对象`);
+    }
+    return entry as Record<string, unknown>;
+  });
+}
+
+/** 字符串数组字段（deleteIds）：非数组或非字符串条目返回 400。 */
+function stringArray(value: unknown, what: string): string[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) {
+    throw new ApiError(400, "INVALID_REQUEST", `${what} 须为字符串列表`);
+  }
+  return value.map((entry, index) => {
+    if (typeof entry !== "string") {
+      throw new ApiError(400, "INVALID_REQUEST", `${what} 第 ${index + 1} 项须为字符串`);
+    }
+    return entry;
+  });
+}
+
+/** 小任务用户标签：优先描述，其次序号；用于把错误定位到具体行。 */
+function subtaskLabel(entry: Record<string, unknown>, index: number): string {
+  const description = typeof entry.description === "string" ? entry.description.trim().slice(0, 20) : "";
+  return description === "" ? `小任务第 ${index + 1} 项` : `小任务「${description}」`;
+}
+
+/** 小任务负责人：缺失/非法是 400，已归档/不存在是 422；均给出具体小任务标签。 */
+function assertSubtaskOwner(entry: Record<string, unknown>, index: number, active: Set<string>): string {
+  const label = subtaskLabel(entry, index);
+  const ownerId = entry.ownerId;
+  if (typeof ownerId !== "string" || !UUID_PATTERN.test(ownerId)) {
+    throw new ApiError(400, "INVALID_REQUEST", `${label}缺少有效负责人，请选择负责人`);
+  }
+  if (!active.has(ownerId)) {
+    throw new ApiError(422, "INVALID_REQUEST", `${label}的负责人不存在或已归档，请重新选择`);
+  }
+  return ownerId;
 }
 
 /** 应用 mutation 前后的变化检测：无有效变化不制造 revision（06 §7.1）。 */
@@ -215,11 +262,11 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       seen.add(key);
     }
     for (const sub of draft.subtasks) {
-      if (sub.progress < 0 || sub.progress > 100) throw new ApiError(400, "INVALID_REQUEST", "小任务 progress 须为 0–100");
+      if (sub.progress < 0 || sub.progress > 100) throw new ApiError(400, "INVALID_REQUEST", "小任务进度须为 0–100 整数");
       const owners = draft.assignments.filter((a) => a.taskId === sub.id && a.kind === "owner");
-      if (owners.length > 1) throw new ApiError(422, "ASSIGNMENT_ROLE_CONFLICT", "小任务至多一个 owner");
+      if (owners.length > 1) throw new ApiError(422, "ASSIGNMENT_ROLE_CONFLICT", "小任务至多一名负责人");
       if (draft.assignments.some((a) => a.taskId === sub.id && a.kind === "collaborator")) {
-        throw new ApiError(422, "ASSIGNMENT_ROLE_CONFLICT", "小任务不开放协作人员");
+        throw new ApiError(422, "ASSIGNMENT_ROLE_CONFLICT", "小任务不支持协作人员");
       }
     }
   }
@@ -312,10 +359,10 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       const detail = typeof input.detail === "string" ? input.detail : "";
 
       if (input.parentId === null || input.parentId === undefined) {
-        const subtaskCreateIntent = (input.subtasks as { create?: unknown } | undefined)?.create;
-        if (subtaskCreateIntent !== undefined && subtaskCreateIntent !== null && !Array.isArray(subtaskCreateIntent)) {
-          throw new ApiError(400, "INVALID_REQUEST", "subtasks.create 须为数组");
-        }
+        const subtaskCreateIntent = subtaskObjects(
+          (input.subtasks as { create?: unknown } | undefined)?.create,
+          "subtasks.create",
+        );
         const activeMembers = await activeMemberIds();
         const ownerIds = assertMembersActiveSync(input.ownerIds, "ownerIds", activeMembers);
         if (ownerIds.length === 0) throw new ApiError(422, "INVALID_REQUEST", "主任务至少需要一个有效 owner");
@@ -335,17 +382,18 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
           deletedAt: null;
         }> = [];
         const pendingSubtaskAssignments: Array<{ taskId: string; memberId: string; kind: "owner" }> = [];
-        for (const create of (subtaskCreateIntent ?? []) as Array<Record<string, unknown>>) {
+        for (const [index, create] of subtaskCreateIntent.entries()) {
           const subId = randomUUID();
-          const ownerId = assertMembersActiveSync([create.ownerId], "小任务 owner", activeMembers)[0]!;
+          const label = subtaskLabel(create, index);
+          const ownerId = assertSubtaskOwner(create, index, activeMembers);
           pendingSubtasks.push({
             id: subId,
             parentId: taskId,
             folderId,
-            description: assertDescription(create.description),
-            progress: assertProgress(create.progress ?? 0),
-            importance: assertImportance(create.importance ?? "mid"),
-            dueDate: assertDueDate(create.dueDate),
+            description: assertDescription(create.description, label),
+            progress: assertProgress(create.progress ?? 0, label),
+            importance: assertImportance(create.importance ?? "mid", label),
+            dueDate: assertDueDate(create.dueDate, label),
             createdAt: now,
             deletedAt: null,
           });
@@ -382,7 +430,7 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       const parent = resolved.aggregate;
       const activeMembers = await activeMemberIds();
       const ownerIds = assertMembersActiveSync(input.ownerIds, "ownerIds", activeMembers);
-      if (ownerIds.length !== 1) throw new ApiError(422, "INVALID_REQUEST", "小任务需要恰好一个 owner");
+      if (ownerIds.length !== 1) throw new ApiError(422, "INVALID_REQUEST", "小任务需要恰好一名负责人");
 
       const subId = randomUUID();
       const updated = await commitDraft(parent, {
@@ -500,11 +548,14 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       if (typeof version !== "number") throw new ApiError(400, "INVALID_REQUEST", "version 必填");
       const editor = input.task as Record<string, unknown> | undefined;
       if (!editor) throw new ApiError(400, "INVALID_REQUEST", "task 编辑意图必填");
-      const subtasks = (input.subtasks ?? {}) as {
-        create?: Array<Record<string, unknown>>;
-        update?: Array<Record<string, unknown>>;
-        deleteIds?: string[];
-      };
+      const rawSubtasks = input.subtasks;
+      if (rawSubtasks !== undefined && rawSubtasks !== null && (typeof rawSubtasks !== "object" || Array.isArray(rawSubtasks))) {
+        throw new ApiError(400, "INVALID_REQUEST", "小任务数据格式不正确：subtasks 须为对象");
+      }
+      const subtasksInput = (rawSubtasks ?? {}) as { create?: unknown; update?: unknown; deleteIds?: unknown };
+      const subtaskCreates = subtaskObjects(subtasksInput.create, "subtasks.create");
+      const subtaskUpdates = subtaskObjects(subtasksInput.update, "subtasks.update");
+      const subtaskDeleteIds = stringArray(subtasksInput.deleteIds, "subtasks.deleteIds");
 
       const activeMembers = await activeMemberIds();
       const changeKindRef = { current: "update" as ChangeKind };
@@ -525,42 +576,44 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
           for (const memberId of collaboratorIds) draft.assignments.push({ taskId: id, memberId, kind: "collaborator" });
 
           const existingIds = new Set(draft.subtasks.map((s) => s.id));
-          if ((subtasks.create?.length ?? 0) + (subtasks.update?.length ?? 0) + (subtasks.deleteIds?.length ?? 0) > 0) {
+          if (subtaskCreates.length + subtaskUpdates.length + subtaskDeleteIds.length > 0) {
             changeKindRef.current = "subtask";
           }
-          for (const deleteId of subtasks.deleteIds ?? []) {
-            if (typeof deleteId !== "string" || !existingIds.has(deleteId)) {
-              throw new ApiError(404, "NOT_FOUND", `小任务不存在：${String(deleteId)}`);
+          for (const deleteId of subtaskDeleteIds) {
+            if (!existingIds.has(deleteId)) {
+              throw new ApiError(404, "NOT_FOUND", `小任务不存在：${deleteId}`);
             }
             draft.subtasks = draft.subtasks.filter((s) => s.id !== deleteId);
             draft.assignments = draft.assignments.filter((a) => a.taskId !== deleteId);
           }
-          for (const update of subtasks.update ?? []) {
+          for (const [index, update] of subtaskUpdates.entries()) {
             const subId = assertUuid(update.id, "小任务 ID");
             const sub = draft.subtasks.find((s) => s.id === subId);
             if (!sub) throw new ApiError(404, "NOT_FOUND", `小任务不存在：${subId}`);
-            sub.description = assertDescription(update.description);
-            sub.progress = assertProgress(update.progress);
-            sub.importance = assertImportance(update.importance);
-            sub.dueDate = assertDueDate(update.dueDate);
-            const ownerId = assertMembersActiveSync([update.ownerId], "小任务 owner", activeMembers)[0]!;
+            const label = subtaskLabel(update, index);
+            sub.description = assertDescription(update.description, label);
+            sub.progress = assertProgress(update.progress, label);
+            sub.importance = assertImportance(update.importance, label);
+            sub.dueDate = assertDueDate(update.dueDate, label);
+            const ownerId = assertSubtaskOwner(update, index, activeMembers);
             draft.assignments = draft.assignments.filter((a) => a.taskId !== subId);
             draft.assignments.push({ taskId: subId, memberId: ownerId, kind: "owner" });
           }
-          for (const create of subtasks.create ?? []) {
+          for (const [index, create] of subtaskCreates.entries()) {
             const subId = randomUUID();
+            const label = subtaskLabel(create, index);
             draft.subtasks.push({
               id: subId,
               parentId: id,
               folderId: draft.task.folderId,
-              description: assertDescription(create.description),
-              progress: assertProgress(create.progress ?? 0),
-              importance: assertImportance(create.importance ?? "mid"),
-              dueDate: assertDueDate(create.dueDate),
+              description: assertDescription(create.description, label),
+              progress: assertProgress(create.progress ?? 0, label),
+              importance: assertImportance(create.importance ?? "mid", label),
+              dueDate: assertDueDate(create.dueDate, label),
               createdAt: clock().toISOString(),
               deletedAt: null,
             });
-            const ownerId = assertMembersActiveSync([create.ownerId], "小任务 owner", activeMembers)[0]!;
+            const ownerId = assertSubtaskOwner(create, index, activeMembers);
             draft.assignments.push({ taskId: subId, memberId: ownerId, kind: "owner" });
           }
           validateDraft(draft, id);

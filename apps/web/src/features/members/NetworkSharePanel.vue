@@ -7,6 +7,7 @@ import { useToast } from "../../components/ui/toast";
 import BaseDialog from "../../components/ui/BaseDialog.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 局域网分享面板（08 §5，05 §4.9）：展示 loopback/LAN 状态与 shareBaseUrl，
@@ -147,7 +148,7 @@ function onListenFailed(cause: unknown): void {
     toast.show("网卡地址不可用，请重新选择");
     return;
   }
-  toast.show(cause instanceof Error ? cause.message : "开启局域网分享失败");
+  toast.show(describeApiError(cause, "开启局域网分享失败"));
 }
 
 function invalidateShareViews(): void {
@@ -186,7 +187,7 @@ const disableMutation = useMutation({
   },
   onError: (cause: unknown) => {
     confirmCloseOpen.value = false;
-    toast.show(cause instanceof Error ? cause.message : "关闭局域网分享失败");
+    toast.show(describeApiError(cause, "关闭局域网分享失败"));
   },
 });
 

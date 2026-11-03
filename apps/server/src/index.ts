@@ -1,5 +1,7 @@
 export { buildApp } from "./app.js";
 export type { BuildAppOptions, ListenerKind } from "./app.js";
+export { describeInternalError, describeValidationError } from "./errors/describe-error.js";
+export type { ErrorDescription } from "./errors/describe-error.js";
 export { serve } from "./bootstrap.js";
 export type { ServeHandle } from "./bootstrap.js";
 export { defaultDataDir, isLoopbackHost, isWildcardHost, validateServeConfig } from "./config.js";

@@ -1,4 +1,5 @@
-import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { EntryNotFoundError, readJsonFile, writeJsonAtomic } from "@ztask/server";
@@ -6,8 +7,7 @@ import { EntryNotFoundError, readJsonFile, writeJsonAtomic } from "@ztask/server
 let dir: string;
 
 beforeEach(async () => {
-  dir = path.join("/tmp", `ztask-storage-spec-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(dir, { recursive: true });
+  dir = await mkdtemp(path.join(tmpdir(), "ztask-storage-spec-"));
 });
 
 afterEach(async () => {
@@ -41,6 +41,8 @@ describe("writeJsonAtomic", () => {
   });
 
   it("文件权限为 0600", async () => {
+    // Windows/NTFS 不保留 POSIX mode；该断言在 Windows 门禁中不适用。
+    if (process.platform === "win32") return;
     const file = path.join(dir, "private.json");
     await writeJsonAtomic(file, { ok: true });
     expect((await stat(file)).mode & 0o777).toBe(0o600);

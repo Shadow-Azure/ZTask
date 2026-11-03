@@ -6,6 +6,7 @@ import { API_PREFIX, ApiError } from "@ztask/shared";
 import type { ServerConfig } from "./config.js";
 import { isLoopbackHost } from "./config.js";
 import type { ZtaskStore } from "./storage/store.js";
+import { describeInternalError, describeValidationError } from "./errors/describe-error.js";
 import { folderRoutes } from "./modules/folders/folder-routes.js";
 import { memberRoutes } from "./modules/members/member-routes.js";
 import { taskRoutes } from "./modules/tasks/task-routes.js";
@@ -184,6 +185,27 @@ function isSameOriginMutation(request: FastifyRequest): boolean {
   }
 }
 
+/** 只读请求：读失败用“读取失败”措辞，写失败用“保存失败”。 */
+function isReadOnlyMethod(method: string): boolean {
+  return method === "GET" || method === "HEAD";
+}
+
+/**
+ * 记录未预期异常：请求编号是用户反馈与日志检索的唯一关联键。
+ *
+ * 只写方法、路由模板、请求编号、错误码与堆栈；不写请求体、token 或数据内容。
+ * @param request 当前请求。
+ * @param error 抛出的错误。
+ */
+function logRequestError(request: FastifyRequest, error: Error): void {
+  const route = request.routeOptions?.url ?? request.url.split("?")[0] ?? request.url;
+  const code = (error as { code?: unknown }).code;
+  console.error(
+    `[ztask] request ${request.id} ${request.method} ${route} failed: ${typeof code === "string" ? code : "unknown"} ${error.message}`,
+    error.stack ?? "",
+  );
+}
+
 /**
  * 装配 Fastify 应用：/api/v1 健康、统一 404、同源静态回退与 Admin 本机专用钩子。
  * /api/* 未命中返回统一 404 JSON，静态回退绝不吞掉 API（验收标准）。
@@ -267,6 +289,8 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   // （05 §7 要求统一的嵌套 error 结构，管理端抛出的 ApiError 同样走这里）。
   app.setErrorHandler((error: FastifyError, request, reply) => {
     if (error instanceof ApiError) {
+      // 领域错误文案由各 service 提供，已是面向用户的表述；5xx 领域错误仍记录日志。
+      if (error.statusCode >= 500) logRequestError(request, error);
       void reply.status(error.statusCode).send({
         error: { code: error.code, message: error.message, requestId: request.id, details: error.details },
       });
@@ -274,18 +298,31 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
     }
     if (error.validation) {
       void reply.status(400).send({
-        error: { code: "INVALID_REQUEST", message: error.message, requestId: request.id },
+        error: {
+          code: "INVALID_REQUEST",
+          message: describeValidationError(error),
+          requestId: request.id,
+          details: { validation: error.validation },
+        },
       });
       return;
     }
     const statusCode = error.statusCode ?? 500;
-    const safe = statusCode >= 500;
+    if (statusCode >= 500) {
+      logRequestError(request, error);
+      const described = describeInternalError(error, request.id, !isReadOnlyMethod(request.method));
+      void reply.status(statusCode).send({
+        error: {
+          code: "INTERNAL_ERROR",
+          message: described.message,
+          requestId: request.id,
+          details: { cause: described.cause },
+        },
+      });
+      return;
+    }
     void reply.status(statusCode).send({
-      error: {
-        code: safe ? "INTERNAL_ERROR" : "INVALID_REQUEST",
-        message: safe ? "内部错误" : error.message,
-        requestId: request.id,
-      },
+      error: { code: "INVALID_REQUEST", message: error.message, requestId: request.id },
     });
   });
 

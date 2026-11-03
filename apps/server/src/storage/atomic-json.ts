@@ -69,6 +69,9 @@ async function rmTempQuietly(temp: string): Promise<void> {
 }
 
 async function fsyncDirQuietly(dir: string): Promise<void> {
+  // Windows 不支持打开目录句柄做 fsync（NTFS 目录没有等价 FlushFileBuffers 语义）；
+  // 文件句柄的 fsync 已由 writeJsonAtomic 完成，这里直接跳过而不是依赖异常兜底。
+  if (process.platform === "win32") return;
   try {
     await stat(dir);
     const handle = await open(dir, "r");

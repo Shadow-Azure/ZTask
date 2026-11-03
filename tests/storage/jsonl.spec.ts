@@ -1,4 +1,5 @@
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { StorageCorruptionError, appendJsonlLine, iterateJsonl, recoverJsonlTail } from "@ztask/server";
@@ -7,8 +8,8 @@ let dir: string;
 let file: string;
 
 beforeEach(async () => {
-  dir = path.join("/tmp", `ztask-jsonl-spec-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-  await mkdir(dir, { recursive: true });
+  // 跨平台临时目录：Windows CI 门禁也运行本文件（只读句柄 fsync 会 EPERM 的回归）。
+  dir = await mkdtemp(path.join(tmpdir(), "ztask-jsonl-spec-"));
   file = path.join(dir, "revisions.jsonl");
 });
 
@@ -21,7 +22,7 @@ function makeRecord(taskVersion: number): Record<string, unknown> {
 }
 
 describe("appendJsonlLine + iterateJsonl", () => {
-  it("追加行以换行结尾，读回顺序一致且 checksum 可验证", async () => {
+  it("追加行以换行结尾，读回顺序一致且 checksum 可验证（Windows 写句柄 fsync 回归）", async () => {
     await appendJsonlLine(file, makeRecord(1));
     await appendJsonlLine(file, makeRecord(2));
     const seen: Array<Record<string, unknown>> = [];
@@ -32,6 +33,17 @@ describe("appendJsonlLine + iterateJsonl", () => {
     for (const record of seen) {
       expect(typeof record.checksum).toBe("string");
     }
+  });
+
+  it("首次追加即完成写入与 fsync（Windows 只读句柄 EPERM 回归）", async () => {
+    // 旧实现在写入后用只读句柄 sync：Windows 的 FlushFileBuffers 需要写权限，会抛 EPERM。
+    // 这个最小用例在 Windows 门禁中直接覆盖根因；Linux/macOS 同时验证行为不变。
+    await appendJsonlLine(file, makeRecord(1));
+    const seen: Array<Record<string, unknown>> = [];
+    await iterateJsonl(file, (record) => {
+      seen.push(record);
+    });
+    expect(seen).toHaveLength(1);
   });
 
   it("篡改中间字段后 checksum 校验显式报错", async () => {

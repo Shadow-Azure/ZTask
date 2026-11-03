@@ -9,6 +9,7 @@ import LoadingState from "../../components/ui/LoadingState.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
 import MemberEditorDialog from "./MemberEditorDialog.vue";
 import ShareLinkCell from "./ShareLinkCell.vue";
+import { describeApiError } from "../../api/error-message";
 
 /**
  * 成员表格（08 §5，原型 mem-table 688–694/1780–1799）：列表 15s 轮询；
@@ -58,7 +59,7 @@ const archiveMutation = useMutation({
     toast.show("成员已移除；其历史任务保留并显示待分配");
   },
   onError: (cause: unknown) => {
-    toast.show(cause instanceof Error ? cause.message : "移除失败");
+    toast.show(describeApiError(cause, "移除失败"));
   },
 });
 
