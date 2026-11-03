@@ -16,6 +16,7 @@ scope:
   - .agents/notes/**
   - plan/fullstack-design/**
   - reports/**
+  - scripts/doc-budgets.manifest.json
 adr:
   - ../../notes/implemented/bug-fix/2026-11-03-subtask-save-error-reporting.md
 github:
