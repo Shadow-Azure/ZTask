@@ -9,6 +9,7 @@ priority: P1
 status: in-progress
 scope:
   - plan/m1-01-ui-prototype/**
+  - plan/fullstack-design/**
   - scripts/prototype-tracker.spec.mjs
   - scripts/doc-budgets.manifest.json
   - .agents/flow/roadmap*
@@ -33,6 +34,7 @@ github:
 - 仅子任务负责人命中时保留主任务，但只显示该负责人负责的子任务，并在卡片内标明已按负责人筛选。
 - 负责人筛选与重要度、关键词搜索同时生效，三者取交集。
 - 保留修改前后的原型对比截图，供界面评审。
+- 同步更新 `plan/fullstack-design` 中任务管理筛选、列表 API、派生索引与前端实现的设计契约。
 
 ## 实现内容
 
@@ -40,6 +42,7 @@ github:
 - 调整一条示例子任务的负责人，使原型可演示“子任务负责人不是主任务负责人”的分支。
 - `scripts/prototype-tracker.spec.mjs`：覆盖主任务命中、子任务命中、未命中、多选并集与筛选后卡片渲染。
 - `plan/m1-01-ui-prototype/review/`：新增修改前后对比与筛选交互截图。
+- `plan/fullstack-design/`：补负责人筛选的功能口径、`ownerIds` 查询参数、服务端子任务裁剪与前端交互契约。
 
 ## 实施步骤
 
@@ -69,6 +72,7 @@ pnpm verify:flow
 - 工具栏负责人下拉可多选成员，选择后任务列表立即更新，清除后恢复全部任务。
 - 主任务负责人命中时任务卡保留全部子任务；仅子任务负责人命中时只显示对应子任务且卡片有筛选说明。
 - 负责人、重要度与搜索条件同时生效，空结果有明确提示。
+- 全栈设计文档中的筛选契约与原型行为一致，并整理一份变更点 Markdown。
 - `pnpm test:prototype`、`pnpm lint:docs`、`pnpm verify:flow` 全绿。
 
 ## 非目标

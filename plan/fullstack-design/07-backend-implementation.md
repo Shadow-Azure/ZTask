@@ -85,7 +85,11 @@ getDescendantIds(folderId: string): Promise<string[]>
 
 ### 5.1 读取
 
-`listTasks(scope,filters)` 从 current 索引得到主任务及小任务，批量组装 DTO，无 N+1 文件读取。搜索在完整派生索引上执行，再按 `createdAt ASC,id ASC` 稳定排序，以最后一项的 createdAt/id 生成 opaque cursor；新增任务不会导致页码跳号。
+`listTasks(scope,filters)` 从 current 索引得到主任务及小任务，批量组装 DTO，无 N+1 文件读取。`filters` 包含 `q`、`importance` 和 `ownerIds`，三者取交集。搜索在完整派生索引上执行，再按 `createdAt ASC,id ASC` 稳定排序，以最后一项的 createdAt/id 生成 opaque cursor；新增任务不会导致页码跳号。
+
+### 5.1.1 负责人筛选
+
+`ownerIds` 为空或缺省表示不筛选；非空时先按主任务 owner 命中判断：任一 ID 在 `activeOwnersByTask` 中，则保留整条任务及全部小任务。否则通过 `activeSubtaskOwnersByTask` 与 `parentBySubtaskId` 找到命中小任务及其父任务，只把命中的小任务组装进 DTO；父任务没有任何命中小任务时丢弃。主任务的 `owners/collaborators` 始终完整返回。过滤在分页前完成，分页计数按过滤后的主任务，而不是按小任务；未知或归档成员 ID 不命中也不报错，非法 UUID 在 query 校验阶段返回 400。该参数只由管理员任务列表使用，分享域不暴露。
 
 `getTaskForAdmin` 返回完整聚合；`getTaskForMember(id,memberId)` 先通过 assignmentsByMember 和当前 member 状态确定范围。主任务 owner/collaborator 可看完整聚合；仅分配给小任务的成员只看父任务上下文和被分配的小任务，不看主任务 detail 或其他小任务。个人页分组按主任务分配，subtask-only 只出现在只读事项跟踪。不能把全量结果交给前端再过滤。`patchTaskForAdmin(id,input)` 分别校验主任务字段与小任务字段，主任务返回 Task，小任务返回 Subtask+parent。
 
@@ -186,6 +190,8 @@ revision 始终保存完整 after-state。文本做空白规范化与长度限�
 | 小任务下再创建 | 422，无文件变化 |
 | owner 与 collaborator 重复 | 422，无 revision/current 变化 |
 | 归档成员被提交为新负责人 | 422 |
+| `ownerIds` 含非法 UUID | 400 `INVALID_REQUEST`，不执行列表查询 |
+| `ownerIds` 含未知或归档成员 | 200，条件不命中，不报错 |
 | 两个管理员会话并发编辑同一聚合 | 队列内一个 version 成功，另一个 409 |
 | 动态开启非法/非本机/wildcard IP | 422，不启动 listener、不写 network.json |
 | LAN bind 成功但 network.json 保存失败 | 关闭新 listener，回滚到原状态 |

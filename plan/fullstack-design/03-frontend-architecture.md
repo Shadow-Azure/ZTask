@@ -23,7 +23,7 @@
 | 路由 | 页面 | 数据权限 |
 | --- | --- | --- |
 | `/` | 重定向到 `/#/tracker` | 不加载业务数据 |
-| `/#/tracker?folder=<id>&tab=tasks` | 管理员事项跟踪 | admin API |
+| `/#/tracker?folder=<id>&tab=tasks&owners=<ids>` | 管理员事项跟踪；owners 为空表示全部负责人 | admin API |
 | `/#/tracker?folder=<id>&tab=dashboard&members=<ids>` | 管理员情况看板 | admin API |
 | `/#/tracker?...&task=<id>` | 当前页面上叠加任务浮窗 | admin API |
 | `/#/members` | 成员与分享链接管理 | admin API |
@@ -32,7 +32,7 @@
 | `/#/s/tracker?...` | 成员只读事项跟踪，含看板与只读详情 | share GET API，相关任务范围 |
 | `/#/share-invalid` | 失效链接页 | 无业务数据 |
 
-管理页中的 folder/tab/members/task 是可分享、可后退的 UI 状态；搜索文本和临时浮窗草稿默认不进入 URL。成员 token 在交换成功后立即从地址栏移除，因此刷新后的路由为 `/#/s/home` 或 `/#/s/tracker`，由 Cookie 恢复会话；没有 `/#/s/members`。
+管理页中的 folder/tab/members/owners/task 是可分享、可后退的 UI 状态；owners 按成员 ID 稳定排序后写入 URL。搜索文本和临时浮窗草稿默认不进入 URL。成员 token 在交换成功后立即从地址栏移除，因此刷新后的路由为 `/#/s/home` 或 `/#/s/tracker`，由 Cookie 恢复会话；没有 `/#/s/members`。
 
 管理员路由的导航 guard 只负责体验，真正权限由 API 决定。远程设备访问管理路由时显示“请从服务主机打开管理端”，不能通过前端绕过。
 
@@ -100,14 +100,14 @@ apps/web/src/
 | 状态 | 权威位置 | 说明 |
 | --- | --- | --- |
 | 任务、成员、链接状态、看板 | 服务端文件存储 / TanStack Query cache | 不用 Pinia 再保存一份实体副本 |
-| 当前 folder/tab/成员筛选 | URL + 页面 composable | 可刷新、可后退、可复制管理页深链 |
+| 当前 folder/tab/成员筛选/负责人筛选 | URL + 页面 composable | 可刷新、可后退、可复制管理页深链 |
 | 树展开、树宽、子任务栏宽 | localStorage 偏好 + 内存 | 只改善本机体验，不是业务事实 |
 | 管理员浮窗表单、未保存小任务 | `useTaskEditor` 草稿 | 保存前不写 query cache |
 | 成员个人页进度/详情/小任务草稿 | MemberTaskCard 局部状态 | 仅 owner 主任务；保存成功才更新权威 cache |
 | 分享 token | 仅交换前短暂存在于内存 | 不进入 Pinia/localStorage/query cache |
 | 分享会话 | HttpOnly Cookie + 服务端 | 前端只保存脱敏的当前成员摘要 |
 
-查询键至少包含权限域和资源参数，例如 `['admin','tasks',folderId,filters]`、`['admin','dashboard',folderId,memberIds]`、`['share','tasks']`。管理员与成员 cache 不共用实体 key，避免切换身份时复用越权数据。
+查询键至少包含权限域和资源参数，例如 `['admin','tasks',folderId,q,importance,ownerIds]`、`['admin','dashboard',folderId,memberIds]`、`['share','tasks']`。管理员与成员 cache 不共用实体 key，避免切换身份时复用越权数据。
 
 ## 5. 核心组件树
 
@@ -122,6 +122,9 @@ TrackerPage
    ├─ BoardHeader / Tabs
    ├─ TaskManagementPanel
    │  ├─ TaskToolbar
+   │  │  ├─ ImportanceFilter
+   │  │  ├─ AssigneeFilter（仅管理员）
+   │  │  └─ TaskSearch
    │  └─ TaskCard[]
    │     ├─ TaskSummary
    │     ├─ SubtaskList（只读）

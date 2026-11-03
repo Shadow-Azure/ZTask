@@ -130,11 +130,17 @@ NetworkState = {
 ### 3.4 `GET /admin/tasks`
 
 - 解决问题：查询当前任务夹及后代中的主任务，用于任务管理 tab。
-- Params：`folderId` 必填；`includeDescendants` 默认 true；`q` 可选；`importance=high|mid|low` 可选；`cursor` 可选。
+- Params：`folderId` 必填；`includeDescendants` 默认 true；`q` 可选；`importance=high|mid|low` 可选；`ownerIds` 可选，支持逗号分隔或重复参数；`cursor` 可选。
 - Body：无。
 - Response 200：`{ items: Task[], nextCursor: string | null }`。
 
-返回主任务及其一层小任务，小任务不单独成为列表行。
+返回主任务及其一层小任务，小任务不单独成为列表行。`ownerIds` 为空或缺省表示不按负责人筛选；非空时在服务端按以下顺序处理：
+
+1. 先按 folder、`q`（仅主任务描述）和 `importance` 过滤主任务。
+2. 任一 `ownerIds` 命中主任务 `owners` 时，返回整条任务及全部小任务，不裁剪子任务。
+3. 否则只保留 `owner` 属于 `ownerIds` 的小任务；没有任何命中小任务的主任务整体不返回。
+4. 返回的 `Task.owners/collaborators` 仍是完整分配，`subtasks` 只在上述第 3 种情况为子集；前端可用所选 `ownerIds` 与 `owners` 是否相交判断是否显示“已按负责人筛选”。列表裁剪只作用于该查询，任务详情与编辑接口仍返回完整聚合。
+5. 三个条件取交集，分页在过滤后的主任务集合上执行；`ownerIds` 非法 UUID 返回 400 `INVALID_REQUEST`，未知或已归档成员 ID 不报错但不会命中。
 
 ### 3.5 `POST /admin/tasks`
 
@@ -432,7 +438,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 { items: Task[], nextCursor: string | null }
 ```
 
-服务端始终先按 session.memberId 过滤相关任务，再应用其他查询条件。
+服务端始终先按 session.memberId 过滤相关任务，再应用其他查询条件。首版不提供负责人筛选：成员范围已经限定为当前 session.memberId 的相关任务，且分享域没有成员目录；`ownerIds` 只在管理员任务列表提供。
 
 ### 6.5 `GET /share/tasks/{id}`
 

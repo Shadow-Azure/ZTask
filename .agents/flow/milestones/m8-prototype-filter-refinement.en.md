@@ -16,7 +16,7 @@ The task management prototype adds an assignee filter alongside importance and s
 
 ## Delivery boundary
 
-- Change only the static prototype, specification tests, and review screenshots; do not change the real `apps/web` implementation, server APIs, or storage.
+- Change only the static prototype, full-stack design documents, specification tests, and review screenshots; do not change the real `apps/web` implementation, server APIs, or storage.
 - The filter applies only to main tasks and subtasks under the selected folder; it does not change task-tree counts or dashboard statistics.
 
 ## Stage acceptance

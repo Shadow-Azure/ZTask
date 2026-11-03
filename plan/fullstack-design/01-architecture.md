@@ -155,7 +155,8 @@ LAN listener 的运行状态与持久化 enabled 状态分开：重启后先启�
 
 ```text
 TaskBoard
-  → GET folders/tree + GET tasks?folderId=...
+  → GET folders/tree + GET tasks?folderId=...&q=...&importance=...&ownerIds=...
+  → ownerIds 命中主任务负责人时返回整条任务；仅命中子任务负责人时只返回命中小任务
   → 浮窗提交 editor，携带主任务 version
   → admin principal + DTO + 成员/层级校验
   → 进入该任务聚合的写队列并再次检查 version
@@ -163,6 +164,8 @@ TaskBoard
   → 原子替换 current.json，再更新内存索引
   → 返回最新任务；冲突返回 409，前端保留草稿
 ```
+
+任务列表的 `ownerIds` 过滤只作用于列表查询，不改变看板 `memberIds` 的统计口径；搜索、重要度和负责人条件在服务端取交集，分页在过滤后的主任务集合上执行。
 
 ### 5.2 成员个人页与只读事项跟踪
 

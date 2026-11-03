@@ -26,9 +26,17 @@
 
 ### 2.3 TaskBoard
 
-`TaskManagementPanel` 的 query key 包含 folder/search/importance。搜索可本地过滤当前已取范围，跨分页后必须改服务端查询，避免只搜当前页。
+`TaskManagementPanel` 的 query key 包含 folder/q/importance/ownerIds。所有筛选（包括搜索）都走服务端查询，避免分页后只过滤当前页；`ownerIds` 只用于管理员任务管理，成员只读事项跟踪不渲染该入口。
 
 TaskCard 不直接接收整个 TaskEditor 草稿。点击标题路由到 task 深链；管理员打开 TaskEditorDialog，成员打开同布局的只读 TaskDetailDialog。管理员编辑成功后 tree count/progress、当前 list 和 dashboard 相关 query 失效。
+
+### 2.4 负责人筛选
+
+工具栏按“重要度筛选 → 负责人多选 → 搜索”排列。负责人控件复用管理员成员目录，支持按姓名/角色搜索、多选和清除；选中成员之间为 OR，空选表示全部。选中 ID 按稳定顺序写入 URL `owners`，刷新、后退和复制链接都恢复同一筛选；清除时删除该参数。
+
+筛选在服务端执行，前端不下载全量任务再过滤。`GET /admin/tasks` 返回的 `subtasks` 已在“仅子任务负责人命中”时裁剪；前端用所选 `ownerIds` 与 `task.owners` 是否相交判断整条命中还是子任务命中。子任务命中时，卡片显示“已按负责人筛选，仅显示所选负责人负责的子任务”，完成数按返回的可见子任务计算；主任务负责人命中时行为与未筛选一致。
+
+负责人、重要度和搜索始终取 AND；任一条件变化都重置 cursor 并刷新列表。筛选只影响列表响应；打开任务编辑浮窗仍请求完整聚合，不会把裁剪后的子任务当作完整任务保存。无结果时显示组合条件空态，任务树计数、看板和成员视图不受影响。成员只读事项跟踪没有成员目录，不渲染负责人筛选。
 
 ## 3. TaskEditorDialog
 
