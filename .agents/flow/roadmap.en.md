@@ -16,6 +16,7 @@ milestones:
   - m9
   - m10
   - m11
+  - m12
 ```
 
 ZTask provides task collaboration through a local CLI, web service, and file storage. See [README](README.en.md) for rules; the baseline is `plan/fullstack-design/`.
@@ -33,6 +34,7 @@ ZTask provides task collaboration through a local CLI, web service, and file sto
 - m9: Subtask save errors and diagnosability.
 - m10: Dashboard filter fix.
 - m11: Task card modal.
+- m12: Diagnosable startup-occupancy errors.
 
 ## Progression principles
 

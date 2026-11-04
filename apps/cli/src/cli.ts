@@ -8,6 +8,7 @@ import { CommanderError } from "commander";
 import { defaultDataDir, LockHeldError, serve, validateServeConfig } from "@ztask/server";
 import type { NetworkState } from "@ztask/shared";
 import { parseCliArgs, resolveOpenDecision, type ParsedServeArgs } from "./serve-args.js";
+import { formatLockHeldMessage } from "./lock-error.js";
 import { EXIT_USAGE, runBackup, runDoctor, runRestore } from "./maintenance.js";
 
 const require = createRequire(import.meta.url);
@@ -55,7 +56,16 @@ async function runServe(parsed: ParsedServeArgs): Promise<void> {
     staticRoot: existsSync(WEB_DIST) ? WEB_DIST : null,
   });
 
-  const handle = await serve(config, { version: VERSION });
+  const handle = await serve(config, { version: VERSION }).catch((cause: unknown) => {
+    if (cause instanceof LockHeldError) {
+      // 冲突是第二个实例最常见的启动结果：把持有者、数据目录与可执行动作一次说清。
+      console.error(formatLockHeldMessage(cause, { host: config.host, port: config.port }));
+      process.exitCode = 1;
+      return null;
+    }
+    throw cause;
+  });
+  if (handle === null) return;
   // 只打印管理 URL 与分享地址；raw token 只在管理端生成响应里出现一次（05 §4.5）。
   const url = `http://${config.host}:${handle.port}/`;
   console.log(`ZTask ${VERSION} 管理端：${url}`);

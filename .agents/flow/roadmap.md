@@ -16,6 +16,7 @@ milestones:
   - m9
   - m10
   - m11
+  - m12
 ```
 
 ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。
@@ -33,6 +34,7 @@ ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [R
 - m9：小任务保存错误与可诊断性。
 - m10：看板筛选修复。
 - m11：任务卡浮窗。
+- m12：启动占用错误可诊断。
 
 ## 推进原则
 

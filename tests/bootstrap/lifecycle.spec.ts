@@ -5,11 +5,20 @@ import { acquireDataDirLock, LockHeldError, serve, validateServeConfig } from "@
 import { makeTempDataDir } from "./helpers.js";
 
 describe("数据目录单写者锁", () => {
-  it("获得锁后，第二个实例被拒绝", async () => {
+  it("获得锁后，第二个实例被拒绝，并带出持有者现场", async () => {
     const dataDir = await makeTempDataDir();
     const first = await acquireDataDirLock(dataDir);
-    await expect(acquireDataDirLock(dataDir)).rejects.toBeInstanceOf(LockHeldError);
-    await first.release();
+    try {
+      const cause = await acquireDataDirLock(dataDir).catch((error: unknown) => error);
+      expect(cause).toBeInstanceOf(LockHeldError);
+      const held = cause as LockHeldError;
+      expect(held.message).toBe(`数据目录正被进程 ${process.pid} 持有`);
+      expect(held.dataDir).toBe(dataDir);
+      expect(held.lockDir).toBe(path.join(dataDir, ".ztask-lock"));
+      expect(held.pid).toBe(process.pid);
+    } finally {
+      await first.release();
+    }
   });
 
   it("释放后可重新获得", async () => {

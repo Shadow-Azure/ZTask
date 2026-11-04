@@ -1,5 +1,7 @@
 export { DEFAULT_SERVER_URL, parseCliArgs, parseServeArgs, resolveOpenDecision } from "./serve-args.js";
 export type { OpenDecisionInput, ParsedCliArgs, ParsedServeArgs } from "./serve-args.js";
+export { formatLockHeldMessage } from "./lock-error.js";
+export type { LockHeldMessageContext } from "./lock-error.js";
 export {
   EXIT_FAILURE,
   EXIT_OK,
