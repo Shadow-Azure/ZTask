@@ -3,9 +3,23 @@ import path from "node:path";
 
 /** 数据目录已被存活进程持有时抛出；调用方应立即退出，不得继续写数据。 */
 export class LockHeldError extends Error {
-  constructor(message: string) {
+  /** 被占用的数据目录。 */
+  readonly dataDir: string;
+  /** 数据目录锁目录（`.ztask-lock`）。 */
+  readonly lockDir: string;
+  /** 锁记录的持有者 pid；读不到时为 null。 */
+  readonly pid: number | null;
+
+  /**
+   * @param message 单行拒绝原因。
+   * @param details 现场信息：数据目录、锁目录与持有者 pid。
+   */
+  constructor(message: string, details: { dataDir: string; lockDir: string; pid: number | null }) {
     super(message);
     this.name = "LockHeldError";
+    this.dataDir = details.dataDir;
+    this.lockDir = details.lockDir;
+    this.pid = details.pid;
   }
 }
 
@@ -34,8 +48,8 @@ export async function acquireDataDirLock(dataDir: string): Promise<DataDirLock> 
     } catch (cause) {
       const code = (cause as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") throw cause;
-      if (attempt === 1) throw new LockHeldError(await heldMessage(lockDir));
-      if (!(await isStaleLock(lockDir))) throw new LockHeldError(await heldMessage(lockDir));
+      if (attempt === 1) throw await lockHeldError(dataDir, lockDir);
+      if (!(await isStaleLock(lockDir))) throw await lockHeldError(dataDir, lockDir);
       await rm(lockDir, { recursive: true, force: true });
     }
   }
@@ -48,10 +62,13 @@ export async function acquireDataDirLock(dataDir: string): Promise<DataDirLock> 
   };
 }
 
-/** 拒绝消息里带持有者 pid，便于现场诊断。 */
-async function heldMessage(lockDir: string): Promise<string> {
+/** 构造携带数据目录与持有者现场的单行锁冲突错误。 */
+async function lockHeldError(dataDir: string, lockDir: string): Promise<LockHeldError> {
   const pid = await readPid(lockDir);
-  return pid ? `数据目录正被进程 ${pid} 持有` : `数据目录锁不可用：${lockDir}`;
+  return new LockHeldError(
+    pid === null ? `数据目录锁不可用：${lockDir}` : `数据目录正被进程 ${pid} 持有`,
+    { dataDir, lockDir, pid },
+  );
 }
 
 /** 残锁判定：pid 文件缺失，或 pid 不再存活。 */
