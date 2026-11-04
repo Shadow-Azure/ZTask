@@ -6,7 +6,7 @@ English | [中文](m11-task-card-pane-modal.md)
 kind: milestone
 id: m11
 title: 阶段 11：任务卡内容区打开浮窗
-status: active
+status: done
 github:
   number: 11
   url: https://github.com/Shadow-Azure/ZTask/milestone/11

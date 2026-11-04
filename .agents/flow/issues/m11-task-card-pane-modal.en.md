@@ -6,7 +6,7 @@ English | [中文](m11-task-card-pane-modal.md)
 kind: issue
 milestone: m11
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/web/**
   - tests/**

@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/milestones/m11-task-card-pane-modal.md
-m11-task-card-pane-modal.md: b52b37c681ae2f47d758b8e2f5ef005c727d9a94
-m11-task-card-pane-modal.en.md: d9d897baab21a3e6517c7b4093fccea073bf2bef
+m11-task-card-pane-modal.md: 0d86757aab73808bdd90ff3f27b1fbd973b9b943
+m11-task-card-pane-modal.en.md: dc8aac244ad858c9c19865103ff4a0dffb6202b6
