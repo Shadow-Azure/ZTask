@@ -12,6 +12,7 @@ scope:
   - tests/**
   - reports/**
   - .agents/flow/**
+  - scripts/doc-budgets.manifest.json
 adr: []
 github:
   number: 68
