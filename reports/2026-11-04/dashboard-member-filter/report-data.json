@@ -70,6 +70,10 @@
     {
       "label": "时区",
       "value": "Asia/Shanghai（自定义区间按本地日边界解析）"
+    },
+    {
+      "label": "证据交付",
+      "value": "截图与 PDF 仅本地/Feishu 直接发送，不提交仓库；仓库保留文本报告与数据"
     }
   ],
   "matrix": {
@@ -90,7 +94,7 @@
         },
         "detail": "默认“昨天至今”显示 4 个任务的变化；成员 chips 为陈晨、林悦、周舟，统计卡正常。",
         "evidence": [
-          "screenshots/01-default-range-all.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -102,7 +106,7 @@
         },
         "detail": "自定义 2026-11-04 至 2026-11-04 后只显示今天有进度更新的 A/B/D 三条，11-03 创建后未更新的 C 被正确排除；状态行为“已查询 · 自定义日期”。",
         "evidence": [
-          "screenshots/02-custom-range-all.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -114,8 +118,8 @@
         },
         "detail": "修复前：点击陈晨后日期从 11-04→11-04 回退为 11-03→11-04，状态行变回“昨天至今”，请求从 mode=custom 变为 mode=default。修复后：日期控件保持 11-04，请求继续带 mode=custom 与起止日期，仅显示陈晨相关的 A/D。",
         "evidence": [
-          "screenshots/03-custom-then-chen-reset.png",
-          "screenshots/09-fixed-custom-chen.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）",
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -127,7 +131,7 @@
         },
         "detail": "先筛选陈晨，再查询今天：仍保持 11-04→11-04 的自定义区间，显示 A/D 两条。说明服务端组合过滤与控件本身可用，问题只发生在“已提交时间段后再改成员”。",
         "evidence": [
-          "screenshots/04-filter-then-custom.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -139,8 +143,8 @@
         },
         "detail": "修复前：今天没有周舟的更新，筛选后却回退默认区间并显示 11-03 创建的 C。修复后：仍为“自定义日期”，显示“该时间段内所选范围的任务没有进展变化”，不再出现 C。",
         "evidence": [
-          "screenshots/05-custom-then-zhou-reset.png",
-          "screenshots/08-fixed-custom-zhou-empty.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）",
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -152,7 +156,7 @@
         },
         "detail": "自定义 2026-11-03 至 2026-11-03 后显示 4 条“区间内创建”，与 11-03 的修订一致；单独使用时间范围时边界解析正确。",
         "evidence": [
-          "screenshots/06-custom-yesterday-all.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -164,8 +168,8 @@
         },
         "detail": "修复前：今天区间多选林悦+周舟后又多出 11-03 创建的 C。修复后：多选周舟+陈晨仍保持 11-04 自定义区间，只保留 A/D，无昨天记录。",
         "evidence": [
-          "screenshots/07-custom-then-multi-reset.png",
-          "screenshots/09-fixed-custom-chen.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）",
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -261,8 +265,8 @@
         },
         "detail": "陈晨的 gt50 分布为 0/0/0/0/1；叠加林悦后刷新为 0/0/1/0/1，5 桶、图例与轴标签完整。",
         "evidence": [
-          "screenshots/15-postfix-due-distribution-chen.png",
-          "screenshots/16-postfix-due-distribution-multi.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）",
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       },
       {
@@ -286,7 +290,7 @@
         },
         "detail": "任务管理显示 4 张任务卡，切回看板正常；前端 9 个 GUI 场景全程无 console error / pageerror。",
         "evidence": [
-          "screenshots/11-postfix-default-dashboard.png"
+          "本地截图（未提交仓库；随 PDF 直接发送）"
         ]
       }
     ]
@@ -331,85 +335,7 @@
       }
     }
   ],
-  "screenshots": [
-    {
-      "src": "screenshots/02-custom-range-all.png",
-      "alt": "自定义今天后仅显示今日有更新的任务",
-      "label": "02 · 修复前基线",
-      "caption": "自定义 2026-11-04：仅 A/B/D 三条今日进度更新，C 被正确排除。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/03-custom-then-chen-reset.png",
-      "alt": "修复前选择陈晨后时间段回退",
-      "label": "03 · 修复前：选完时间段再筛成员",
-      "caption": "成员筛选生效，但日期回退 11-03→11-04，状态行变回“昨天至今”。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/05-custom-then-zhou-reset.png",
-      "alt": "修复前选完今天再筛周舟出现时间段外任务",
-      "label": "05 · 修复前：结果越界",
-      "caption": "今天没有周舟的更新，却出现 11-03 创建的 C。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/06-custom-yesterday-all.png",
-      "alt": "自定义昨天显示四条创建记录",
-      "label": "06 · 时间段单独查询",
-      "caption": "只查 11-03：4 条“区间内创建”，说明时间过滤本身正确。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/09-fixed-custom-chen.png",
-      "alt": "修复后自定义今天并筛选陈晨",
-      "label": "09 · 修复后：时间保留",
-      "caption": "仍为 11-04 自定义区间，筛陈晨显示 A/D，状态行与日期控件不变。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/08-fixed-custom-zhou-empty.png",
-      "alt": "修复后自定义今天并筛选周舟为空态",
-      "label": "08 · 修复后：空态",
-      "caption": "今天筛周舟保持自定义区间，显示空态，不再混入 11-03 的 C。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/04-filter-then-custom.png",
-      "alt": "先筛成员再选时间段",
-      "label": "04 · 反向顺序对照",
-      "caption": "先筛陈晨再查询今天也能保持时间段，结果为 A/D。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/07-custom-then-multi-reset.png",
-      "alt": "修复前多选成员后出现昨天任务",
-      "label": "07 · 修复前多选",
-      "caption": "今天区间内林悦+周舟本应只有 B/D，重置后多出 11-03 创建的 C。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/15-postfix-due-distribution-chen.png",
-      "alt": "修复后完成度大于50%分布图，陈晨筛选",
-      "label": "15 · 分布图 + 陈晨",
-      "caption": "gt50 分布为未排期 1，图例与五桶轴标签完整。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/16-postfix-due-distribution-multi.png",
-      "alt": "修复后叠加林悦的完成度大于50%分布图",
-      "label": "16 · 分布图 + 多成员",
-      "caption": "叠加林悦后刷新为一月内 1 + 未排期 1，分布随成员联动。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/17-postfix-yesterday-members.png",
-      "alt": "选中成员后切换时间段到昨天",
-      "label": "17 · 成员选中时切换时间段",
-      "caption": "陈晨+林悦保持选中，切到 11-03 后显示 3 条区间内创建。",
-      "variant": "wide"
-    }
-  ],
+  "screenshots": [],
   "coverage": {
     "columns": [
       "范围",
@@ -456,5 +382,5 @@
       "自动化 434 tests 通过；PR #69 的 CI 三项全绿，待评审合并。"
     ]
   },
-  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence and real API assertions; no credentials or private Feishu content included."
+  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence and real API assertions; visual evidence delivered directly as PDF, not committed; no credentials or private Feishu content included."
 }
