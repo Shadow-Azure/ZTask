@@ -13,6 +13,8 @@ import ProgressRing from "./ui/ProgressRing.vue";
  * 14px/650 标题、facts 首项为 17px 成员头像组、facts 重要度为 tinted chip（R2-D1）、
  * 「预计 M-D」行内红字「· 已逾期」无徽章（D4/D5/D6；徽章形态只属于成员端卡）。
  * 永远不渲染编辑控件；头部 Enter/Space 触发 open（路由深链由父级处理）。
+ * 内容区两个区块与头部同属打开入口：点击或键盘激活同样打开任务浮窗，
+ * 拖动文字选择时不误触（用户反馈点击子任务进展 / 进展详情无浮窗）。
  */
 const props = defineProps<{ task: TaskCardModel }>();
 
@@ -35,11 +37,23 @@ function onPaneDrag(clientX: number): void {
   subtaskPanePercent.value = Math.min(55, Math.max(26, Math.round(percent * 10) / 10));
 }
 
-function onHeaderKeydown(event: KeyboardEvent): void {
+function openTask(): void {
+  emit("open", props.task.id);
+}
+
+/** 头部与内容区共用：Enter/Space 等价于点击打开浮窗。 */
+function onActivateKeydown(event: KeyboardEvent): void {
   if (event.key === "Enter" || event.key === " ") {
     event.preventDefault();
-    emit("open", props.task.id);
+    openTask();
   }
+}
+
+/** 内容区点击不抢走文字选择：用户拖选进展文本时不弹浮窗。 */
+function onPaneClick(): void {
+  const selection = window.getSelection();
+  if (selection !== null && !selection.isCollapsed && selection.toString().trim() !== "") return;
+  openTask();
 }
 </script>
 
@@ -50,8 +64,8 @@ function onHeaderKeydown(event: KeyboardEvent): void {
       tabindex="0"
       title="打开任务详情浮窗"
       :aria-label="`打开任务详情：${task.description}`"
-      @click="emit('open', task.id)"
-      @keydown="onHeaderKeydown"
+      @click="openTask"
+      @keydown="onActivateKeydown"
     >
       <div class="identity">
         <div class="title-line">
@@ -84,7 +98,15 @@ function onHeaderKeydown(event: KeyboardEvent): void {
     </header>
 
     <div ref="bodyEl" class="card-body" :style="{ '--subtask-pane-width': `${subtaskPanePercent}%` }">
-      <section class="pane" aria-label="子任务进展">
+      <section
+        class="pane"
+        aria-label="子任务进展"
+        role="button"
+        tabindex="0"
+        title="打开任务详情浮窗"
+        @click="onPaneClick"
+        @keydown="onActivateKeydown"
+      >
         <div class="pane-title">
           <span>子任务进展</span>
           <span class="count">{{ doneCount }}/{{ task.subtasks.length }} 已完成</span>
@@ -119,7 +141,15 @@ function onHeaderKeydown(event: KeyboardEvent): void {
         @drag="onPaneDrag"
       />
 
-      <section class="pane" aria-label="任务进展详情">
+      <section
+        class="pane"
+        aria-label="任务进展详情"
+        role="button"
+        tabindex="0"
+        title="打开任务详情浮窗"
+        @click="onPaneClick"
+        @keydown="onActivateKeydown"
+      >
         <div class="pane-title">
           <span>进展详情</span>
           <span class="count">{{ detailLines }} 条记录</span>
@@ -294,6 +324,21 @@ function onHeaderKeydown(event: KeyboardEvent): void {
 .pane {
   padding: 15px 20px 17px;
   min-width: 0;
+}
+
+/* 内容区与头部同为打开入口：可点击 + 悬停/聚焦反馈（与 .card-head 同口径）。 */
+.pane[role="button"] {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pane[role="button"]:hover {
+  background: #fafbfc;
+}
+
+.pane[role="button"]:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--blue) 50%, transparent);
 }
 
 /* 原型 232–233：11px/650 dim 标题 + 右侧 mono 计数。 */

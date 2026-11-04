@@ -140,6 +140,24 @@ describe("TrackerView（事项跟踪体验）", () => {
     wrapper.unmount();
   });
 
+  it("点击子任务进展 / 进展详情区块打开编辑浮窗", async () => {
+    mockFetch();
+    const { wrapper } = await mountView({ folder: "f-1" });
+    expect(wrapper.find(".task-list .task-card").exists()).toBe(true);
+    for (const label of ["子任务进展", "任务进展详情"]) {
+      await wrapper.find(`.task-card .pane[aria-label="${label}"]`).trigger("click");
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await nextTick();
+      const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement | null;
+      expect(dialog).toBeTruthy();
+      (dialog!.querySelector(".icon-btn") as HTMLButtonElement).click();
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await nextTick();
+      expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    }
+    wrapper.unmount();
+  });
+
   it("树拖柄指针拖拽映射为树宽（钳制 220–480）", async () => {
     mockFetch();
     const { wrapper } = await mountView({ folder: "f-1" });

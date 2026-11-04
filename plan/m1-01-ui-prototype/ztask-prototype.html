@@ -270,7 +270,9 @@
   .task-pane-resizer:hover::before, .task-pane-resizer:focus-visible::before, .task-pane-resizer.dragging::before { left: 5px; width: 3px; background: color-mix(in srgb, var(--blue) 45%, transparent); }
   .task-pane-resizer:hover::after, .task-pane-resizer:focus-visible::after, .task-pane-resizer.dragging::after { opacity: 1; background: var(--blue); }
   body.task-pane-resizing { cursor: col-resize; user-select: none; }
-  .task-pane { min-width: 0; padding: 15px 20px 17px; }
+  .task-pane { min-width: 0; padding: 15px 20px 17px; cursor: pointer; transition: background .15s; }
+  .task-pane:hover { background: #fafbfc; }
+  .task-pane:focus-visible { outline: none; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--blue) 50%, transparent); }
   .task-pane-title { display: flex; align-items: center; gap: 7px; margin-bottom: 11px; color: var(--text-dim); font-size: 11px; font-weight: 650; }
   .task-pane-title .count { margin-left: auto; color: var(--text-faint); font-family: var(--mono); font-size: 10px; font-weight: 500; }
   .subtask-lines { display: grid; gap: 12px; }
@@ -673,7 +675,7 @@
             <input class="search-box" id="task-search" placeholder="搜索任务描述…">
           </div>
           <div class="task-list" id="task-rows"></div>
-          <p class="hint-line">任务进展为只读视图；点击任务标题区可在浮窗中查看或编辑完整任务。<br>负责人筛选与重要度、搜索同时生效：主任务负责人命中时显示整条任务，仅子任务负责人命中时只显示对应子任务。</p>
+          <p class="hint-line">任务进展为只读视图；点击任务卡可在浮窗中查看或编辑完整任务。<br>负责人筛选与重要度、搜索同时生效：主任务负责人命中时显示整条任务，仅子任务负责人命中时只显示对应子任务。</p>
         </div>
         <!-- tab 2：情况看板 -->
         <div id="tab-dash" style="display:none">
@@ -1400,7 +1402,7 @@ function taskRow(t, isSub, fromFolder, view) {
       </div>
     </header>
     <div class="task-card-body">
-      <section class="task-pane" aria-label="子任务进展">
+      <section class="task-pane" aria-label="子任务进展" role="button" tabindex="0" title="打开任务详情浮窗">
         <div class="task-pane-title"><span>子任务进展</span><span class="count">${summary.done}/${summary.total} 已完成</span></div>
         ${partial ? '<p class="pane-filter-note">已按负责人筛选，仅显示所选负责人负责的子任务</p>' : ''}
         ${summary.total ? `<div class="subtask-lines">${shownSubs.map(st => `<div class="subtask-line${st.progress === 100 ? ' done' : ''}">
@@ -1412,7 +1414,7 @@ function taskRow(t, isSub, fromFolder, view) {
         </div>`).join('')}</div>` : '<div class="task-empty">暂无小任务</div>'}
       </section>
       <div class="task-pane-resizer" role="separator" aria-label="调整子任务与任务详情宽度" aria-orientation="vertical" aria-valuemin="26" aria-valuemax="55" aria-valuenow="36" tabindex="0" title="拖拽调整宽度；也可使用左右方向键"></div>
-      <section class="task-pane" aria-label="任务进展详情">
+      <section class="task-pane" aria-label="任务进展详情" role="button" tabindex="0" title="打开任务详情浮窗">
         <div class="task-pane-title"><span>进展详情</span><span class="count">${(t.detail || '').split('\n').filter(Boolean).length} 条记录</span></div>
         ${t.detail ? `<div class="progress-detail">${esc(t.detail)}</div>` : '<div class="task-empty">暂无进展详情</div>'}
       </section>
@@ -1461,6 +1463,17 @@ function bindTaskRows(root) {
         e.preventDefault();
         openModal(head.dataset.tid);
       }
+    });
+  });
+  root.querySelectorAll('.task-card').forEach(card => {
+    card.querySelectorAll('.task-pane').forEach(pane => {
+      pane.addEventListener('click', () => openModal(card.dataset.taskCard));
+      pane.addEventListener('keydown', e => {
+        if ((e.key === 'Enter' || e.key === ' ') && e.target === pane) {
+          e.preventDefault();
+          openModal(card.dataset.taskCard);
+        }
+      });
     });
   });
 }

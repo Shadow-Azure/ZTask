@@ -214,6 +214,36 @@ describe("成员只读事项跟踪（/s/tracker）", () => {
     expectNoAdminRequest();
   });
 
+  it("点击子任务进展 / 进展详情区块打开只读详情", async () => {
+    mockShareFetch(defaultResponder({ tasks: () => ({ items: [TASK_A], nextCursor: null }) }));
+    const { wrapper, router } = await mountTracker();
+
+    await vi.waitFor(() => {
+      expect(wrapper.find('[data-task-card="t-a"]').exists()).toBe(true);
+    });
+
+    for (const label of ["子任务进展", "任务进展详情"]) {
+      await wrapper.find(`[data-task-card="t-a"] .pane[aria-label="${label}"]`).trigger("click");
+      await vi.waitFor(() => {
+        expect(dialogElement()).toBeTruthy();
+      });
+      expect(dialogElement().getAttribute("aria-label")).toBe("任务详情（只读）");
+      await vi.waitFor(() => {
+        expect(dialogElement().textContent).toContain("第一条进展");
+      });
+      dialogElement().dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+      // 关闭会同步移除 ?task= 深链；等 URL 与浮窗都回落后再点下一个区块，避免两次 replace 交错。
+      await vi.waitFor(() => {
+        expect(router.currentRoute.value.query.task).toBeUndefined();
+      });
+      await vi.waitFor(() => {
+        expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+      });
+    }
+
+    expectNoAdminRequest();
+  });
+
   it("小任务详情形态（{task,parent,memberRole}）同样只读且带父任务上下文", async () => {
     const SUBTASK_DETAIL = {
       task: TASK_A.subtasks[0],
