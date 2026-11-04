@@ -101,6 +101,8 @@ test('task card presents a unified read-only subtask and progress view', () => {
   assert.match(rendered, /class="task-card"/);
   assert.match(rendered, /class="task-card-head"/);
   assert.match(rendered, /class="task-card-body"/);
+  assert.match(rendered, /aria-label="子任务进展" role="button" tabindex="0"/);
+  assert.match(rendered, /aria-label="任务进展详情" role="button" tabindex="0"/);
   assert.match(rendered, /第一行进展\n第二行进展/);
   assert.match(rendered, /1\/1/);
   assert.match(rendered, /subtask-progress-ring/);

@@ -88,6 +88,58 @@ describe("TaskCard（统一只读卡）", () => {
     expect(opens?.[0]).toEqual(["t-1"]);
   });
 
+  it("点击子任务进展 / 进展详情区块触发 open，携带任务 ID", async () => {
+    const wrapper = mount(TaskCard, { props: { task: model() } });
+    await wrapper.find('.pane[aria-label="子任务进展"]').trigger("click");
+    await wrapper.find('.pane[aria-label="任务进展详情"]').trigger("click");
+    const opens = wrapper.emitted("open");
+    expect(opens?.length).toBe(2);
+    expect(opens?.[0]).toEqual(["t-1"]);
+    expect(opens?.[1]).toEqual(["t-1"]);
+  });
+
+  it("子任务进展 / 进展详情区块的键盘 Enter/Space 触发 open", async () => {
+    const wrapper = mount(TaskCard, { props: { task: model() } });
+    for (const label of ["子任务进展", "任务进展详情"]) {
+      const pane = wrapper.find(`.pane[aria-label="${label}"]`);
+      expect(pane.attributes("role")).toBe("button");
+      expect(pane.attributes("tabindex")).toBe("0");
+      await pane.trigger("keydown", { key: "Enter" });
+      await pane.trigger("keydown", { key: " " });
+    }
+    const opens = wrapper.emitted("open");
+    expect(opens?.length).toBe(4);
+  });
+
+  it("拖选区块内文本时不触发 open，普通点击仍触发", async () => {
+    const wrapper = mount(TaskCard, { props: { task: model() }, attachTo: document.body });
+    const pane = wrapper.find('.pane[aria-label="任务进展详情"]');
+    const selection = window.getSelection()!;
+    const range = document.createRange();
+    range.selectNodeContents(pane.element);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    await pane.trigger("click");
+    expect(wrapper.emitted("open")).toBeUndefined();
+
+    selection.removeAllRanges();
+    await pane.trigger("click");
+    expect(wrapper.emitted("open")?.length).toBe(1);
+    wrapper.unmount();
+  });
+
+  it("拖动分隔条不会触发 open", async () => {
+    const wrapper = mount(TaskCard, { props: { task: model() } });
+    const resizer = wrapper.find('.card-body [role="separator"]');
+    const element = resizer.element;
+    element.dispatchEvent(new PointerEvent("pointerdown", { clientX: 300, button: 0, bubbles: true }));
+    element.dispatchEvent(new PointerEvent("pointermove", { clientX: 320, bubbles: true }));
+    element.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+    await resizer.trigger("click");
+    expect(wrapper.emitted("open")).toBeUndefined();
+  });
+
   it("无负责人时显示待分配；文件夹路径为可选", () => {
     const wrapper = mount(TaskCard, {
       props: { task: model({ owners: [], folderName: undefined }) },
