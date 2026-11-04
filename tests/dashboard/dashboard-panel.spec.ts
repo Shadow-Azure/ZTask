@@ -87,6 +87,14 @@ beforeEach(() => {
         collaborated: [],
       });
     }
+    if (url.pathname.endsWith("/dashboard/changes")) {
+      return jsonResponse(200, {
+        start: "2026-11-01T00:00:00.000Z",
+        end: "2026-11-02T00:00:00.000Z",
+        timeZone: "Asia/Shanghai",
+        items: [],
+      });
+    }
     if (url.pathname.endsWith("/dashboard/summary")) return jsonResponse(200, summary);
     if (url.pathname.endsWith("/dashboard/due-distribution")) return jsonResponse(200, due);
     return jsonResponse(404, { error: { code: "NOT_FOUND", message: "未知", requestId: "r" } });
@@ -170,6 +178,36 @@ describe("情况看板（05 §5.1–5.2）", () => {
       const call = calls.filter((item) => item.path.endsWith("/dashboard/summary")).at(-1);
       expect(call?.query).toContain("memberIds=m-a%2Cm-b");
     });
+    wrapper.unmount();
+  });
+
+  it("成员筛选变更保留已提交的自定义时间段，并叠加成员参数刷新", async () => {
+    const wrapper = await mountPanel({ access: "admin", folderId: "f-root" });
+    await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
+    await vi.waitFor(() => expect(wrapper.find(".range-status").exists()).toBe(true));
+
+    await wrapper.get('input[aria-label="历史开始日期"]').setValue("2026-11-01");
+    await wrapper.get('input[aria-label="历史结束日期"]').setValue("2026-11-02");
+    await wrapper.findAll("button").find((button) => button.text() === "查询")!.trigger("click");
+    await vi.waitFor(() => {
+      const call = calls.filter((item) => item.path.endsWith("/dashboard/changes") && item.query.includes("mode=custom")).at(-1);
+      expect(call?.query).toContain("startDate=2026-11-01");
+      expect(call?.query).toContain("endDate=2026-11-02");
+    });
+
+    await wrapper.findAll(".mchip")[0]!.trigger("click");
+    await vi.waitFor(() => {
+      const call = calls
+        .filter((item) => item.path.endsWith("/dashboard/changes") && item.query.includes("memberIds=m-a"))
+        .at(-1);
+      expect(call?.query).toContain("mode=custom");
+      expect(call?.query).toContain("startDate=2026-11-01");
+      expect(call?.query).toContain("endDate=2026-11-02");
+    });
+
+    // 控件本身也保留已提交的日期，而不是静默回填默认区间。
+    expect((wrapper.get('input[aria-label="历史开始日期"]').element as HTMLInputElement).value).toBe("2026-11-01");
+    expect((wrapper.get('input[aria-label="历史结束日期"]').element as HTMLInputElement).value).toBe("2026-11-02");
     wrapper.unmount();
   });
 
