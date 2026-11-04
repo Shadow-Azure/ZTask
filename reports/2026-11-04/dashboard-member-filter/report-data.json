@@ -1,28 +1,32 @@
 {
   "lang": "zh-CN",
-  "title": "情况看板 · 人员筛选与任务进展联动冒烟测试报告",
-  "eyebrow": "ZTask · 2026-11-04 · Smoke Test",
-  "summary": "在真实生产构建与真实 API 数据上验证“先选时间段、再按人员筛选”的联动。单独的时间段过滤与单独的人员筛选都正确，但按用户描述的顺序操作时，人员筛选会静默把已选时间段重置为“昨天至今”，导致任务进展变化不再受所选时间范围约束。",
+  "title": "情况看板 · 人员筛选与任务进展联动冒烟测试报告（含修复验证）",
+  "eyebrow": "ZTask · 2026-11-04 · Smoke + Fix",
+  "summary": "在真实生产构建与真实 API 数据上验证“先选时间段、再按人员筛选”的联动。初测发现：人员筛选会静默把已选时间段重置为“昨天至今”，导致任务进展变化混入时间段外记录。修复后复验：已提交的时间段与日期控件保持不变，人员筛选在所选区间内叠加刷新。",
   "meta": "2026-11-04 · macOS · Chrome headless 1440×1000 · Asia/Shanghai",
   "metrics": [
     {
-      "value": "8",
+      "value": "9",
       "label": "冒烟场景"
     },
     {
       "value": "5",
-      "label": "通过"
+      "label": "直接通过"
     },
     {
-      "value": "3",
-      "label": "失败"
+      "value": "4",
+      "label": "修复后通过"
+    },
+    {
+      "value": "0",
+      "label": "仍失败"
     },
     {
       "value": "1",
-      "label": "P1 缺陷"
+      "label": "P1 已修复"
     },
     {
-      "value": "45",
+      "value": "46",
       "label": "相关自动化测试通过"
     }
   ],
@@ -36,8 +40,12 @@
       "value": "agent/test-dashboard-member-filter-ed3c1f58a6bc"
     },
     {
-      "label": "构建",
+      "label": "基线构建",
       "value": "b1b41be · pnpm build（Vite production build + Fastify serve）"
+    },
+    {
+      "label": "修复提交",
+      "value": "ec10817 · keepPreviousData 保留 summary，ChangesPanel 不再卸载"
     },
     {
       "label": "接口",
@@ -93,12 +101,13 @@
         "id": "03",
         "name": "先选时间段，再筛陈晨",
         "status": {
-          "kind": "fail",
-          "label": "FAIL"
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
         },
-        "detail": "成员筛选本身生效（只剩陈晨相关的 A/D），但日期输入从 11-04→11-04 回退为 11-03→11-04，状态行变回“已自动查询 · 昨天至今”；请求从 mode=custom 变为 mode=default，已选时间段丢失。",
+        "detail": "修复前：点击陈晨后日期从 11-04→11-04 回退为 11-03→11-04，状态行变回“昨天至今”，请求从 mode=custom 变为 mode=default。修复后：日期控件保持 11-04，请求继续带 mode=custom 与起止日期，仅显示陈晨相关的 A/D。",
         "evidence": [
-          "screenshots/03-custom-then-chen-reset.png"
+          "screenshots/03-custom-then-chen-reset.png",
+          "screenshots/09-fixed-custom-chen.png"
         ]
       },
       {
@@ -117,12 +126,13 @@
         "id": "05",
         "name": "先选今天，再筛周舟（应空）",
         "status": {
-          "kind": "fail",
-          "label": "FAIL"
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
         },
-        "detail": "周舟在今天没有进度更新，正确结果应为空；实际筛选后回退默认区间，并显示 11-03 创建的“C 周舟负责：回归用例”，属于所选时间段之外的变化。",
+        "detail": "修复前：今天没有周舟的更新，筛选后却回退默认区间并显示 11-03 创建的 C。修复后：仍为“自定义日期”，显示“该时间段内所选范围的任务没有进展变化”，不再出现 C。",
         "evidence": [
-          "screenshots/05-custom-then-zhou-reset.png"
+          "screenshots/05-custom-then-zhou-reset.png",
+          "screenshots/08-fixed-custom-zhou-empty.png"
         ]
       },
       {
@@ -141,12 +151,13 @@
         "id": "07",
         "name": "先选今天，再多选林悦+周舟",
         "status": {
-          "kind": "fail",
-          "label": "FAIL"
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
         },
-        "detail": "今天区间内林悦+周舟应只显示 B/D；重置为默认区间后又多出 11-03 创建的 C，实际显示 3 条。",
+        "detail": "修复前：今天区间多选林悦+周舟后又多出 11-03 创建的 C。修复后：多选周舟+陈晨仍保持 11-04 自定义区间，只保留 A/D，无昨天记录。",
         "evidence": [
-          "screenshots/07-custom-then-multi-reset.png"
+          "screenshots/07-custom-then-multi-reset.png",
+          "screenshots/09-fixed-custom-chen.png"
         ]
       },
       {
@@ -159,6 +170,18 @@
         "detail": "直接请求 mode=custom&startDate=2026-11-04&endDate=2026-11-04&memberIds=周舟 返回 200 与空 items；请求今天+陈晨返回 A/D。服务端组合过滤正确，缺陷在前端页面状态管理。",
         "evidence": [
           "终端 API 断言，见问题卡"
+        ]
+      },
+      {
+        "id": "09",
+        "name": "自动化回归（修复前失败 → 修复后通过）",
+        "status": {
+          "kind": "fixed",
+          "label": "FAIL → FIXED"
+        },
+        "detail": "新增 DashboardPanel 组件用例：自定义 11-01 至 11-02 后点击陈晨，断言请求仍为 mode=custom、保留 startDate/endDate 并叠加 memberIds。修复前该断言收到 mode=default；修复后通过。dashboard-panel 7 tests 全绿。",
+        "evidence": [
+          "终端测试断言（见问题卡）"
         ]
       }
     ]
@@ -174,7 +197,7 @@
         },
         {
           "label": "预期",
-          "value": "保留已提交的自定义起止日期，只在其中按成员收窄；周舟在今天无变化时应显示空态。"
+          "value": "保留已提交的自定义起止日期与日期控件，只在其中按成员收窄；周舟在今天无变化时应显示空态。"
         },
         {
           "label": "影响",
@@ -182,20 +205,24 @@
         },
         {
           "label": "根因",
-          "value": "DashboardPanel 在 summaryQuery.isLoading 时用 LoadingState 替换整个内容区；成员变更触发 summary 新 query key 进入 loading，ChangesPanel 被卸载重挂，局部 submitted 状态回到默认，随后 changes 请求以 mode=default 发出。"
+          "value": "DashboardPanel 在 summaryQuery.isLoading 时用 LoadingState 替换整个内容区；成员变更触发 summary 新 query key 进入 loading，ChangesPanel 被卸载重挂，局部 submitted 状态回到默认。"
         },
         {
-          "label": "对照",
-          "value": "先筛成员再选时间段可正常工作；可作为临时规避方式。"
+          "label": "修复",
+          "value": "summaryQuery 增加 placeholderData: keepPreviousData，成员切换期间保留上一份 summary，内容区与 ChangesPanel 保持挂载；changes 查询继续使用已提交的 mode/startDate/endDate，并叠加新的 memberIds。"
         },
         {
-          "label": "证据",
-          "value": "截图 02/03/05/07；API 直接断言显示服务端组合过滤正确。"
+          "label": "验证",
+          "value": "真实构建 + 真实 API：自定义 11-04 后筛周舟为空态，筛陈晨为 A/D，状态行与日期控件均保持自定义；无 console error。新增组件用例修复前失败、修复后通过。"
+        },
+        {
+          "label": "状态",
+          "value": "修复验证通过；PR 待评审合并。"
         }
       ],
       "state": {
-        "kind": "fail",
-        "label": "未修复 · 待决策"
+        "kind": "fixed",
+        "label": "已修复 · ec10817"
       }
     }
   ],
@@ -203,29 +230,22 @@
     {
       "src": "screenshots/02-custom-range-all.png",
       "alt": "自定义今天后仅显示今日有更新的任务",
-      "label": "02 · 自定义时间段",
+      "label": "02 · 修复前基线",
       "caption": "自定义 2026-11-04：仅 A/B/D 三条今日进度更新，C 被正确排除。",
       "variant": "wide"
     },
     {
       "src": "screenshots/03-custom-then-chen-reset.png",
-      "alt": "选择陈晨后时间段回退为昨天至今",
-      "label": "03 · 选完时间段再筛成员",
-      "caption": "成员筛选生效，但日期回退 11-03→11-04，状态行变回“昨天至今”，已选时间段丢失。",
+      "alt": "修复前选择陈晨后时间段回退",
+      "label": "03 · 修复前：选完时间段再筛成员",
+      "caption": "成员筛选生效，但日期回退 11-03→11-04，状态行变回“昨天至今”。",
       "variant": "wide"
     },
     {
       "src": "screenshots/05-custom-then-zhou-reset.png",
-      "alt": "选完今天再筛周舟后出现时间段外的任务",
-      "label": "05 · 结果越出所选时间段",
-      "caption": "今天没有周舟的更新，却出现 11-03 创建的 C，证明结果已不受所选时间段约束。",
-      "variant": "wide"
-    },
-    {
-      "src": "screenshots/04-filter-then-custom.png",
-      "alt": "先筛成员再选时间段",
-      "label": "04 · 反向顺序对照",
-      "caption": "先筛陈晨再查询今天，时间段保持 11-04→11-04，结果为 A/D。",
+      "alt": "修复前选完今天再筛周舟出现时间段外任务",
+      "label": "05 · 修复前：结果越界",
+      "caption": "今天没有周舟的更新，却出现 11-03 创建的 C。",
       "variant": "wide"
     },
     {
@@ -236,10 +256,31 @@
       "variant": "wide"
     },
     {
+      "src": "screenshots/09-fixed-custom-chen.png",
+      "alt": "修复后自定义今天并筛选陈晨",
+      "label": "09 · 修复后：时间保留",
+      "caption": "仍为 11-04 自定义区间，筛陈晨显示 A/D，状态行与日期控件不变。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/08-fixed-custom-zhou-empty.png",
+      "alt": "修复后自定义今天并筛选周舟为空态",
+      "label": "08 · 修复后：空态",
+      "caption": "今天筛周舟保持自定义区间，显示空态，不再混入 11-03 的 C。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/04-filter-then-custom.png",
+      "alt": "先筛成员再选时间段",
+      "label": "04 · 反向顺序对照",
+      "caption": "先筛陈晨再查询今天也能保持时间段，结果为 A/D。",
+      "variant": "wide"
+    },
+    {
       "src": "screenshots/07-custom-then-multi-reset.png",
-      "alt": "今天区间多选成员后出现昨天的任务",
-      "label": "07 · 多选筛选",
-      "caption": "今天区间内林悦+周舟本应只有 B/D，重置后又多出 11-03 创建的 C。",
+      "alt": "修复前多选成员后出现昨天任务",
+      "label": "07 · 修复前多选",
+      "caption": "今天区间内林悦+周舟本应只有 B/D，重置后多出 11-03 创建的 C。",
       "variant": "wide"
     }
   ],
@@ -254,41 +295,40 @@
       [
         "服务端历史接口",
         "14 个 API 测试 + 直接请求",
-        "自定义区间、成员过滤、组合过滤语义均正确。",
+        "自定义区间、成员过滤、组合过滤语义均正确，服务端无需修改。",
         "保持真实 API 冒烟。"
       ],
       [
         "ChangesPanel 组件",
         "8 个组件测试",
-        "覆盖默认区间、自定义查询、成员参数透传；未覆盖父组件重挂载导致本地状态丢失。",
-        "补“自定义区间后切换成员”的集成用例。"
+        "覆盖默认区间、自定义查询、成员参数透传。",
+        "继续保留成员参数透传断言。"
       ],
       [
         "DashboardPanel 成员筛选",
-        "6 个组件测试",
-        "覆盖成员 chips、summary 请求参数与分布图；未覆盖与 ChangesPanel 的状态生命周期。",
-        "将筛选态下的局部 loading 与内容区分离，或上提历史查询状态。"
+        "7 个组件测试",
+        "新增“自定义区间后切换成员”回归用例，修复前失败、修复后通过。",
+        "防止 summary loading 再次卸载内容区。"
       ],
       [
         "页面级真实浏览器冒烟",
-        "7 个 GUI 场景 + 1 个 API 对照",
-        "复现了用户描述的操作顺序，确认 1 个可稳定复现的 P1。",
-        "修复后重跑本报告场景 02/03/05/07。"
+        "9 个 GUI 场景 + API 对照",
+        "修复前复现 P1，修复后同场景复验通过，无 console error。",
+        "合并前保留修复前/后截图对照。"
       ]
     ]
   },
   "conclusion": {
-    "kind": "fail",
-    "label": "冒烟不通过 · 1 个 P1",
-    "summary": "单独的时间段过滤和单独的人员筛选都工作；但按“先选时间段、再筛人员”的实际操作顺序，页面会静默重置时间段，任务进展变化不再受所选时间范围约束。",
+    "kind": "pass",
+    "label": "修复验证通过 · 待评审合并",
+    "summary": "P1 已修复并复验：成员筛选切换时保留已提交的自定义时间段与日期控件，任务进展变化在所选区间内叠加人员筛选刷新。",
     "points": [
-      "人员筛选本身生效：陈晨→A/D，林悦→B/D，周舟→空；多选为 OR 语义。",
-      "时间范围单独查询正确：今天仅 A/B/D，昨天 4 条区间内创建。",
-      "缺陷可稳定复现：成员变更触发 summary loading，ChangesPanel 重挂载，submitted 回到 default，changes 请求从 mode=custom 变为 mode=default。",
-      "临时规避：先选成员，再设置并查询时间段。",
-      "现有 45 个 dashboard/history 自动化测试通过，但没有覆盖这个操作顺序。",
-      "本次仅做冒烟验证与报告，未修改产品代码；修复后需补页面级回归用例。"
+      "自定义 11-04 后筛周舟：状态行与日期控件保持自定义，结果为空态，不再出现 11-03 的 C。",
+      "同一区间筛陈晨：只显示 A/D，请求继续带 mode=custom、startDate、endDate 与 memberIds。",
+      "新增组件回归用例修复前收到 mode=default，修复后通过；dashboard/history 相关 46 个测试全绿。",
+      "修复只改前端查询生命周期：summaryQuery 使用 keepPreviousData，避免 ChangesPanel 被卸载重挂。",
+      "服务端未改；真实浏览器无 console error；PR 待评审合并。"
     ]
   },
-  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence; real build, real API, no credentials or private Feishu content included."
+  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence; real build, real API, before/after screenshots, no credentials or private Feishu content included."
 }
