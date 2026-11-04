@@ -6,7 +6,7 @@ English | [中文](m10-dashboard-filter-sync.md)
 kind: issue
 milestone: m10
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/web/**
   - tests/**
