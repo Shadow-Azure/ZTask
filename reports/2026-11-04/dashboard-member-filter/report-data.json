@@ -1,16 +1,16 @@
 {
   "lang": "zh-CN",
-  "title": "情况看板 · 人员筛选与任务进展联动冒烟测试报告（含修复验证）",
-  "eyebrow": "ZTask · 2026-11-04 · Smoke + Fix",
-  "summary": "在真实生产构建与真实 API 数据上验证“先选时间段、再按人员筛选”的联动。初测发现：人员筛选会静默把已选时间段重置为“昨天至今”，导致任务进展变化混入时间段外记录。修复后复验：已提交的时间段与日期控件保持不变，人员筛选在所选区间内叠加刷新。",
+  "title": "情况看板前后端 · 冒烟测试报告（含修复验证）",
+  "eyebrow": "ZTask · 2026-11-04 · Frontend + API Smoke",
+  "summary": "在修复后的真实构建与真实 API 数据上做前后端冒烟：前端覆盖看板时间段与人员筛选联动、空态、分布图、历史展开与视图切换；后端覆盖 summary/changes/due-distribution 的组合口径、参数校验与基础读取。前端 9 个场景、后端 26 项断言全部通过，P1 修复保持有效。",
   "meta": "2026-11-04 · macOS · Chrome headless 1440×1000 · Asia/Shanghai",
   "metrics": [
     {
-      "value": "9",
+      "value": "17",
       "label": "冒烟场景"
     },
     {
-      "value": "5",
+      "value": "13",
       "label": "直接通过"
     },
     {
@@ -18,16 +18,20 @@
       "label": "修复后通过"
     },
     {
-      "value": "0",
-      "label": "仍失败"
+      "value": "9",
+      "label": "前端 GUI 场景"
+    },
+    {
+      "value": "26",
+      "label": "后端 API 断言"
     },
     {
       "value": "1",
       "label": "P1 已修复"
     },
     {
-      "value": "46",
-      "label": "相关自动化测试通过"
+      "value": "434",
+      "label": "自动化测试通过"
     }
   ],
   "facts": [
@@ -40,16 +44,20 @@
       "value": "agent/test-dashboard-member-filter-ed3c1f58a6bc"
     },
     {
-      "label": "基线构建",
-      "value": "b1b41be · pnpm build（Vite production build + Fastify serve）"
+      "label": "构建",
+      "value": "b1b41be + ec10817 · pnpm build（Vite production build + Fastify serve）"
     },
     {
       "label": "修复提交",
       "value": "ec10817 · keepPreviousData 保留 summary，ChangesPanel 不再卸载"
     },
     {
-      "label": "接口",
-      "value": "真实 /api/v1/admin/dashboard/changes 与 /summary"
+      "label": "前端范围",
+      "value": "情况看板：时间段、成员筛选、空态、分布图、历史展开、任务/看板切换"
+    },
+    {
+      "label": "后端范围",
+      "value": "/admin/dashboard/summary、changes、due-distribution、tasks、members、folders"
     },
     {
       "label": "测试数据",
@@ -183,6 +191,103 @@
         "evidence": [
           "终端测试断言（见问题卡）"
         ]
+      },
+      {
+        "id": "10",
+        "name": "后端 summary：全量与成员口径",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "5 组断言：全量 4 个任务（0/2/2）、陈晨 2（A/D）、林悦 2（B/D）、周舟 1（C）、陈晨+周舟 OR 3；三桶与重要度计数均与数据一致。",
+        "evidence": [
+          "终端 API 断言：26/26 通过"
+        ]
+      },
+      {
+        "id": "11",
+        "name": "后端 changes：时间段与成员组合",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "7 组断言：今天 A/B/D；今天+周舟空；今天+陈晨 A/D；今天+林悦 B/D；今天多选 A/D；昨天 4 条 created；昨天+陈晨 A/D。",
+        "evidence": [
+          "终端 API 断言：26/26 通过"
+        ]
+      },
+      {
+        "id": "12",
+        "name": "后端 due-distribution：时间桶与成员",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "gt50 全量为“一月内 1 + 未排期 1”；陈晨仅“未排期 1”；lt50 全量为“一周内 1 + 一月后 1”。",
+        "evidence": [
+          "终端 API 断言：26/26 通过"
+        ]
+      },
+      {
+        "id": "13",
+        "name": "后端参数校验",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "倒序日期、2026-02-31、缺少结束日期、非法 mode、非法 bucket 均返回 400 INVALID_REQUEST，未出现 500。",
+        "evidence": [
+          "终端 API 断言：26/26 通过"
+        ]
+      },
+      {
+        "id": "14",
+        "name": "后端基础读取与未知任务夹",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "任务列表 4、成员 3、根任务夹 1；未知任务夹的 summary/changes 返回 200 空集，不 404。",
+        "evidence": [
+          "终端 API 断言：26/26 通过"
+        ]
+      },
+      {
+        "id": "15",
+        "name": "前端分布图 + 成员叠加",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "陈晨的 gt50 分布为 0/0/0/0/1；叠加林悦后刷新为 0/0/1/0/1，5 桶、图例与轴标签完整。",
+        "evidence": [
+          "screenshots/15-postfix-due-distribution-chen.png",
+          "screenshots/16-postfix-due-distribution-multi.png"
+        ]
+      },
+      {
+        "id": "16",
+        "name": "前端历史展开/折叠",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "陈晨+林悦、今天区间下 3 条变化，展开 3 → 折叠 2 → 再展开 3，日期仍保持 11-04。",
+        "evidence": [
+          "UI 状态断言：展开 3 → 折叠 2 → 再展开 3"
+        ]
+      },
+      {
+        "id": "17",
+        "name": "前端视图切换与运行错误",
+        "status": {
+          "kind": "pass",
+          "label": "PASS"
+        },
+        "detail": "任务管理显示 4 张任务卡，切回看板正常；前端 9 个 GUI 场景全程无 console error / pageerror。",
+        "evidence": [
+          "screenshots/11-postfix-default-dashboard.png"
+        ]
       }
     ]
   },
@@ -213,11 +318,11 @@
         },
         {
           "label": "验证",
-          "value": "真实构建 + 真实 API：自定义 11-04 后筛周舟为空态，筛陈晨为 A/D，状态行与日期控件均保持自定义；无 console error。新增组件用例修复前失败、修复后通过。"
+          "value": "真实构建 + 真实 API：前端 9 个 GUI 场景通过（自定义区间+成员筛选、空态、分布图、历史折叠、视图切换，无 console error）；后端 26 项 API 断言通过；新增组件用例修复前失败、修复后通过。"
         },
         {
           "label": "状态",
-          "value": "修复验证通过；PR 待评审合并。"
+          "value": "修复验证通过；前端 9/9、后端 26/26、自动化 434 通过；PR 待评审合并。"
         }
       ],
       "state": {
@@ -282,6 +387,27 @@
       "label": "07 · 修复前多选",
       "caption": "今天区间内林悦+周舟本应只有 B/D，重置后多出 11-03 创建的 C。",
       "variant": "wide"
+    },
+    {
+      "src": "screenshots/15-postfix-due-distribution-chen.png",
+      "alt": "修复后完成度大于50%分布图，陈晨筛选",
+      "label": "15 · 分布图 + 陈晨",
+      "caption": "gt50 分布为未排期 1，图例与五桶轴标签完整。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/16-postfix-due-distribution-multi.png",
+      "alt": "修复后叠加林悦的完成度大于50%分布图",
+      "label": "16 · 分布图 + 多成员",
+      "caption": "叠加林悦后刷新为一月内 1 + 未排期 1，分布随成员联动。",
+      "variant": "wide"
+    },
+    {
+      "src": "screenshots/17-postfix-yesterday-members.png",
+      "alt": "选中成员后切换时间段到昨天",
+      "label": "17 · 成员选中时切换时间段",
+      "caption": "陈晨+林悦保持选中，切到 11-03 后显示 3 条区间内创建。",
+      "variant": "wide"
     }
   ],
   "coverage": {
@@ -293,42 +419,42 @@
     ],
     "rows": [
       [
-        "服务端历史接口",
-        "14 个 API 测试 + 直接请求",
-        "自定义区间、成员过滤、组合过滤语义均正确，服务端无需修改。",
+        "前端情况看板",
+        "9 个 GUI 场景",
+        "时间段+成员筛选、空态、分布图、历史展开、任务/看板切换全部通过。",
+        "保持真实浏览器冒烟。"
+      ],
+      [
+        "后端 dashboard API",
+        "26 项断言",
+        "summary/changes/due-distribution 的组合口径、边界与参数校验通过。",
         "保持真实 API 冒烟。"
       ],
       [
-        "ChangesPanel 组件",
-        "8 个组件测试",
-        "覆盖默认区间、自定义查询、成员参数透传。",
-        "继续保留成员参数透传断言。"
-      ],
-      [
-        "DashboardPanel 成员筛选",
-        "7 个组件测试",
-        "新增“自定义区间后切换成员”回归用例，修复前失败、修复后通过。",
+        "自动化回归",
+        "434 tests",
+        "新增“自定义区间后切换成员”用例修复前失败、修复后通过。",
         "防止 summary loading 再次卸载内容区。"
       ],
       [
-        "页面级真实浏览器冒烟",
-        "9 个 GUI 场景 + API 对照",
-        "修复前复现 P1，修复后同场景复验通过，无 console error。",
-        "合并前保留修复前/后截图对照。"
+        "修复证据",
+        "修复前/后截图",
+        "4 个修复场景保留 before/after 对照；P1 由 FAIL 转 PASS。",
+        "合并前保留对照。"
       ]
     ]
   },
   "conclusion": {
     "kind": "pass",
-    "label": "修复验证通过 · 待评审合并",
-    "summary": "P1 已修复并复验：成员筛选切换时保留已提交的自定义时间段与日期控件，任务进展变化在所选区间内叠加人员筛选刷新。",
+    "label": "前后端冒烟通过 · 待评审合并",
+    "summary": "修复后的前后端冒烟通过：前端 9/9 场景、后端 26/26 断言、自动化 434 测试全部通过；P1 保持修复，任务进展变化在所选时间段内叠加人员筛选刷新。",
     "points": [
-      "自定义 11-04 后筛周舟：状态行与日期控件保持自定义，结果为空态，不再出现 11-03 的 C。",
-      "同一区间筛陈晨：只显示 A/D，请求继续带 mode=custom、startDate、endDate 与 memberIds。",
-      "新增组件回归用例修复前收到 mode=default，修复后通过；dashboard/history 相关 46 个测试全绿。",
+      "前端：自定义 11-04 后筛周舟为空态、筛陈晨为 A/D；日期控件与状态行保持自定义。",
+      "前端：分布图随陈晨/林悦叠加从 0/0/0/0/1 刷新为 0/0/1/0/1；历史展开/折叠正常。",
+      "后端：summary/changes/due-distribution 的全量、成员、组合与边界断言全部通过，非法参数均返回 400。",
       "修复只改前端查询生命周期：summaryQuery 使用 keepPreviousData，避免 ChangesPanel 被卸载重挂。",
-      "服务端未改；真实浏览器无 console error；PR 待评审合并。"
+      "自动化 434 tests 通过；PR #69 的 CI 三项全绿，待评审合并。"
     ]
   },
-  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence; real build, real API, before/after screenshots, no credentials or private Feishu content included."
+  "footer": "Generated by computer-use-smoke-reporting from Playwright browser evidence and real API assertions; no credentials or private Feishu content included."
 }
