@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { useQuery } from "@tanstack/vue-query";
+import { keepPreviousData, useQuery } from "@tanstack/vue-query";
 import type { DashboardDueDistribution, DueBucket, DashboardSummary, Importance, ProgressBucket } from "@ztask/shared";
 import { adminApi } from "../../api/admin";
 import { shareApi } from "../../api/share";
@@ -90,6 +90,9 @@ const summaryQuery = useQuery({
       ? adminApi.dashboardSummary({ folderId: props.folderId!, memberIds: memberIds.value })
       : shareApi.dashboardSummary({ folderId: props.folderId!, memberIds: memberIds.value }),
   enabled: computed(() => props.folderId !== null),
+  // 成员筛选切换会换 query key；保留上一份 summary，避免整块内容走 LoadingState。
+  // ChangesPanel 因此不会被卸载，已提交的自定义时间段与折叠状态得以保留（08 §4.1）。
+  placeholderData: keepPreviousData,
   // 03 §7：看板 15s 轮询；切到后台 tab 暂停，回到前台由 focus 失效刷新。
   refetchInterval: () => (document.visibilityState === "hidden" ? false : 15_000),
   refetchOnWindowFocus: true,
