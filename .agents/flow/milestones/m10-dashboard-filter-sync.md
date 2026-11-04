@@ -6,7 +6,7 @@
 kind: milestone
 id: m10
 title: 阶段 10：看板筛选联动修复
-status: active
+status: done
 github:
   number: 10
   url: https://github.com/Shadow-Azure/ZTask/milestone/10
