@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseServeArgs, resolveOpenDecision } from "@ztask/cli";
+import { parseCliArgs, parseServeArgs, resolveOpenDecision } from "@ztask/cli";
 
 describe("parseServeArgs", () => {
   it("默认 127.0.0.1:8123 且允许自动打开", () => {
@@ -27,6 +27,18 @@ describe("parseServeArgs", () => {
 
   it("未知子命令报错", () => {
     expect(() => parseServeArgs(["frobnicate"])).toThrow();
+  });
+});
+
+describe("parseCliArgs --version", () => {
+  it("输出来自注入的包版本，不写死常量", () => {
+    try {
+      parseCliArgs(["--version"], "9.9.9");
+      expect.unreachable("--version 应通过 CommanderError 退出");
+    } catch (cause) {
+      expect((cause as { code?: string }).code).toBe("commander.version");
+      expect((cause as Error).message).toContain("9.9.9");
+    }
   });
 });
 

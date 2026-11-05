@@ -22,6 +22,8 @@
     "install-merge-driver": "node scripts/install-merge-driver.mjs",
     "test:prototype": "node --test scripts/prototype-tracker.spec.mjs",
     "test": "pnpm build && pnpm test:gates && vitest run apps tests",
+    "package:smoke": "node scripts/package-smoke.mjs",
+    "pack:ztask": "pnpm --filter ./apps/ztask pack",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel --stream dev",
     "typecheck": "pnpm -r typecheck",

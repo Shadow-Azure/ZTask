@@ -1,5 +1,10 @@
+import { createRequire } from "node:module";
 import { Command } from "commander";
 import type { ServeConfigInput } from "@ztask/server";
+
+const require = createRequire(import.meta.url);
+/** 命令行版本来源：monorepo 与发布包都读各自 package.json，避免另写常量。 */
+const PACKAGE_VERSION: string = require("../package.json").version;
 
 /** serve 子命令解析结果；input 交给 validateServeConfig，open 交给 resolveOpenDecision。 */
 export interface ParsedServeArgs {
@@ -21,11 +26,12 @@ export type ParsedCliArgs =
  * 构造 ztask 的 commander 程序：四个子命令共用一份帮助与参数校验。
  * 所有 action 只把结果写回回调，真正的执行由 cli.ts 分发，便于单测解析而不启动服务。
  * @param onParse 解析出一个子命令时回调。
+ * @param version 传给 `--version` 的版本号。
  * @returns 已注册全部子命令的程序。
  */
-function buildProgram(onParse: (parsed: ParsedCliArgs) => void): Command {
+function buildProgram(onParse: (parsed: ParsedCliArgs) => void, version: string): Command {
   const program = new Command();
-  program.exitOverride().name("ztask").description("ZTask 本地团队进度服务").version("0.1.0");
+  program.exitOverride().name("ztask").description("ZTask 本地团队进度服务").version(version);
 
   program
     .command("serve")
@@ -86,14 +92,15 @@ function buildProgram(onParse: (parsed: ParsedCliArgs) => void): Command {
  * 解析 ztask 命令行的子命令与参数。
  * `--help` 由 commander 输出全部四个子命令（serve/backup/restore/doctor）后退出。
  * @param argv 命令行参数（不含 node 与脚本路径）。
+ * @param version `--version` 输出；默认取包内 package.json，便于发布包与 monorepo 共用。
  * @returns 子命令解析结果。
  * @throws commander.CommanderError 未知子命令、缺少必填参数或用户请求帮助/版本。
  */
-export function parseCliArgs(argv: string[]): ParsedCliArgs {
+export function parseCliArgs(argv: string[], version: string = PACKAGE_VERSION): ParsedCliArgs {
   let parsed: ParsedCliArgs | null = null;
   const program = buildProgram((value) => {
     parsed = value;
-  });
+  }, version);
   program.parse(argv, { from: "user" });
   if (parsed !== null) return parsed;
   // 无子命令：打印帮助并按用法错误退出（commander 在 exitOverride 下抛 CommanderError）。
