@@ -11,10 +11,5 @@ node_modules/
 # PR review working docs (kept local; not versioned)
 /plans/
 
-# Smoke evidence stays local: share screenshots/PDF directly, keep text reports only
-/reports/**/*.png
-/reports/**/*.jpg
-/reports/**/*.jpeg
-/reports/**/*.webp
-/reports/**/*.gif
-/reports/**/*.pdf
+# Smoke evidence stays local: share reports/screenshots directly; not versioned
+/reports/**
