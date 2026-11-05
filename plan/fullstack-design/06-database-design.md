@@ -452,6 +452,7 @@ pauseWrites()（停新写入并等待在途事务）
 - `packages/shared/`：API DTO 不变；如备份或 doctor 报告新增字段，按可选字段扩展，避免破坏现有客户端。
 - `tests/`：替换原子写、JSONL 和尾恢复测试为 schema、事务回滚、版本冲突、WAL 恢复、旧数据导入、备份恢复、doctor 和 SQL 查询口径测试；故障注入改为事务前后与进程中止。
 - `package.json`：`engines.node` 为 `>=22`（better-sqlite3 要求 Node >=22；v13 prebuilds 覆盖 CI 平台），并在 README 和开发文档说明。
+- 迁移门禁：新增 migration 必须同步更新 `tests/fixtures/migrations/checksums.json`，并保留 `tests/fixtures/schema/v1/ztask.db` 供升级 fixture 测试；`pnpm test` 会校验已发布 checksum、v1 升级、备份恢复与降级拒绝。
 
 ## 11. 待确认
 

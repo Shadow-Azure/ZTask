@@ -15,9 +15,9 @@ function sha256(value: string): string {
 }
 
 /** migration 的校验和：覆盖该版本的全部 DDL，发布后修改会导致启动拒绝。 */
-const CHECKSUMS: Record<string, string> = {
+export const MIGRATION_CHECKSUMS: Readonly<Record<string, string>> = Object.freeze({
   "0001_initial": sha256(INITIAL_STATEMENTS.join(";\n")),
-};
+});
 
 const MIGRATIONS: Record<string, Migration> = {
   "0001_initial": {
@@ -59,7 +59,7 @@ async function readAudit(db: Kysely<DB>): Promise<Array<{ name: string; checksum
 }
 
 function checksumFor(name: string): string {
-  const checksum = CHECKSUMS[name];
+  const checksum = MIGRATION_CHECKSUMS[name];
   if (checksum === undefined) throw new StorageCorruptionError(`未知 migration：${name}`);
   return checksum;
 }
