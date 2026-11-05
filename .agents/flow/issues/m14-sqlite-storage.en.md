@@ -17,6 +17,8 @@ scope:
   - docs/**
   - reports/**
   - README.md
+  - README.en.md
+  - README.i18n.yaml
   - package.json
   - pnpm-lock.yaml
   - scripts/doc-budgets.manifest.json
