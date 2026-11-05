@@ -14,6 +14,7 @@ scope:
   - tests/**
   - plan/fullstack-design/**
   - .agents/**
+  - .github/**
   - docs/**
   - reports/**
   - README.md
