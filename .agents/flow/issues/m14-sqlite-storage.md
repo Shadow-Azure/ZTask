@@ -15,6 +15,7 @@ scope:
   - plan/fullstack-design/**
   - .agents/**
   - docs/**
+  - reports/**
   - README.md
   - package.json
   - pnpm-lock.yaml
