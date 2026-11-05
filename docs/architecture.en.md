@@ -10,6 +10,7 @@ ZTask is a local-first team progress tool managed as a pnpm workspace with four 
 - `apps/server/`: the Fastify service, static frontend fallback, data-directory lock, and local JSON/JSONL storage.
 - `apps/web/`: the admin shell built with Vue 3, Vue Router, and TanStack Query.
 - `packages/shared/`: the cross-surface API prefix, DTOs, and error contract.
+- `apps/ztask/`: the release wrapper; bundles CLI, server, and shared into one ESM file with the `apps/web` build output and distributes it as the `ztask` package.
 
 `tests/` covers startup, configuration, storage recovery, the web shell, and shared behavior. `plan/fullstack-design/` holds the design and implementation basis.
 

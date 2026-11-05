@@ -47,6 +47,10 @@ node apps/cli/dist/cli.js restore --backup <backup-dir> --data-dir <data-dir>
 
 钩子提供及时反馈，穷尽覆盖仍由 CI 承担。
 
+## 单包发布
+
+`apps/ztask` 是发布包 `ztask`。`pnpm build` 后用 `pnpm package:smoke` 在仓库外安装 tarball 并做启动、API 与重启冒烟。正式发布推送 `v<version>` 标签（版本须与 `apps/ztask/package.json` 一致），`release.yml` 重跑测试、打包、npm 发布并创建 GitHub Release；首次发布前需配置仓库 secret `NPM_TOKEN`，并确认包名与许可证。本地只打包用 `pnpm pack:ztask`。
+
 ## 流程与 CI
 
 开工前把需求落到 `.agents/flow/` 的 roadmap、milestone 与 issue，规则见 [.agents/flow/README.md](../.agents/flow/README.md)。新 issue 用 `pnpm flow:new-issue` 生成，编号回填走 `pnpm flow:sync`，提交、PR 标题与 scope 由流程门禁对账。

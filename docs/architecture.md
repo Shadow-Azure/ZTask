@@ -10,6 +10,7 @@ ZTask 是 pnpm workspace 管理的本地优先团队进度工具，当前由四�
 - `apps/server/`：Fastify 服务、静态前端回退、数据目录锁与本地 JSON/JSONL 存储。
 - `apps/web/`：Vue 3、Vue Router 与 TanStack Query 构成的管理端外壳。
 - `packages/shared/`：跨端 API 前缀、DTO 与错误契约。
+- `apps/ztask/`：发布包装，把 CLI、server 与 shared 打成单文件 ESM，并携带 `apps/web` 的构建产物，以 `ztask` 包名分发。
 
 `tests/` 覆盖启动、配置、存储恢复、Web 外壳与共享行为；`plan/fullstack-design/` 保存设计和实现依据。
 

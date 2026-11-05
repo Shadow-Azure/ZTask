@@ -28,5 +28,6 @@
   ".agents/flow/milestones/m9-subtask-error-reporting.md": 300,
   ".agents/flow/milestones/m10-dashboard-filter-sync.md": 300,
   ".agents/flow/milestones/m11-task-card-pane-modal.md": 300,
-  ".agents/flow/milestones/m12-startup-occupancy-error.md": 300
+  ".agents/flow/milestones/m12-startup-occupancy-error.md": 300,
+  ".agents/flow/milestones/m13-single-package-release.md": 300
 }

@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/roadmap.md
-roadmap.md: f4a00188e10bfef57eea4fd9baa1431cb3f5f894
-roadmap.en.md: ebf8e0c10d982425382079d8429ab42562af73cc
+roadmap.md: 50c6f3e8b6eeae71ed6fce9f33ef89e635932e94
+roadmap.en.md: 275ea5c1744a9e8cc46b123729c1723cdc64345d
