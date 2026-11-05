@@ -166,10 +166,11 @@ export function createShareLinkService(options: ShareLinkServiceOptions): ShareL
         await requireActiveMember(memberId);
         const baseUrl = requireShareBaseUrl();
         const now = clock().toISOString();
-        // reset 语义（07 §7）：新 id + 新 tokenHash 原子替换旧文件，旧链接/旧会话立即失效。
+        // reset 语义（07 §7）：先删旧会话，再替换链接行（外键要求旧 session 不悬挂）。
+        // 新 id + 新 tokenHash 使旧链接/旧会话立即失效。
         const { file, token } = newLink(memberId, now);
-        await linkStore.put(memberId, file);
         await destroySessionsForMember(options.dataDir, memberId);
+        await linkStore.put(memberId, file);
         return toIssued(file, token, baseUrl);
       });
     },

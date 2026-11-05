@@ -34,8 +34,28 @@ function actor() {
   return { kind: "admin" as const, memberId: null, name: "管理员" };
 }
 
+async function seedFolder(id: string, parentId: string | null, name: string): Promise<void> {
+  const store = createEntityStore<{ id: string; parentId: string | null; name: string; position: number }>({
+    dataDir,
+    subdir: "folders",
+  });
+  await store.put(id, { id, parentId, name, position: 0 });
+}
+
+async function seedMember(id: string, name: string): Promise<void> {
+  const store = createEntityStore<{ id: string; name: string; role: string; color: string; archivedAt: string | null }>({
+    dataDir,
+    subdir: "members",
+  });
+  await store.put(id, { id, name, role: "", color: "#2f6fe0", archivedAt: null });
+}
+
 describe("派生索引", () => {
   it("从聚合与实体文件重建 byId/folderChildren/active/history/assignments/owners", async () => {
+    await seedFolder(FOLDER_A, null, "A");
+    await seedFolder(FOLDER_B, FOLDER_A, "B");
+    await seedMember(MEMBER_X, "陈晨");
+    await seedMember(MEMBER_Y, "李泠");
     const boot = await initStore({ dataDir, applicationVersion: "0.1.0" });
     const tasks = createTaskStore({ dataDir, clock: () => new Date("2026-11-02T03:00:00.000Z") });
     await tasks.createAggregate({
@@ -49,10 +69,6 @@ describe("派生索引", () => {
         { taskId: TASK_2, memberId: MEMBER_X, kind: "owner" },
       ], actor: actor(),
     });
-    const folders = createEntityStore<{ id: string; parentId: string | null; name: string }>({ dataDir, subdir: "folders" });
-    await folders.put(FOLDER_A, { id: FOLDER_A, parentId: null, name: "A" });
-    await folders.put(FOLDER_B, { id: FOLDER_B, parentId: FOLDER_A, name: "B" });
-
     const indexes = await boot.rebuildIndexes();
     expect(indexes.byId.size).toBe(2);
 
@@ -75,6 +91,9 @@ describe("派生索引", () => {
   });
 
   it("小任务父级与有效小任务 owner 索引从聚合重建", async () => {
+    await seedFolder(FOLDER_A, null, "A");
+    await seedMember(MEMBER_X, "陈晨");
+    await seedMember(MEMBER_Y, "李泠");
     const boot = await initStore({ dataDir, applicationVersion: "0.1.0" });
     const tasks = createTaskStore({ dataDir, clock: () => new Date("2026-11-02T03:00:00.000Z") });
     const subtaskId = "33333333-3333-4333-8333-333333333333";
@@ -99,6 +118,8 @@ describe("派生索引", () => {
   });
 
   it("重启后重建的索引与首次一致", async () => {
+    await seedFolder(FOLDER_A, null, "A");
+    await seedMember(MEMBER_X, "陈晨");
     const boot1 = await initStore({ dataDir, applicationVersion: "0.1.0" });
     const tasks = createTaskStore({ dataDir, clock: () => new Date("2026-11-02T03:00:00.000Z") });
     await tasks.createAggregate({
@@ -124,7 +145,7 @@ describe("通用实体存储（members/folders/share-links/auth-sessions 统一�
     await members.put(MEMBER_X, { id: MEMBER_X, name: "陈晨改" });
     await members.put(MEMBER_Y, { id: MEMBER_Y, name: "李泠" });
 
-    expect(await members.get(MEMBER_X)).toEqual({ id: MEMBER_X, name: "陈晨改" });
+    expect(await members.get(MEMBER_X)).toMatchObject({ id: MEMBER_X, name: "陈晨改" });
     const all = await members.list();
     expect(all.length).toBe(2);
     expect(all.map((e) => e.value.name).sort()).toEqual(["李泠", "陈晨改"]);

@@ -2,7 +2,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildApp, initStore } from "@ztask/server";
+import { buildApp, createTaskStore, initStore } from "@ztask/server";
 import type { FastifyInstance } from "fastify";
 
 let dataDir: string;
@@ -166,7 +166,7 @@ describe("GET /admin/tasks（列表）", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/admin/tasks",
-      payload: createPayload({ description: "林悦的主任务", ownerIds: [ownerB], importance: "mid" }),
+      payload: createPayload({ description: "林悦的主任务", ownerIds: [ownerB], collaboratorIds: [], importance: "mid" }),
     });
 
     const byOwnerA = (
@@ -200,7 +200,7 @@ describe("GET /admin/tasks（列表）", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/admin/tasks",
-      payload: createPayload({ description: "林悦的中等任务", ownerIds: [ownerB], importance: "mid" }),
+      payload: createPayload({ description: "林悦的中等任务", ownerIds: [ownerB], collaboratorIds: [], importance: "mid" }),
     });
 
     const combined = (
@@ -434,10 +434,12 @@ describe("DELETE /admin/tasks/{id}（软删除）", () => {
     expect(list.json().items.length).toBe(0);
     expect((await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` })).statusCode).toBe(404);
 
-    // revisions.jsonl 文件保留（历史可查）
-    const { readFile } = await import("node:fs/promises");
-    const raw = await readFile(path.join(dataDir, "tasks", main.id, "revisions.jsonl"), "utf8");
-    expect(raw.trim().split("\n").length).toBeGreaterThanOrEqual(2);
+    // 历史 revision 保留（历史可查）
+    const revisions: Array<{ taskVersion: number }> = [];
+    await createTaskStore({ dataDir }).readRevisions(main.id, (line) => {
+      revisions.push({ taskVersion: line.taskVersion });
+    });
+    expect(revisions.length).toBeGreaterThanOrEqual(2);
     void sub;
   });
 

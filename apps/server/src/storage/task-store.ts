@@ -1,20 +1,22 @@
-import { mkdir, readdir } from "node:fs/promises";
-import { join } from "node:path";
 import { randomUUID } from "node:crypto";
+import { join } from "node:path";
 import type { ChangeKind, RevisionActor } from "@ztask/shared";
-import { appendJsonlLine, iterateJsonl } from "./jsonl.js";
-import { readJsonFile, writeJsonAtomic } from "./atomic-json.js";
-import { EntryNotFoundError, StorageError, VersionConflictError } from "./errors.js";
-import { TEMP_PREFIX } from "./paths.js";
-import type { AssignmentRecord, RevisionLine, RevisionTip, SubtaskRecord, TaskAggregate, TaskRecord } from "./task-types.js";
+import { Kysely } from "kysely";
+import { canonicalJson, checksumOf } from "./checksum.js";
+import { getStoreContext, type DB } from "./db.js";
+import { EntryNotFoundError, StorageCorruptionError, StorageError, VersionConflictError } from "./errors.js";
+import type {
+  AssignmentRecord,
+  RevisionLine,
+  RevisionTip,
+  SubtaskRecord,
+  TaskAggregate,
+  TaskRecord,
+} from "./task-types.js";
 import { createWriteQueue, type WriteQueue } from "./write-queue.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/**
- * 校验 taskId 是服务端生成的 UUID——文件路径只接受 UUID，
- * 用户可见名称绝不参与路径，杜绝路径穿越（06 §10 / 07 §4）。
- */
 function assertTaskId(taskId: string): void {
   if (!UUID_PATTERN.test(taskId)) {
     throw new StorageError("INVALID_TASK_ID", `taskId 非法（须为 UUID）：${taskId}`);
@@ -22,70 +24,249 @@ function assertTaskId(taskId: string): void {
 }
 
 /**
- * 聚合目录 `tasks/<taskId>/`；taskId 必须为 UUID。
- * @param dataDir 数据目录根。
+ * 旧文件布局下的聚合目录；仅用于旧数据导入/测试引用，不再是运行时存储。
+ * @param dataDir 数据目录。
  * @param taskId 主任务 UUID。
- * @returns 聚合目录绝对/相对路径。
+ * @returns 旧聚合目录路径。
  */
 export function taskDir(dataDir: string, taskId: string): string {
   return join(dataDir, "tasks", taskId);
 }
 
 /**
- * 聚合 current.json 路径（最新状态缓存，可由 revision 重建）。
- * @param dataDir 数据目录根。
+ * 旧文件布局下的 current.json 路径；仅用于旧数据导入/测试引用。
+ * @param dataDir 数据目录。
  * @param taskId 主任务 UUID。
- * @returns current.json 路径。
+ * @returns 旧 current.json 路径。
  */
 export function taskCurrentPath(dataDir: string, taskId: string): string {
   return join(taskDir(dataDir, taskId), "current.json");
 }
 
 /**
- * 聚合 revisions.jsonl 路径（历史与恢复依据，只追加）。
- * @param dataDir 数据目录根。
+ * 旧文件布局下的 revisions.jsonl 路径；仅用于旧数据导入/测试引用。
+ * @param dataDir 数据目录。
  * @param taskId 主任务 UUID。
- * @returns revisions.jsonl 路径。
+ * @returns 旧 revisions.jsonl 路径。
  */
 export function taskRevisionsPath(dataDir: string, taskId: string): string {
   return join(taskDir(dataDir, taskId), "revisions.jsonl");
 }
 
-/**
- * 直接读取聚合 current；不存在返回 null，损坏向上抛（06 §5：current 是缓存，可由 revision 重建）。
- * @param dataDir 数据目录根。
- * @param taskId 主任务 UUID。
- * @returns 聚合内容；不存在时为 null。
- */
-export async function readTaskAggregate(dataDir: string, taskId: string): Promise<TaskAggregate | null> {
-  assertTaskId(taskId);
-  try {
-    return (await readJsonFile(taskCurrentPath(dataDir, taskId))) as TaskAggregate;
-  } catch (cause) {
-    if (cause instanceof Error && cause.name === "EntryNotFoundError") return null;
-    throw cause;
+interface Draft {
+  task: TaskRecord;
+  subtasks: SubtaskRecord[];
+  assignments: AssignmentRecord[];
+}
+
+function buildRevision(
+  taskId: string,
+  taskVersion: number,
+  changeKind: ChangeKind,
+  actor: RevisionActor,
+  snapshot: Draft,
+  recordedAt: string,
+): { line: RevisionLine; checksum: string } {
+  const base = {
+    formatVersion: 1,
+    revisionId: randomUUID(),
+    taskId,
+    taskVersion,
+    recordedAt,
+    changeKind,
+    actor,
+    snapshot,
+  };
+  const checksum = checksumOf(base);
+  return { line: { ...base, checksum }, checksum };
+}
+
+function aggregateFromParts(
+  aggregate: {
+    task_id: string;
+    format_version: number;
+    task_version: number;
+    updated_at: string;
+    tip_task_version: number;
+    tip_recorded_at: string;
+    tip_change_kind: string;
+    tip_checksum: string;
+  },
+  task: TaskRecord,
+  subtasks: SubtaskRecord[],
+  assignments: AssignmentRecord[],
+): TaskAggregate {
+  return {
+    formatVersion: aggregate.format_version,
+    taskId: aggregate.task_id,
+    taskVersion: aggregate.task_version,
+    updatedAt: aggregate.updated_at,
+    revisionTip: {
+      taskVersion: aggregate.tip_task_version,
+      recordedAt: aggregate.tip_recorded_at,
+      changeKind: aggregate.tip_change_kind as ChangeKind,
+      checksum: aggregate.tip_checksum,
+    },
+    task,
+    subtasks,
+    assignments,
+  };
+}
+
+/** 从 SQLite 读取一个聚合；不存在返回 null，结构损坏抛 StorageCorruptionError。 */
+async function readAggregate(db: Kysely<DB>, taskId: string): Promise<TaskAggregate | null> {
+  const aggregate = await db
+    .selectFrom("task_aggregates")
+    .selectAll()
+    .where("task_id", "=", taskId)
+    .executeTakeFirst();
+  if (!aggregate) return null;
+
+  const taskRows = await db
+    .selectFrom("tasks")
+    .selectAll()
+    .where("aggregate_id", "=", taskId)
+    .orderBy("created_at")
+    .orderBy("id")
+    .execute();
+  const main = taskRows.find((row) => row.parent_id === null);
+  if (!main || main.id !== taskId) {
+    throw new StorageCorruptionError(`聚合缺少主任务行：${taskId}`);
+  }
+  if (taskRows.some((row) => row.parent_id !== null && row.parent_id !== taskId)) {
+    throw new StorageCorruptionError(`小任务 parent_id 非法：${taskId}`);
+  }
+
+  const assignments = await db
+    .selectFrom("assignments")
+    .selectAll()
+    .where("aggregate_id", "=", taskId)
+    .orderBy("task_id")
+    .orderBy("member_id")
+    .execute();
+
+  const task: TaskRecord = {
+    folderId: main.folder_id,
+    parentId: null,
+    description: main.description,
+    progress: main.progress,
+    detailText: main.detail_text ?? "",
+    importance: main.importance as TaskRecord["importance"],
+    dueDate: main.due_date,
+    createdAt: main.created_at,
+    deletedAt: main.deleted_at,
+  };
+  const subtasks: SubtaskRecord[] = taskRows
+    .filter((row) => row.parent_id !== null)
+    .map((row) => ({
+      id: row.id,
+      parentId: row.parent_id!,
+      folderId: row.folder_id,
+      description: row.description,
+      progress: row.progress,
+      importance: row.importance as SubtaskRecord["importance"],
+      dueDate: row.due_date,
+      createdAt: row.created_at,
+      deletedAt: row.deleted_at,
+    }));
+  const assignmentRecords: AssignmentRecord[] = assignments.map((row) => ({
+    taskId: row.task_id,
+    memberId: row.member_id,
+    kind: row.kind as AssignmentRecord["kind"],
+  }));
+
+  return aggregateFromParts(aggregate, task, subtasks, assignmentRecords);
+}
+
+async function insertRevision(db: Kysely<DB>, line: RevisionLine): Promise<void> {
+  await db
+    .insertInto("task_revisions")
+    .values({
+      revision_id: line.revisionId,
+      aggregate_id: line.taskId,
+      format_version: line.formatVersion,
+      task_version: line.taskVersion,
+      recorded_at: line.recordedAt,
+      change_kind: line.changeKind,
+      actor_kind: line.actor.kind,
+      actor_member_id: line.actor.memberId,
+      actor_name: line.actor.name,
+      checksum: line.checksum,
+      snapshot_json: JSON.stringify(line.snapshot),
+    })
+    .execute();
+}
+
+async function replaceCurrentRows(db: Kysely<DB>, taskId: string, draft: Draft): Promise<void> {
+  await db.deleteFrom("assignments").where("aggregate_id", "=", taskId).execute();
+  await db.deleteFrom("tasks").where("aggregate_id", "=", taskId).execute();
+
+  await db
+    .insertInto("tasks")
+    .values({
+      id: taskId,
+      aggregate_id: taskId,
+      parent_id: null,
+      folder_id: draft.task.folderId,
+      description: draft.task.description,
+      progress: draft.task.progress,
+      detail_text: draft.task.detailText,
+      importance: draft.task.importance,
+      due_date: draft.task.dueDate,
+      created_at: draft.task.createdAt,
+      deleted_at: draft.task.deletedAt,
+    })
+    .execute();
+
+  for (const subtask of draft.subtasks) {
+    await db
+      .insertInto("tasks")
+      .values({
+        id: subtask.id,
+        aggregate_id: taskId,
+        parent_id: subtask.parentId,
+        folder_id: subtask.folderId,
+        description: subtask.description,
+        progress: subtask.progress,
+        detail_text: null,
+        importance: subtask.importance,
+        due_date: subtask.dueDate,
+        created_at: subtask.createdAt,
+        deleted_at: subtask.deletedAt,
+      })
+      .execute();
+  }
+
+  for (const assignment of draft.assignments) {
+    await db
+      .insertInto("assignments")
+      .values({
+        task_id: assignment.taskId,
+        aggregate_id: taskId,
+        member_id: assignment.memberId,
+        kind: assignment.kind,
+      })
+      .execute();
   }
 }
 
-/** task-store 的故障注入缝：模拟 append 后 / publish 后崩溃（06 §8.2 的两个窗口）。 */
+/** task-store 的故障注入缝：事务内抛错即回滚。 */
 export interface TaskStoreHooks {
-  /** revision append + fsync 完成后触发；抛错即模拟"append 后、current 前"崩溃。 */
+  /** revision 行插入后触发；抛错即模拟提交前失败。 */
   afterAppend?: (info: { taskId: string; taskVersion: number }) => void;
-  /** current 原子发布完成后触发；抛错即模拟"current 后、索引前"失败。 */
+  /** 当前状态行更新后触发；抛错同样回滚。 */
   afterPublish?: (info: { taskId: string; taskVersion: number }) => void;
 }
 
 /** createTaskStore 的装配项：目录、时钟、注入缝与队列。 */
 export interface TaskStoreOptions {
   dataDir: string;
-  /** 可注入时钟（UTC）；缺省系统时间。 */
   clock?: () => Date;
   hooks?: TaskStoreHooks;
-  /** 外部队列（测试/上层共享同一串行边界）；缺省内部新建。 */
   queue?: WriteQueue;
 }
 
-/** 创建聚合的输入：主任务体、初始小任务与分配（taskVersion 从 1 起）。 */
+/** 创建聚合的输入。 */
 export interface CreateAggregateInput {
   taskId: string;
   task: TaskRecord;
@@ -94,147 +275,195 @@ export interface CreateAggregateInput {
   actor: RevisionActor;
 }
 
-/** 提交变更的输入：期望版本、变更语义、操作者与队列内执行的 mutation。 */
+/** 提交变更的输入。 */
 export interface CommitInput {
   expectedVersion: number;
   changeKind: ChangeKind;
   actor: RevisionActor;
-  /** 队列内、通过版本复查后调用；就地修改 draft，抛错则本次变更不落任何文件。 */
-  mutate: (draft: { task: TaskRecord; subtasks: SubtaskRecord[]; assignments: AssignmentRecord[] }) => void;
+  mutate: (draft: Draft) => void;
 }
 
-/** 任务聚合存储门面：create/commit/readRevisions，全部写操作按 taskId 串行。 */
+/** 任务聚合存储门面；SQLite 事务是提交边界，写队列只负责顺序。 */
 export interface TaskStore {
   createAggregate(input: CreateAggregateInput): Promise<TaskAggregate>;
-  /** 队列内复查 expectedVersion → append revision → 原子发布 current（06 §8.2 顺序）。 */
   commit(taskId: string, input: CommitInput): Promise<TaskAggregate>;
-  readRevisions(taskId: string, visitor: (line: RevisionLine) => void): Promise<void>;
+  readRevisions(taskId: string, visitor: (line: RevisionLine) => void | Promise<void>): Promise<void>;
   listTaskIds(): Promise<string[]>;
   drain(): Promise<void>;
-  /**
-   * 备份/维护用的一致性边界（06 §10）：先暂停新写入，再等待在途写入结束，返回恢复函数。
-   * 暂停期间提交的写会排队，恢复后按提交顺序执行；未调用 resume 的暂停会让写入永久排队。
-   * @returns resume；幂等，调用后队列恢复接受新写入。
-   */
   pauseWrites(): Promise<() => void>;
 }
 
 /**
- * 创建任务聚合存储门面：create/commit/readRevisions/listTaskIds。
- * 全部写操作经 taskId 串行队列，append+fsync 是逻辑提交点，随后才原子发布 current（06 §8.2）。
+ * 创建 SQLite 任务聚合存储门面。
  * @param options 装配项（dataDir 必填；clock/hooks/queue 可注入）。
  * @returns TaskStore。
  */
 export function createTaskStore(options: TaskStoreOptions): TaskStore {
   const { dataDir, clock = () => new Date(), hooks, queue = createWriteQueue() } = options;
 
-  async function buildRevision(taskId: string, taskVersion: number, changeKind: ChangeKind, actor: RevisionActor, snapshot: RevisionLine["snapshot"]): Promise<{ line: RevisionLine; checksum: string }> {
-    const recordedAt = clock().toISOString();
-    const line: Omit<RevisionLine, "checksum"> = {
-      formatVersion: 1,
-      revisionId: randomUUID(),
-      taskId,
-      taskVersion,
-      recordedAt,
-      changeKind,
-      actor,
-      snapshot,
-    };
-    const checksum = await appendJsonlLine(taskRevisionsPath(dataDir, taskId), line as Record<string, unknown>);
-    return { line: { ...line, checksum }, checksum };
+  async function create(input: CreateAggregateInput): Promise<TaskAggregate> {
+    const context = await getStoreContext(dataDir);
+    return await context.db.transaction().execute(async (trx) => {
+      const existing = await trx
+        .selectFrom("task_aggregates")
+        .select("task_id")
+        .where("task_id", "=", input.taskId)
+        .executeTakeFirst();
+      if (existing) throw new StorageError("TASK_AGGREGATE_EXISTS", `任务聚合已存在：${input.taskId}`);
+
+      const recordedAt = clock().toISOString();
+      const draft: Draft = { task: input.task, subtasks: input.subtasks, assignments: input.assignments };
+      const { line, checksum } = buildRevision(input.taskId, 1, "create", input.actor, draft, recordedAt);
+
+      await trx
+        .insertInto("task_aggregates")
+        .values({
+          task_id: input.taskId,
+          format_version: 1,
+          task_version: 1,
+          updated_at: recordedAt,
+          tip_revision_id: line.revisionId,
+          tip_task_version: 1,
+          tip_recorded_at: recordedAt,
+          tip_change_kind: "create",
+          tip_checksum: checksum,
+        })
+        .execute();
+      await insertRevision(trx as unknown as Kysely<DB>, line);
+      hooks?.afterAppend?.({ taskId: input.taskId, taskVersion: 1 });
+      await replaceCurrentRows(trx as unknown as Kysely<DB>, input.taskId, draft);
+      hooks?.afterPublish?.({ taskId: input.taskId, taskVersion: 1 });
+
+      return aggregateFromParts(
+        {
+          task_id: input.taskId,
+          format_version: 1,
+          task_version: 1,
+          updated_at: recordedAt,
+          tip_task_version: 1,
+          tip_recorded_at: recordedAt,
+          tip_change_kind: "create",
+          tip_checksum: checksum,
+        },
+        input.task,
+        input.subtasks,
+        input.assignments,
+      );
+    });
   }
 
   return {
     async createAggregate(input): Promise<TaskAggregate> {
       assertTaskId(input.taskId);
-      return queue.run(input.taskId, async () => {
-        const existing = await readTaskAggregate(dataDir, input.taskId);
-        if (existing) {
-          throw new StorageError("TASK_AGGREGATE_EXISTS", `任务聚合已存在：${input.taskId}`);
-        }
-        await mkdir(taskDir(dataDir, input.taskId), { recursive: true, mode: 0o700 });
-        const snapshot = { task: input.task, subtasks: input.subtasks, assignments: input.assignments };
-        const { line, checksum } = await buildRevision(input.taskId, 1, "create", input.actor, snapshot);
-        hooks?.afterAppend?.({ taskId: input.taskId, taskVersion: 1 });
-        const tip: RevisionTip = {
-          taskVersion: 1,
-          recordedAt: line.recordedAt,
-          changeKind: "create",
-          checksum,
-        };
-        const aggregate: TaskAggregate = {
-          formatVersion: 1,
-          taskId: input.taskId,
-          taskVersion: 1,
-          updatedAt: tip.recordedAt,
-          revisionTip: tip,
-          task: input.task,
-          subtasks: input.subtasks,
-          assignments: input.assignments,
-        };
-        await writeJsonAtomic(taskCurrentPath(dataDir, input.taskId), aggregate);
-        hooks?.afterPublish?.({ taskId: input.taskId, taskVersion: 1 });
-        return aggregate;
-      });
+      return await queue.run(input.taskId, () => create(input));
     },
 
     async commit(taskId, input): Promise<TaskAggregate> {
       assertTaskId(taskId);
-      return queue.run(taskId, async () => {
-        const current = await readTaskAggregate(dataDir, taskId);
-        if (!current) {
-          throw new EntryNotFoundError(`任务聚合不存在：${taskId}`);
-        }
-        // 乐观版本复查必须在队列内做（04 §5.1），路由入口的检查只是预检。
-        if (current.taskVersion !== input.expectedVersion) {
-          throw new VersionConflictError(
-            current.taskVersion,
-            `版本冲突：期望 ${input.expectedVersion}，当前 ${current.taskVersion}`,
+      return await queue.run(taskId, async () => {
+        const context = await getStoreContext(dataDir);
+        return await context.db.transaction().execute(async (trx) => {
+          const current = await readAggregate(trx as unknown as Kysely<DB>, taskId);
+          if (!current) throw new EntryNotFoundError(`任务聚合不存在：${taskId}`);
+          if (current.taskVersion !== input.expectedVersion) {
+            throw new VersionConflictError(
+              current.taskVersion,
+              `版本冲突：期望 ${input.expectedVersion}，当前 ${current.taskVersion}`,
+            );
+          }
+
+          const original: Draft = {
+            task: current.task,
+            subtasks: current.subtasks,
+            assignments: current.assignments,
+          };
+          const draft: Draft = structuredClone(original);
+          await input.mutate(draft);
+          if (canonicalJson(draft) === canonicalJson(original)) return current;
+
+          const recordedAt = clock().toISOString();
+          const taskVersion = current.taskVersion + 1;
+          const { line, checksum } = buildRevision(taskId, taskVersion, input.changeKind, input.actor, draft, recordedAt);
+
+          await insertRevision(trx as unknown as Kysely<DB>, line);
+          hooks?.afterAppend?.({ taskId, taskVersion });
+          await replaceCurrentRows(trx as unknown as Kysely<DB>, taskId, draft);
+          await trx
+            .updateTable("task_aggregates")
+            .set({
+              task_version: taskVersion,
+              updated_at: recordedAt,
+              tip_revision_id: line.revisionId,
+              tip_task_version: taskVersion,
+              tip_recorded_at: recordedAt,
+              tip_change_kind: input.changeKind,
+              tip_checksum: checksum,
+            })
+            .where("task_id", "=", taskId)
+            .execute();
+          hooks?.afterPublish?.({ taskId, taskVersion });
+
+          return aggregateFromParts(
+            {
+              task_id: taskId,
+              format_version: current.formatVersion,
+              task_version: taskVersion,
+              updated_at: recordedAt,
+              tip_task_version: taskVersion,
+              tip_recorded_at: recordedAt,
+              tip_change_kind: input.changeKind,
+              tip_checksum: checksum,
+            },
+            draft.task,
+            draft.subtasks,
+            draft.assignments,
           );
-        }
-        const draft = structuredClone({ task: current.task, subtasks: current.subtasks, assignments: current.assignments });
-        await input.mutate(draft);
-        const taskVersion = current.taskVersion + 1;
-        const { line, checksum } = await buildRevision(taskId, taskVersion, input.changeKind, input.actor, draft);
-        hooks?.afterAppend?.({ taskId, taskVersion });
-        const aggregate: TaskAggregate = {
-          formatVersion: 1,
-          taskId,
-          taskVersion,
-          updatedAt: line.recordedAt,
-          revisionTip: { taskVersion, recordedAt: line.recordedAt, changeKind: input.changeKind, checksum },
-          task: draft.task,
-          subtasks: draft.subtasks,
-          assignments: draft.assignments,
-        };
-        await writeJsonAtomic(taskCurrentPath(dataDir, taskId), aggregate);
-        hooks?.afterPublish?.({ taskId, taskVersion });
-        return aggregate;
+        });
       });
     },
 
     async readRevisions(taskId, visitor): Promise<void> {
       assertTaskId(taskId);
-      try {
-        await iterateJsonl(taskRevisionsPath(dataDir, taskId), (record) => {
-          visitor(record as unknown as RevisionLine);
-        });
-      } catch (cause) {
-        if ((cause as NodeJS.ErrnoException)?.code === "ENOENT") {
-          throw new EntryNotFoundError(`任务聚合不存在：${taskId}`);
+      const context = await getStoreContext(dataDir);
+      const rows = await context.db
+        .selectFrom("task_revisions")
+        .selectAll()
+        .where("aggregate_id", "=", taskId)
+        .orderBy("task_version")
+        .execute();
+      if (rows.length === 0) throw new EntryNotFoundError(`任务聚合不存在：${taskId}`);
+      for (const row of rows) {
+        const line: RevisionLine = {
+          formatVersion: row.format_version,
+          revisionId: row.revision_id,
+          taskId: row.aggregate_id,
+          taskVersion: row.task_version,
+          recordedAt: row.recorded_at,
+          changeKind: row.change_kind as ChangeKind,
+          actor: {
+            kind: row.actor_kind as RevisionActor["kind"],
+            memberId: row.actor_member_id,
+            name: row.actor_name,
+          },
+          checksum: row.checksum,
+          snapshot: JSON.parse(row.snapshot_json) as RevisionLine["snapshot"],
+        };
+        const { checksum, ...rest } = line;
+        if (checksumOf(rest) !== checksum) {
+          throw new StorageCorruptionError(`revision checksum 不匹配：${taskId} v${row.task_version}`);
         }
-        throw cause;
+        await visitor(line);
       }
     },
 
     async listTaskIds(): Promise<string[]> {
-      try {
-        const entries = await readdir(join(dataDir, "tasks"));
-        return entries.filter((entry) => UUID_PATTERN.test(entry));
-      } catch (cause) {
-        if ((cause as NodeJS.ErrnoException).code === "ENOENT") return [];
-        throw cause;
-      }
+      const context = await getStoreContext(dataDir);
+      const rows = await context.db
+        .selectFrom("task_aggregates")
+        .select("task_id")
+        .orderBy("task_id")
+        .execute();
+      return rows.map((row) => row.task_id);
     },
 
     drain(): Promise<void> {
@@ -242,7 +471,6 @@ export function createTaskStore(options: TaskStoreOptions): TaskStore {
     },
 
     async pauseWrites(): Promise<() => void> {
-      // 顺序不可交换：先关闸门再 drain，才能保证「drain 观察到的在途集合」之后不会再有新写入。
       const resume = queue.pause();
       await queue.drain();
       return resume;
@@ -250,4 +478,35 @@ export function createTaskStore(options: TaskStoreOptions): TaskStore {
   };
 }
 
-export { TEMP_PREFIX };
+/**
+ * 直接读取一个聚合的当前状态；不存在返回 null。
+ * @param dataDir 数据目录。
+ * @param taskId 主任务 UUID。
+ * @returns TaskAggregate。
+ */
+export async function readTaskAggregate(dataDir: string, taskId: string): Promise<TaskAggregate | null> {
+  assertTaskId(taskId);
+  const context = await getStoreContext(dataDir);
+  return await readAggregate(context.db, taskId);
+}
+
+/**
+ * 读取全部主任务聚合（share/dashboard/history 的统一入口）。
+ * 单个聚合损坏时跳过，避免成员视图整体 500。
+ * @param dataDir 数据目录。
+ * @returns 任务聚合列表。
+ */
+export async function readAllTaskAggregates(dataDir: string): Promise<TaskAggregate[]> {
+  const context = await getStoreContext(dataDir);
+  const ids = await context.db.selectFrom("task_aggregates").select("task_id").orderBy("task_id").execute();
+  const aggregates: TaskAggregate[] = [];
+  for (const row of ids) {
+    try {
+      const aggregate = await readAggregate(context.db, row.task_id);
+      if (aggregate) aggregates.push(aggregate);
+    } catch {
+      // 单个损坏聚合按不可见处理（05 §7 不泄露存储细节）。
+    }
+  }
+  return aggregates;
+}

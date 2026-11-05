@@ -99,7 +99,7 @@ apps/web/src/
 
 | 状态 | 权威位置 | 说明 |
 | --- | --- | --- |
-| 任务、成员、链接状态、看板 | 服务端文件存储 / TanStack Query cache | 不用 Pinia 再保存一份实体副本 |
+| 任务、成员、链接状态、看板 | 服务端 SQLite 存储 / TanStack Query cache | 不用 Pinia 再保存一份实体副本 |
 | 当前 folder/tab/成员筛选/负责人筛选 | URL + 页面 composable | 可刷新、可后退、可复制管理页深链 |
 | 树展开、树宽、子任务栏宽 | localStorage 偏好 + 内存 | 只改善本机体验，不是业务事实 |
 | 管理员浮窗表单、未保存小任务 | `useTaskEditor` 草稿 | 保存前不写 query cache |

@@ -14,7 +14,7 @@ English | [中文](README.md)
 
 ![ZTask admin UI: folders, tasks, subtasks, progress, and updates](docs/assets/ztask-admin.png)
 
-ZTask keeps team progress in the team's own hands. A single command starts a local service; the admin UI runs in the browser, where goals, owners, and due dates are organized by folder. When collaboration is needed, turn on LAN sharing so each member sees only the work relevant to them. Data is stored as readable JSON/JSONL files in a local directory, with dedicated commands for backup, restore, and diagnostics.
+ZTask keeps team progress in the team's own hands. A single command starts a local service; the admin UI runs in the browser, where goals, owners, and due dates are organized by folder. When collaboration is needed, turn on LAN sharing so each member sees only the work relevant to them. Data lives in a local SQLite database, with dedicated commands for backup, restore, and diagnostics.
 
 ## What it does
 
@@ -33,7 +33,7 @@ pnpm build
 pnpm serve
 ```
 
-Node 22 and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for setup and the everyday loop.
+Node 22+ and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for setup and the everyday loop.
 
 ## Documentation
 

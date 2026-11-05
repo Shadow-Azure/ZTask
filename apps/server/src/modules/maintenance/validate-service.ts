@@ -1,8 +1,12 @@
 import { readFile, readdir, stat } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
+import { sql } from "kysely";
 import { checksumOf } from "../../storage/checksum.js";
+import { openDiagnosticDb } from "../../storage/db.js";
 import type { Manifest } from "../../storage/manifest-store.js";
 import { SUPPORTED_FORMAT_VERSION } from "../../storage/manifest-store.js";
+import { SCHEMA_VERSION } from "../../storage/migrations.js";
 import { TEMP_PREFIX } from "../../storage/paths.js";
 
 /**
@@ -38,7 +42,8 @@ export type ValidationIssueKind =
   | "revision-tip"
   | "reference"
   | "network"
-  | "shape";
+  | "shape"
+  | "sqlite";
 
 /** 一条校验问题。 */
 export interface ValidationIssue {
@@ -247,7 +252,7 @@ interface RevisionLineLike {
  * @param dataDir 数据目录根（可以是刚复制出来的备份临时目录）。
  * @returns 校验结果（含文件统计与 manifest）。
  */
-export async function validateDataDir(dataDir: string): Promise<ValidationResult> {
+async function validateLegacyDataDir(dataDir: string): Promise<ValidationResult> {
   const root = path.resolve(dataDir);
   const files = await listDataDirFiles(root);
   const byPath = new Map(files.map((file) => [file.path, file]));
@@ -520,4 +525,151 @@ export async function validateDataDir(dataDir: string): Promise<ValidationResult
   // ok = 无阻塞问题：可自动修复的问题（JSONL 尾半行、current 落后）不阻止备份/恢复，
   // 但 issues 仍会完整上报给 doctor；真正干净由 issues.length === 0 判断。
   return { ok: !issues.some((issue) => !issue.fixable), issues, stats, files, manifest };
+}
+
+
+/**
+ * SQLite 数据目录只读校验（06 §7.4/§8）。
+ *
+ * 不打开 store 上下文（避免 migration/导入写库），只用只读连接做
+ * integrity_check、外键、schema 版本、meta 和业务引用断言。SQLite 可能创建/删除
+ * `-shm` 临时文件，但数据库内容不被修改。
+ * @param root 数据目录。
+ * @returns 校验结果。
+ */
+async function validateSqliteDataDir(root: string): Promise<ValidationResult> {
+  const dbPath = path.join(root, "ztask.db");
+  const issues: ValidationIssue[] = [];
+  const files: DataDirFile[] = [];
+  for (const name of ["ztask.db", "ztask.db-wal", "ztask.db-shm"]) {
+    const absolutePath = path.join(root, name);
+    try {
+      const info = await stat(absolutePath);
+      files.push({ path: name, absolutePath, size: info.size });
+    } catch {
+      // 缺失的 sidecar 是正常状态。
+    }
+  }
+  const stats = {
+    fileCount: files.length,
+    byteCount: files.reduce((sum, file) => sum + file.size, 0),
+  };
+
+  const { db, raw } = openDiagnosticDb(dbPath);
+  let manifest: Manifest | null = null;
+  const add = (kind: ValidationIssue["kind"], detail: string): void => {
+    issues.push({ path: "ztask.db", kind, fixable: false, detail });
+  };
+  try {
+    await sql`PRAGMA query_only = ON`.execute(db);
+
+    const integrity = await sql<{ integrity_check: string }>`PRAGMA integrity_check`.execute(db);
+    const badIntegrity = integrity.rows.filter((row) => row.integrity_check !== "ok");
+    if (badIntegrity.length > 0) {
+      add("sqlite", `integrity_check 未通过：${badIntegrity.map((row) => row.integrity_check).join("; ")}`);
+    }
+
+    const foreignKeys = await sql<Record<string, unknown>>`PRAGMA foreign_key_check`.execute(db);
+    if (foreignKeys.rows.length > 0) {
+      add("sqlite", `外键校验未通过：${JSON.stringify(foreignKeys.rows.slice(0, 3))}`);
+    }
+
+    const versionResult = await sql<{ user_version: number }>`PRAGMA user_version`.execute(db);
+    const schemaVersion = Number(versionResult.rows[0]?.user_version ?? 0);
+    if (schemaVersion > SCHEMA_VERSION) {
+      add("sqlite", `schema 版本 ${schemaVersion} 高于应用支持的 ${SCHEMA_VERSION}`);
+    }
+    if (schemaVersion < 1) add("sqlite", "schema 版本缺失或为 0");
+
+    let meta: Record<string, string> = {};
+    try {
+      const rows = await db.selectFrom("meta").selectAll().execute();
+      meta = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+    } catch {
+      add("sqlite", "meta 表缺失或不可读");
+    }
+    for (const key of ["application_version", "created_at", "time_zone"]) {
+      if (typeof meta[key] !== "string" || meta[key] === "") add("sqlite", `meta.${key} 缺失`);
+    }
+    if (meta.time_zone !== undefined) {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: meta.time_zone }).format(new Date());
+      } catch {
+        add("sqlite", `meta.time_zone 非法：${meta.time_zone}`);
+      }
+    }
+    if (schemaVersion >= 1) {
+      manifest = {
+        formatVersion: schemaVersion,
+        applicationVersion: meta.application_version ?? "0.0.0",
+        createdAt: meta.created_at ?? new Date(0).toISOString(),
+        timeZone: meta.time_zone ?? "UTC",
+      };
+    }
+
+    const revisions = await sql<{ aggregate_id: string; min: number; max: number; count: number }>`
+      SELECT aggregate_id, MIN(task_version) AS min, MAX(task_version) AS max, COUNT(*) AS count
+      FROM task_revisions GROUP BY aggregate_id`.execute(db);
+    for (const row of revisions.rows) {
+      if (Number(row.min) !== 1 || Number(row.max) !== Number(row.count)) {
+        add("sqlite", `聚合 ${row.aggregate_id} 的 revision 版本不连续`);
+      }
+    }
+
+    const tips = await sql<{ task_id: string }>`
+      SELECT a.task_id FROM task_aggregates a
+      LEFT JOIN task_revisions r ON r.revision_id = a.tip_revision_id
+      WHERE r.revision_id IS NULL
+         OR r.task_version <> a.task_version
+         OR r.checksum <> a.tip_checksum
+         OR r.aggregate_id <> a.task_id`.execute(db);
+    for (const row of tips.rows) add("sqlite", `聚合 ${row.task_id} 的 revision tip 不一致`);
+
+    const missingMain = await sql<{ task_id: string }>`
+      SELECT a.task_id FROM task_aggregates a
+      LEFT JOIN tasks t ON t.id = a.task_id AND t.parent_id IS NULL
+      WHERE t.id IS NULL`.execute(db);
+    for (const row of missingMain.rows) add("sqlite", `聚合 ${row.task_id} 缺少主任务行`);
+
+    const badAssignments = await sql<{ task_id: string }>`
+      SELECT x.task_id FROM assignments x
+      LEFT JOIN tasks t ON t.id = x.task_id
+      WHERE t.id IS NULL OR t.aggregate_id <> x.aggregate_id`.execute(db);
+    for (const row of badAssignments.rows) add("sqlite", `分配引用的任务 ${row.task_id} 不属于该聚合`);
+
+    const badFolders = await sql<{ id: string }>`
+      SELECT f.id FROM folders f
+      LEFT JOIN folders p ON p.id = f.parent_id
+      WHERE f.parent_id IS NOT NULL AND p.id IS NULL`.execute(db);
+    for (const row of badFolders.rows) add("sqlite", `任务夹 ${row.id} 的父任务夹不存在`);
+  } catch (cause) {
+    add("sqlite", `数据库无法完成校验：${cause instanceof Error ? cause.message : String(cause)}`);
+  } finally {
+    await db.destroy().catch(() => undefined);
+    try {
+      raw.close();
+    } catch {
+      // Kysely 的 destroy 可能已经关闭原生连接。
+    }
+  }
+
+  return {
+    ok: !issues.some((issue) => !issue.fixable),
+    issues,
+    stats,
+    files,
+    manifest,
+  };
+}
+
+/**
+ * 数据目录校验：有 ztask.db 时走 SQLite 只读校验；旧纯文件目录继续走 JSON/JSONL 校验，
+ * 以保持旧备份可恢复。备份/恢复/doctor 共用此入口。
+ * @param dataDir 数据目录根。
+ * @returns 校验结果。
+ */
+export async function validateDataDir(dataDir: string): Promise<ValidationResult> {
+  const root = path.resolve(dataDir);
+  if (existsSync(path.join(root, "ztask.db"))) return await validateSqliteDataDir(root);
+  return await validateLegacyDataDir(dataDir);
 }

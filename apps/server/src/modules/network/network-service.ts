@@ -1,9 +1,13 @@
-import { mkdir } from "node:fs/promises";
 import { networkInterfaces as osNetworkInterfaces } from "node:os";
-import { join } from "node:path";
 import { ApiError } from "@ztask/shared";
 import type { NetworkInterfaceInfo, NetworkState, ShareListenerState } from "@ztask/shared";
-import { readJsonFile, writeJsonAtomic, type AtomicWriteHooks } from "../../storage/atomic-json.js";
+import type { AtomicWriteHooks } from "../../storage/atomic-json.js";
+import {
+  emptyNetworkFile,
+  readNetworkConfig,
+  writeNetworkConfig,
+  type NetworkFile,
+} from "../../storage/network-store.js";
 import { isLoopbackHost, isWildcardHost } from "../../config.js";
 
 /**
@@ -28,21 +32,6 @@ export interface NetworkListenerHandle {
 
 /** 启动 LAN listener；host/port 已经过本服务校验。 */
 export type StartNetworkListener = (host: string, port: number) => Promise<NetworkListenerHandle>;
-
-/**
- * 06 §3.1 的 `network.json` 形态：只保存期望恢复的配置。
- * host/port/shareBaseUrl 在关闭分享后保留原值，便于管理端展示上次选择；
- * 运行态一律由 NetworkService 的内存状态回答。
- */
-export interface NetworkFile {
-  formatVersion: number;
-  shareListener: {
-    enabled: boolean;
-    host: string | null;
-    port: number | null;
-    shareBaseUrl: string | null;
-  };
-}
 
 /** 网卡原始记录的最小结构（Node `os.networkInterfaces()` 的条目）。 */
 export interface RawNetworkInterface {
@@ -94,14 +83,6 @@ export interface NetworkService {
 const FORMAT_VERSION = 1;
 const MIN_PORT = 1;
 const MAX_PORT = 65535;
-
-/** 每次返回独立对象，避免调用方意外共享常量里的 shareListener。 */
-function emptyNetworkFile(): NetworkFile {
-  return {
-    formatVersion: FORMAT_VERSION,
-    shareListener: { enabled: false, host: null, port: null, shareBaseUrl: null },
-  };
-}
 
 /** 稳定字符串比较：不用 localeCompare，避免不同环境排序漂移。 */
 function compareText(a: string, b: string): number {
@@ -173,39 +154,6 @@ export function collectShareInterfaces(records: NodeJS.Dict<RawNetworkInterface[
   return [...byAddress.values()].sort((a, b) => compareText(a.name, b.name) || compareText(a.address, b.address));
 }
 
-/**
- * 读取 network.json 并做容错归一化：文件缺失、JSON 损坏、字段类型不符都视为 disabled，
- * 绝不因网络配置损坏阻断启动（01 §3.1、06 §3.1）。
- * @param dataDir 数据目录。
- * @returns 归一化后的配置；永不为 null。
- */
-async function readNetworkFile(dataDir: string): Promise<NetworkFile> {
-  let raw: unknown;
-  try {
-    raw = await readJsonFile(join(dataDir, "network.json"));
-  } catch {
-    return emptyNetworkFile();
-  }
-  if (raw === null || typeof raw !== "object") return emptyNetworkFile();
-  const shareListener = (raw as { shareListener?: unknown }).shareListener;
-  if (shareListener === null || typeof shareListener !== "object") return emptyNetworkFile();
-  const record = shareListener as { enabled?: unknown; host?: unknown; port?: unknown; shareBaseUrl?: unknown };
-  const enabled = record.enabled === true;
-  const host = typeof record.host === "string" && record.host.trim() !== "" ? stripBrackets(record.host) : null;
-  const port =
-    typeof record.port === "number" && Number.isInteger(record.port) && record.port >= MIN_PORT && record.port <= MAX_PORT
-      ? record.port
-      : null;
-  const shareBaseUrl =
-    typeof record.shareBaseUrl === "string" && record.shareBaseUrl.trim() !== "" ? record.shareBaseUrl.trim().replace(/\/+$/, "") : null;
-  // enabled 但缺少可恢复的 host/port：配置不可执行，按 disabled 呈现而不是假装 degraded。
-  if (enabled && (host === null || port === null)) return emptyNetworkFile();
-  return {
-    formatVersion: FORMAT_VERSION,
-    shareListener: { enabled, host, port, shareBaseUrl },
-  };
-}
-
 /** 运行时 listener 与请求地址记录。 */
 interface ActiveListener {
   host: string;
@@ -244,13 +192,12 @@ export function createNetworkService(options: NetworkServiceOptions): NetworkSer
 
   async function ensureLoaded(): Promise<void> {
     if (loaded) return;
-    persisted = await readNetworkFile(options.dataDir);
+    persisted = await readNetworkConfig(options.dataDir);
     loaded = true;
   }
 
   async function persist(next: NetworkFile): Promise<void> {
-    await mkdir(options.dataDir, { recursive: true, mode: 0o700 });
-    await writeJsonAtomic(join(options.dataDir, "network.json"), next, options.writeHooks);
+    await writeNetworkConfig(options.dataDir, next, options.writeHooks);
   }
 
   async function closeQuietly(handle: NetworkListenerHandle): Promise<void> {
@@ -458,3 +405,5 @@ export function createNetworkService(options: NetworkServiceOptions): NetworkSer
     },
   };
 }
+
+export type { NetworkFile } from "../../storage/network-store.js";

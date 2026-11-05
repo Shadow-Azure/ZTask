@@ -1,9 +1,9 @@
 import { randomBytes, randomUUID, createHash } from "node:crypto";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import type { Importance } from "@ztask/shared";
-import { buildApp, initStore, writeJsonAtomic } from "@ztask/server";
+import { buildApp, createEntityStore, initStore } from "@ztask/server";
 
 /**
  * 成员分享域测试夹具（06 §4.3 / §5）。
@@ -104,24 +104,40 @@ export async function seedShareLink(options: {
     revokedAt: null,
     lastUsedAt: options.lastUsedAt ?? null,
   };
-  await writeJsonAtomic(path.join(options.dataDir, "share-links", `${options.memberId}.json`), link);
+  const store = createEntityStore<ShareLinkSeed>({ dataDir: options.dataDir, subdir: "share-links" });
+  await store.put(options.memberId, link);
   return { token, link };
+}
+
+/** 原地改写 share-link（测试吊销/状态兜底用）。 */
+export async function updateShareLink(dataDir: string, memberId: string, patch: Partial<ShareLinkSeed>): Promise<void> {
+  const store = createEntityStore<ShareLinkSeed>({ dataDir, subdir: "share-links" });
+  const current = await store.get(memberId);
+  if (!current) throw new Error(`share link not found: ${memberId}`);
+  await store.put(memberId, { ...current, ...patch });
 }
 
 /** 读取 share-link 当前落盘内容。 */
 export async function readShareLink(dataDir: string, memberId: string): Promise<ShareLinkSeed> {
-  return JSON.parse(await readFile(path.join(dataDir, "share-links", `${memberId}.json`), "utf8")) as ShareLinkSeed;
+  const store = createEntityStore<ShareLinkSeed>({ dataDir, subdir: "share-links" });
+  const link = await store.get(memberId);
+  if (!link) throw new Error(`share link not found: ${memberId}`);
+  return link;
 }
 
 /** 读取会话文件当前落盘内容。 */
 export async function readSessionFile(dataDir: string, sessionId: string): Promise<SessionSeed> {
-  return JSON.parse(await readFile(path.join(dataDir, "auth-sessions", `${sessionId}.json`), "utf8")) as SessionSeed;
+  const store = createEntityStore<SessionSeed>({ dataDir, subdir: "auth-sessions" });
+  const session = await store.get(sessionId);
+  if (!session) throw new Error(`session not found: ${sessionId}`);
+  return session;
 }
 
 /** 原地改写会话文件（过期/心跳测试用，走原子写保持与生产一致）。 */
 export async function updateSessionFile(dataDir: string, sessionId: string, patch: Partial<SessionSeed>): Promise<void> {
   const current = await readSessionFile(dataDir, sessionId);
-  await writeJsonAtomic(path.join(dataDir, "auth-sessions", `${sessionId}.json`), { ...current, ...patch });
+  const store = createEntityStore<SessionSeed>({ dataDir, subdir: "auth-sessions" });
+  await store.put(sessionId, { ...current, ...patch });
 }
 
 /** 从 Cookie 头值中取出 sessionId（`ztask_share_session=<sessionId>.<verifier>`）。 */

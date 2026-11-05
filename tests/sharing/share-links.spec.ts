@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { createHash } from "node:crypto";
-import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type { FastifyInstance } from "fastify";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildApp, createShareLinkService, initStore, type ShareLinkService } from "@ztask/server";
+import { buildApp, createEntityStore, createShareLinkService, initStore, type ShareLinkService } from "@ztask/server";
 import {
   createMemberViaApi,
   createStubNetworkService,
@@ -39,16 +39,27 @@ interface LinkFile {
   lastUsedAt: string | null;
 }
 
+interface SessionFile {
+  formatVersion: number;
+  sessionId: string;
+  memberId: string;
+  shareLinkId: string;
+  verifierHash: string;
+  createdAt: string;
+  expiresAt: string;
+  lastSeenAt: string;
+}
+
 async function readLinkFile(memberId: string): Promise<LinkFile> {
-  return JSON.parse(await readFile(path.join(dataDir, "share-links", `${memberId}.json`), "utf8")) as LinkFile;
+  const store = createEntityStore<LinkFile>({ dataDir, subdir: "share-links" });
+  const link = await store.get(memberId);
+  if (!link) throw new Error(`share link not found: ${memberId}`);
+  return link;
 }
 
 async function sessionFiles(): Promise<string[]> {
-  try {
-    return (await readdir(path.join(dataDir, "auth-sessions"))).filter((name) => name.endsWith(".json"));
-  } catch {
-    return [];
-  }
+  const store = createEntityStore<SessionFile>({ dataDir, subdir: "auth-sessions" });
+  return (await store.list()).map((entry) => entry.id);
 }
 
 async function issue(memberId: string): Promise<{ id: string; url: string; createdAt: string }> {
@@ -82,7 +93,7 @@ describe("generate（05 §4.5、07 §7）", () => {
 
     expect(issued.url).toBe(`http://192.168.1.5:8123/#/s/${token}`);
 
-    const raw = await readFile(path.join(dataDir, "share-links", `${memberId}.json`), "utf8");
+    const raw = JSON.stringify(await readLinkFile(memberId));
     expect(raw).not.toContain(token);
     expect(raw).not.toContain("192.168.1.5");
 
@@ -118,7 +129,8 @@ describe("generate（05 §4.5、07 §7）", () => {
     const response = await app.inject({ method: "POST", url: `/api/v1/admin/members/${memberId}/share-link` });
     expect(response.statusCode).toBe(409);
     expect((response.json() as { error: { code: string } }).error.code).toBe("LAN_SHARE_DISABLED");
-    await expect(readFile(path.join(dataDir, "share-links", `${memberId}.json`), "utf8")).rejects.toThrow();
+    const store = createEntityStore<LinkFile>({ dataDir, subdir: "share-links" });
+    expect(await store.get(memberId)).toBeNull();
   });
 
   it("成员不存在 → 404；已归档成员 → 404", async () => {
@@ -201,11 +213,12 @@ describe("rotate（05 §4.6、07 §7）", () => {
     const issued = await issue(memberId);
     const oldCookie = await exchangeCookie(app, tokenFromUrl(issued.url));
 
-    // 抓住轮换前的会话文件内容，轮换后人为放回：模拟删除失败/备份恢复的残留。
+    // 抓住轮换前的会话内容，轮换后人为放回：模拟删除失败/备份恢复的残留。
     const names = await sessionFiles();
     expect(names).toHaveLength(1);
-    const sessionPath = path.join(dataDir, "auth-sessions", names[0]!);
-    const saved = await readFile(sessionPath, "utf8");
+    const sessionStore = createEntityStore<SessionFile>({ dataDir, subdir: "auth-sessions" });
+    const saved = await sessionStore.get(names[0]!);
+    expect(saved).not.toBeNull();
 
     const rotated = await app.inject({
       method: "POST",
@@ -214,8 +227,9 @@ describe("rotate（05 §4.6、07 §7）", () => {
     expect(rotated.statusCode).toBe(200);
     expect(await sessionFiles()).toEqual([]);
 
-    await writeFile(sessionPath, saved, "utf8");
-    expect(await sessionFiles()).toEqual([names[0]!]);
+    // SQLite 外键保证旧 session 不能再挂到已删除的 link id 上；即使绕过清理也无法恢复。
+    await expect(sessionStore.put(names[0]!, saved!)).rejects.toThrow();
+    expect(await sessionFiles()).toEqual([]);
     const stale = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: oldCookie } });
     expect(stale.statusCode).toBe(401);
     expect((stale.json() as { error: { code: string } }).error.code).toBe("SHARE_SESSION_REQUIRED");

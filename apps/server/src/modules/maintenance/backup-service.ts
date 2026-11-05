@@ -1,8 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { ApiError } from "@ztask/shared";
+import { sql } from "kysely";
 import { writeJsonAtomic } from "../../storage/atomic-json.js";
+import { getStoreContext, hasStoreDb, storeDbPath } from "../../storage/db.js";
+import { SCHEMA_VERSION } from "../../storage/migrations.js";
 import { TEMP_PREFIX } from "../../storage/paths.js";
 import {
   BACKUP_REPORT_FILE,
@@ -42,6 +45,10 @@ export interface BackupReport {
   excluded: string[];
   /** 校验摘要；发布成功的备份恒为 ok。 */
   validation: { ok: boolean; issues: ValidationIssue[] };
+  /** SQLite 备份的 schema 版本；旧文件备份为 undefined。 */
+  schemaVersion?: number;
+  /** SQLite 备份的各表行数摘要；旧文件备份为 undefined。 */
+  tables?: Record<string, number>;
 }
 
 /** 备份结果：发布后的目录与报告。 */
@@ -171,6 +178,74 @@ export function createBackupService(options: BackupServiceOptions): BackupServic
     }
   }
 
+  async function backupSqlite(createdAt: string): Promise<BackupResult> {
+    const backupsDir = path.join(dataDir, "backups");
+    const tmpRoot = path.join(dataDir, "tmp");
+    await mkdir(backupsDir, { recursive: true, mode: 0o700 });
+    await mkdir(tmpRoot, { recursive: true, mode: 0o700 });
+
+    const stamp = createdAt.replace(/[:.]/g, "-");
+    const finalDir = path.join(backupsDir, `${stamp}-${randomUUID()}`);
+    const tmpDir = path.join(tmpRoot, `backup-${randomUUID()}`);
+    const dbFile = path.join(tmpDir, "ztask.db");
+    let published = false;
+    try {
+      await mkdir(tmpDir, { recursive: true, mode: 0o700 });
+      const context = await getStoreContext(dataDir);
+      // VACUUM INTO 产出单文件、无 WAL 的一致性快照；不复制 -wal/-shm。
+      await sql`VACUUM INTO ${sql.lit(dbFile)}`.execute(context.db);
+
+      const validation = await validateDataDir(tmpDir);
+      if (!validation.ok) {
+        const summary = validation.issues
+          .slice(0, 5)
+          .map((issue) => `${issue.path}：${issue.detail}`)
+          .join("；");
+        throw new ApiError(500, "INTERNAL_ERROR", `数据库快照校验未通过，已放弃本次备份：${summary}`, {
+          issues: validation.issues,
+        });
+      }
+      const dbStat = await stat(dbFile);
+      const tables: Record<string, number> = {};
+      for (const table of [
+        "members",
+        "folders",
+        "task_aggregates",
+        "tasks",
+        "assignments",
+        "task_revisions",
+        "share_links",
+        "auth_sessions",
+      ] as const) {
+        const result = await context.db
+          .selectFrom(table)
+          .select((expression) => expression.fn.countAll<number>().as("count"))
+          .executeTakeFirst();
+        tables[table] = Number(result?.count ?? 0);
+      }
+      const report: BackupReport = {
+        formatVersion: BACKUP_REPORT_FORMAT_VERSION,
+        appVersion: options.appVersion,
+        createdAt,
+        timeZone: options.timeZone,
+        dataDir,
+        files: 1,
+        bytes: dbStat.size,
+        excluded: [...EXCLUDED_DATA_ENTRIES],
+        validation: { ok: true, issues: [] },
+        schemaVersion: validation.manifest?.formatVersion ?? SCHEMA_VERSION,
+        tables,
+      };
+      await writeJsonAtomic(path.join(tmpDir, BACKUP_REPORT_FILE), report);
+      await options.hooks?.beforePublish?.({ tmpDir, finalDir });
+      await rename(tmpDir, finalDir);
+      published = true;
+      return { backupDir: finalDir, report };
+    } finally {
+      if (!published) await rm(tmpDir, { recursive: true, force: true });
+    }
+  }
+
   return {
     isRunning(): boolean {
       return running;
@@ -184,6 +259,7 @@ export function createBackupService(options: BackupServiceOptions): BackupServic
         const createdAt = clock().toISOString();
         const resume = await options.pauseWrites();
         try {
+          if (hasStoreDb(dataDir)) return await backupSqlite(createdAt);
           return await copyAndPublish(createdAt);
         } finally {
           // 无论复制/校验/发布成败都必须恢复写入，否则服务会永久拒绝写请求。
