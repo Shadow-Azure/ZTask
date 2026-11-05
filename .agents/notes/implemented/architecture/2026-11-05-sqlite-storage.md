@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-- 使用单个 `ztask.db` 作为唯一权威业务库，`node:sqlite` 的 `DatabaseSync` 连接，WAL、`synchronous=FULL`、外键开启；数据目录锁和单进程写队列保留。
+- 使用单个 `ztask.db` 作为唯一权威业务库，`better-sqlite3` 连接（Kysely `SqliteDialect`），WAL、`synchronous=FULL`、外键开启；数据目录锁和单进程写队列保留。
 - 当前状态关系化到 `members`、`folders`、`tasks`、`assignments`、`share_links`、`auth_sessions`、`network_config`、`meta`；主任务与小任务共享 `task_aggregates` 的版本。
 - 历史保留为 `task_revisions` 的不可变完整 JSON 快照，checksum 继续用规范化 JSON 的 SHA-256；当前状态与历史不做双向同步。
 - 一次有效变更是一个 `BEGIN IMMEDIATE` 事务：revision、当前状态、aggregate tip 同事务提交；版本冲突在事务内复查；no-op 不写 revision。
@@ -24,7 +24,7 @@ Status: implemented
 ## Alternatives considered
 
 - 继续使用分聚合 JSON + JSONL 并加固恢复：保留纯文本可读和无原生依赖，但原子写、尾行恢复、current 对账和派生索引仍由应用维护，跨实体一致性仍靠约定；否决。
-- 使用 `better-sqlite3`：API 更稳定，但有原生依赖和安装、CI 成本；`node:sqlite` 已满足单进程同步访问，先选内置驱动；若 Node 版本下限不可接受再切换。
+- 使用 `node:sqlite`：无原生依赖，但 API 仍是 experimental 且要求 Node 22.13+；高 star Node/Electron 项目普遍使用 better-sqlite3 或 sqlite3，因此放弃。
 - 引入 ORM：当前查询面小且需要精确控制事务与 SQL 计划，手写 SQL 加仓储更透明；否决。
 - 每聚合一个数据库：事务边界更小，但备份、迁移、跨实体查询和引用校验更复杂；单库更符合当前规模；否决。
 - 历史也完全拆成关系表：历史是整条不可变快照，字段演进时旧快照会被新约束影响；保留 JSON 快照；否决。
@@ -33,7 +33,7 @@ Status: implemented
 
 - 失去“每个实体一个可读 JSON 文件”的透明度；诊断改用 `sqlite3` 或只读连接，人工编辑不再受支持。
 - 迁移单向：升级后旧应用无法读取 `ztask.db`，回滚依赖 `backups/pre-sqlite-*`。
-- `node:sqlite` 要求 Node >= 22.13，且仍是 experimental；`engines.node` 需要提升，驱动替换点集中在连接适配层。
+- `better-sqlite3` 需要原生模块（预编译或本地构建），CI 必须允许其 install script；`engines.node` 为 `>=22`，驱动替换点集中在连接适配层。
 - SQLite 不加密静态数据；数据库文件权限成为唯一保护，和原 JSON 文件的威胁模型一致。
 - 需要建立 schema migration、备份恢复和 revision checksum 的测试矩阵；原原子写、JSONL 和尾恢复测试将被替换。
 - 这是架构级变更：`docs/architecture.md` 已在本 PR 更新；实现由 m14 / issue #79 跟踪。

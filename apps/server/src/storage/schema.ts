@@ -3,7 +3,7 @@
  *
  * DDL 拆成单条语句，便于用 Kysely 的 `sql.raw` 逐条执行；所有语句同时被
  * 初始 migration 和测试的“空库建表”路径复用。STRICT 表要求 SQLite >= 3.37，
- * Node 22.13+ 的 `node:sqlite` 已满足。
+ * `better-sqlite3` 内置的 SQLite 已满足。
  */
 export const DDL_STATEMENTS: readonly string[] = [
   `CREATE TABLE meta (

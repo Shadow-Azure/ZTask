@@ -41,10 +41,10 @@ ZTask 是一个由 `ztask serve` 启动的本地团队进度服务：一个 Node
 | 决策 | 当前方案 | 状态/理由 |
 | --- | --- | --- |
 | 产品形态 | 本地 CLI + 单进程 Web 服务，不做桌面壳 | 推荐；与 DeepSeek Harness 的使用方式一致 |
-| 全栈语言 | Node.js 22.13+ + TypeScript + pnpm workspace | 推荐；沿用仓库工具链，满足 `node:sqlite` 版本下限 |
+| 全栈语言 | Node.js 22+ + TypeScript + pnpm workspace | 推荐；沿用仓库工具链 |
 | 前端 | Vue 3 + Vite + Vue Router + TanStack Query | 推荐；组件化实现原型，分离服务端与界面状态 |
 | 后端 | Fastify 模块化单体 | 推荐；轻量、schema 校验成熟 |
-| 主要持久化 | SQLite 单库（`node:sqlite`） | **已确认**；事务、索引、单文件快照备份；驱动与历史形态见 [06 §11](06-database-design.md) |
+| 主要持久化 | SQLite 单库（`better-sqlite3`） | **已确认**；事务、索引、单文件快照备份；驱动与历史形态见 [06 §11](06-database-design.md) |
 | 历史模型 | 每次有效任务变更写入完整聚合快照 | **已确认**；当前状态关系化，历史 JSON 快照；起止快照即时 diff，不做纯事件重放 |
 | 认证会话 | `auth_sessions` 表 + HttpOnly Cookie | 推荐；只存 verifierHash，link 状态兜底吊销 |
 | UI | 迁移原型设计令牌与布局，不引入重塑视觉的 UI 套件 | 推荐；优先遵从原型 |
@@ -70,7 +70,7 @@ ZTask 是一个由 `ztask serve` 启动的本地团队进度服务：一个 Node
 - [SQLite: PRAGMA](https://www.sqlite.org/pragma.html)：`user_version`、`journal_mode`、`synchronous`、`foreign_keys`、`integrity_check`。
 - [SQLite: VACUUM](https://www.sqlite.org/lang_vacuum.html)：`VACUUM INTO` 生成一致性单文件快照。
 - [SQLite: STRICT tables](https://www.sqlite.org/stricttables.html)：类型与约束收紧。
-- [Node.js `node:sqlite`](https://nodejs.org/docs/latest-v22.x/api/sqlite.html)：内嵌驱动、同步 API 与 Node 版本要求。
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)：Node 同步 SQLite 驱动、预编译与构建说明。
 - [jsdiff](https://github.com/kpdecker/jsdiff)：已确认的 `diffLines` 行级差异计算库；Vue 自研双列渲染，不采用 HTML 字符串注入式展示。
 - [proper-lockfile](https://github.com/moxystudio/node-proper-lockfile)：单写者锁、stale/compromised 处理与限制。
 - [Fastify Hooks](https://fastify.dev/docs/latest/Reference/Hooks/)：路由前统一身份和权限边界。

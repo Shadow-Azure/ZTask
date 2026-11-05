@@ -1,8 +1,8 @@
 import { chmod, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { Kysely, sql } from "kysely";
-import { NodeNativeSqliteDialect } from "kysely-node-native-sqlite";
+import Database from "better-sqlite3";
+import { Kysely, SqliteDialect, sql } from "kysely";
 import { StorageCorruptionError, UnsupportedFormatError } from "./errors.js";
 import type { Manifest } from "./manifest-store.js";
 import { runMigrations } from "./migrations.js";
@@ -151,6 +151,7 @@ export interface StoreContext {
   dataDir: string;
   dbPath: string;
   db: Kysely<DB>;
+  raw: InstanceType<typeof Database>;
   manifest: Manifest;
 }
 
@@ -191,8 +192,24 @@ async function ensureDataDir(dataDir: string): Promise<void> {
   }
 }
 
-function openDb(dbPath: string): Kysely<DB> {
-  return new Kysely<DB>({ dialect: new NodeNativeSqliteDialect(dbPath) });
+function openDb(dbPath: string): { db: Kysely<DB>; raw: InstanceType<typeof Database> } {
+  const raw = new Database(dbPath);
+  const db = new Kysely<DB>({ dialect: new SqliteDialect({ database: raw }) });
+  return { db, raw };
+}
+
+/**
+ * 打开一个仅用于诊断的连接；`query_only` 阻止应用写路径，WAL 库无需只读重开。
+ * @param dbPath ztask.db 路径。
+ * @returns Kysely 连接与原生句柄。
+ */
+export function openDiagnosticDb(dbPath: string): {
+  db: Kysely<DB>;
+  raw: InstanceType<typeof Database>;
+} {
+  const raw = new Database(dbPath);
+  const db = new Kysely<DB>({ dialect: new SqliteDialect({ database: raw }) });
+  return { db, raw };
 }
 
 async function applyPragmas(db: Kysely<DB>): Promise<void> {
@@ -277,8 +294,13 @@ async function chmodBestEffort(filePath: string): Promise<void> {
   }
 }
 
-async function closeQuietly(db: Kysely<DB>): Promise<void> {
+async function closeQuietly(db: Kysely<DB>, raw: InstanceType<typeof Database>): Promise<void> {
   await db.destroy().catch(() => undefined);
+  try {
+    raw.close();
+  } catch {
+    // destroy 已关闭时忽略。
+  }
 }
 
 async function removeDbFiles(dbPath: string): Promise<void> {
@@ -351,7 +373,7 @@ async function openStoreContext(dataDir: string, options: StoreContextOptions): 
   const dbPath = path.join(dataDir, "ztask.db");
   const existed = existsSync(dbPath);
   const hasLegacyManifest = existsSync(path.join(dataDir, "manifest.json"));
-  const db = openDb(dbPath);
+  const { db, raw } = openDb(dbPath);
 
   try {
     await applyPragmas(db);
@@ -397,9 +419,9 @@ async function openStoreContext(dataDir: string, options: StoreContextOptions): 
     await chmodBestEffort(dbPath);
     for (const suffix of ["-wal", "-shm"]) await chmodBestEffort(`${dbPath}${suffix}`);
 
-    return { dataDir, dbPath, db, manifest };
+    return { dataDir, dbPath, db, raw, manifest };
   } catch (cause) {
-    await closeQuietly(db);
+    await closeQuietly(db, raw);
     if (!existed) await removeDbFiles(dbPath);
     throw cause;
   }
@@ -440,6 +462,11 @@ export async function closeStoreContext(dataDir: string): Promise<void> {
   if (!context) return;
   await sql`PRAGMA wal_checkpoint(TRUNCATE)`.execute(context.db).catch(() => undefined);
   await context.db.destroy();
+  try {
+    context.raw.close();
+  } catch {
+    // Kysely 的 destroy 可能已经关闭原生连接。
+  }
 }
 
 /**

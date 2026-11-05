@@ -105,7 +105,7 @@ dueDate 允许 null 表示未设置，非 null 时必须是合法的 `YYYY-MM-DD
 
 - 已回答：运行形态、技术栈、角色边界、数据范围、任务层级、字段、看板口径、历史算法、主要端点、SQLite schema、事务写、迁移、备份恢复和测试主链路。
 - 已确认：SQLite 单库；当前状态关系化、历史保存完整聚合快照；时间段 diff 取 before/after，以 jsdiff diffLines 计算并由 Vue 自研双列渲染；auth-session 只保存认证会话；成员个人页 owner 更新进度/完整详情并管理小任务、协作只读，成员事项跟踪完全只读且无成员管理页；默认 loopback，按需动态启用具体 LAN IP 并派生分享 URL；任务管理负责人筛选采用服务端 `ownerIds`，主任务负责人命中保留整条任务，仅子任务负责人命中只保留对应子任务，且与重要度/搜索取交集。
-- 设计者自行决定的小项：`node:sqlite` 驱动、UUID、API v1 前缀、15 秒轮询、hash 路由、模块目录、token 32 字节、CSS/SVG 图表、revision checksum。实现可调整细节但不能破坏事务、备份与恢复边界。
+- 设计者自行决定的小项：`better-sqlite3` 驱动、UUID、API v1 前缀、15 秒轮询、hash 路由、模块目录、token 32 字节、CSS/SVG 图表、revision checksum。实现可调整细节但不能破坏事务、备份与恢复边界。
 - 仍需用户回答：Q2 会改变安全与 UI 契约；Q3/Q4/Q5/Q6/Q7 会改变字段、交互或统计口径。存储驱动与历史快照形态见 06 §11，未确认前不应开始完整实现。
 - 无实施排期：遵守仓库流程树未初始化的约定，本稿不创建 roadmap、milestone 或 issue。
 

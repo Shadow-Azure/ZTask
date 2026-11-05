@@ -46,7 +46,7 @@
 
 ### 3.2 连接参数
 
-每个进程一个 `node:sqlite` `DatabaseSync` 连接，打开后固定执行：
+每个进程一个 `better-sqlite3` 连接（通过 Kysely `SqliteDialect`），打开后固定执行：
 
 ```sql
 PRAGMA journal_mode = WAL;
@@ -61,7 +61,7 @@ PRAGMA wal_autocheckpoint = 1000;
 
 同步 API 在单进程、小团队、数千任务规模下可接受；查询必须有索引和 LIMIT 或范围，不在请求路径扫描全表或全历史。
 
-驱动选择 `node:sqlite`（Node >= 22.13 无需 flag，仍是 experimental）：不引入原生第三方依赖，安装路径与当前“一条命令启动”一致。若后续需要长期支持 API 或 Node 版本受限，`better-sqlite3` 是可替换实现，schema 与 SQL 不变；替换时只改连接和事务适配层。
+驱动选择 `better-sqlite3`：同步 API、Kysely 官方 `SqliteDialect`、被高 star Node/Electron 项目广泛使用，API 稳定；代价是需要原生模块（预编译或本地构建），CI 必须允许它的 install script。`node:sqlite` 仍作为零原生依赖的备选，schema 与 SQL 不变，替换时只改连接和事务适配层。
 
 ### 3.3 启动校验
 
@@ -338,14 +338,14 @@ SQLite 的 `ALTER TABLE` 能力有限：改列类型、约束、主键或 `STRIC
 
 | 方案 | 代表 | 优点 | 代价 |
 | --- | --- | --- | --- |
-| A. 自研轻量 runner | 本仓库 | 无新运行时依赖，直接配合 `node:sqlite`、数据目录锁和 `VACUUM INTO` 备份；DDL 与数据迁移都可控 | runner、checksum 和测试要自己写；没有现成的 down/rollback |
-| B. 轻量框架 | Kysely Migrator + `kysely-node-native-sqlite`；Umzug | 迁移表、顺序、锁、up/down 现成；Kysely 还提供查询构建器 | 多一个或两个依赖；Umzug 需自定义 storage；仍要自己接备份和校验 |
-| C. ORM 迁移 | Drizzle ORM + drizzle-kit；Prisma | schema 即代码，自动生成 SQL，类型安全，带漂移检查 | 与 ORM 绑定；`node:sqlite` 驱动支持需确认（Drizzle 主推 better-sqlite3/libsql），工具链更重 |
+| A. 自研轻量 runner | 本仓库 | 无新运行时依赖，直接配合 `better-sqlite3`、数据目录锁和 `VACUUM INTO` 备份；DDL 与数据迁移都可控 | runner、checksum 和测试要自己写；没有现成的 down/rollback |
+| B. 轻量框架 | Kysely Migrator + `better-sqlite3`；Umzug | 迁移表、顺序、锁、up/down 现成；Kysely 还提供查询构建器 | 多一个或两个依赖；Umzug 需自定义 storage；仍要自己接备份和校验 |
+| C. ORM 迁移 | Drizzle ORM + drizzle-kit；Prisma | schema 即代码，自动生成 SQL，类型安全，带漂移检查 | 与 ORM 绑定；driver 支持以 better-sqlite3/libsql 为主，工具链更重 |
 | D. 外部 CLI | dbmate、goose、Atlas、Sqitch、Flyway | 成熟、语言无关、适合 CI 和运维 | 不是 `ztask serve` 内嵌路径；本地单命令启动还要额外安装或调用二进制 |
 
-已确认采用 B 的 Kysely Migrator：它成熟、TypeScript 原生、可内嵌运行，迁移表、迁移锁、up/down 和 `migrateToLatest` 都是现成的，不强制采用 ORM，迁移文件仍写原生 SQL；用 `kysely-node-native-sqlite` 保留 `node:sqlite`。应用层仍补 `VACUUM INTO` 备份、`schema_migrations` checksum 审计和完整性校验。
+已确认采用 B 的 Kysely Migrator：它成熟、TypeScript 原生、可内嵌运行，迁移表、迁移锁、up/down 和 `migrateToLatest` 都是现成的，不强制采用 ORM，迁移文件仍写原生 SQL；驱动配 `better-sqlite3` 的 Kysely 官方 SQLite dialect。应用层仍补 `VACUUM INTO` 备份、`schema_migrations` checksum 审计和完整性校验。
 
-若不考虑自研，推荐 B 中的 Kysely Migrator：它成熟、TypeScript 原生、可内嵌运行，迁移表、迁移锁、up/down 和 `migrateToLatest` 都是现成的，不强制采用 ORM，迁移文件仍可写原生 SQL；用 `kysely-node-native-sqlite` 可以保留 `node:sqlite`（社区 dialect，较新）；若接受原生依赖，换 `better-sqlite3` 配 Kysely 官方 SQLite dialect 更稳。若接受 ORM 并希望 schema 即代码、自动生成 SQL 和漂移检查，选 C 的 Drizzle + drizzle-kit（官方已支持 `node:sqlite`）。Umzug 更轻但要自定义 storage；D 只用于 CI 的 schema lint 或漂移检查，不作为运行时入口。
+若不考虑自研，推荐 B 中的 Kysely Migrator：它成熟、TypeScript 原生、可内嵌运行，迁移表、迁移锁、up/down 和 `migrateToLatest` 都是现成的，不强制采用 ORM，迁移文件仍可写原生 SQL；配 `better-sqlite3` 使用 Kysely 官方 SQLite dialect。若接受 ORM 并希望 schema 即代码、自动生成 SQL 和漂移检查，选 C 的 Drizzle + drizzle-kit（配 better-sqlite3/libsql）。Umzug 更轻但要自定义 storage；D 只用于 CI 的 schema lint 或漂移检查，不作为运行时入口。
 
 ### 7.3.2 推荐执行流程
 
@@ -364,7 +364,7 @@ SQLite 的 `ALTER TABLE` 能力有限：改列类型、约束、主键或 `STRIC
 - 迁移脚本里不做网络、文件系统或耗时操作；数据迁移用 TS 函数时也要保持确定性、可重入。
 - 备份和恢复测试覆盖“迁移前备份可恢复”和“迁移失败不改变原库”。
 
-**调研依据**：[SQLite ALTER TABLE](https://www.sqlite.org/lang_altertable.html)、[PRAGMA user_version](https://www.sqlite.org/pragma.html#pragma_user_version)、[Kysely Migrator](https://kysely.dev/docs/migrations)、[Umzug](https://github.com/sequelize/umzug)、[Drizzle Kit migrations](https://orm.drizzle.team/docs/migrations)、[dbmate](https://github.com/amacneil/dbmate)、[goose](https://github.com/pressly/goose)、[Atlas 版本化迁移](https://atlasgo.io/concepts/declarative-vs-versioned)、[Sqitch SQLite](https://sqitch.org/docs/manual/sqitchtutorial-sqlite/)、[kysely-node-native-sqlite](https://www.npmjs.com/package/kysely-node-native-sqlite)、[node:sqlite](https://nodejs.org/docs/latest-v22.x/api/sqlite.html)。
+**调研依据**：[SQLite ALTER TABLE](https://www.sqlite.org/lang_altertable.html)、[PRAGMA user_version](https://www.sqlite.org/pragma.html#pragma_user_version)、[Kysely Migrator](https://kysely.dev/docs/migrations)、[Umzug](https://github.com/sequelize/umzug)、[Drizzle Kit migrations](https://orm.drizzle.team/docs/migrations)、[dbmate](https://github.com/amacneil/dbmate)、[goose](https://github.com/pressly/goose)、[Atlas 版本化迁移](https://atlasgo.io/concepts/declarative-vs-versioned)、[Sqitch SQLite](https://sqitch.org/docs/manual/sqitchtutorial-sqlite/)、[better-sqlite3](https://github.com/WiseLibs/better-sqlite3)、[Kysely SQLite dialect](https://kysely.dev/docs/dialects)。
 
 ### 7.4 一致性校验
 
@@ -451,12 +451,12 @@ pauseWrites()（停新写入并等待在途事务）
 - `apps/server/src/bootstrap.ts` 与 `apps/server/src/lock.ts`：启动顺序不变，锁保留；close 增加 checkpoint 和数据库关闭。
 - `packages/shared/`：API DTO 不变；如备份或 doctor 报告新增字段，按可选字段扩展，避免破坏现有客户端。
 - `tests/`：替换原子写、JSONL 和尾恢复测试为 schema、事务回滚、版本冲突、WAL 恢复、旧数据导入、备份恢复、doctor 和 SQL 查询口径测试；故障注入改为事务前后与进程中止。
-- `package.json`：`engines.node` 提升到 `>=22.13`（`node:sqlite` 无需 flag，仍为 experimental），并在 README 和开发文档说明。
+- `package.json`：`engines.node` 为 `>=22`（better-sqlite3 要求 Node >=22；CI 允许其 install script），并在 README 和开发文档说明。
 
 ## 11. 待确认
 
-1. 驱动：采用内置 `node:sqlite`（Node >= 22.13，experimental），还是 `better-sqlite3`（原生依赖，API 稳定）。本文默认前者；若不能接受 Node 版本下限或实验状态，换后者只改连接适配层。
+1. 驱动：已确认 `better-sqlite3` + Kysely `SqliteDialect`；`node:sqlite` 作为零原生依赖的备选。
 2. 历史保留：revision 仍保存完整 JSON 快照；确认接受“当前状态关系化、历史快照 JSON”的混合形态，而不是把历史也完全拆表。
 3. 旧文件处理：迁移成功后把旧文件移入 `backups/pre-sqlite-*` 保留回滚，而不是删除。
 4. 网络配置：`network.json` 也并入数据库；`locks/`、`backups/`、`tmp/` 仍是文件系统。若希望保留 `network.json` 便于手工查看，可在实施前调整。
-5. 迁移框架：已确认 B 的 Kysely Migrator（`kysely-node-native-sqlite` 保留 `node:sqlite`）；A/C/D 仅作为后续替换备选，对比见 §7.3.1。
+5. 迁移框架：已确认 B 的 Kysely Migrator（配 `better-sqlite3` 官方 SQLite dialect）；A/C/D 仅作为后续替换备选，对比见 §7.3.1。

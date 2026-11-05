@@ -33,7 +33,7 @@ pnpm build
 pnpm serve
 ```
 
-需要 Node 22.13+ 与 pnpm@10。管理端默认位于 `http://127.0.0.1:8123`，数据目录默认为 `~/.ztask`，可用 `--data-dir` 指定；开发时 `pnpm dev` 并行启动 workspace。完整环境与开发循环见[开发指南](docs/development.md)。
+需要 Node 22+ 与 pnpm@10。管理端默认位于 `http://127.0.0.1:8123`，数据目录默认为 `~/.ztask`，可用 `--data-dir` 指定；开发时 `pnpm dev` 并行启动 workspace。完整环境与开发循环见[开发指南](docs/development.md)。
 
 ## 文档
 

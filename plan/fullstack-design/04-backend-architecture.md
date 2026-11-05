@@ -6,12 +6,12 @@
 
 | 类别 | 推荐 | 理由 |
 | --- | --- | --- |
-| 运行时 | Node.js 22.13+ + TypeScript | `node:sqlite` 无需 flag；前后端共享生成契约 |
+| 运行时 | Node.js 22+ + TypeScript | 前后端共享生成契约 |
 | HTTP | Fastify | 轻量路由、schema 校验、hooks 与插件封装清晰 |
 | 静态资源 | `@fastify/static` | 生产同源提供 Vue dist 与 SPA fallback |
 | Cookie | `@fastify/cookie` | 成员会话 Cookie，不把签名密钥等同于分享 token |
 | 校验/契约 | JSON Schema + OpenAPI 生成 | 请求、响应与数据库结构可复用部分基础 schema，但分别版本化 |
-| 主要持久化 | SQLite 单库（`node:sqlite`） | 事务、索引、关系约束、单文件快照备份；内嵌库不引入独立服务 |
+| 主要持久化 | SQLite 单库（`better-sqlite3`） | 事务、索引、关系约束、单文件快照备份；内嵌库不引入独立服务 |
 | 事务 | SQLite `BEGIN IMMEDIATE` + WAL | revision、当前状态和 tip 原子提交，崩溃由 WAL 恢复 |
 | 写锁 | `proper-lockfile` 或等价 mkdir 锁 + 进程内队列 | 防止多实例写同一目录，保证 version 检查与写入串行 |
 | 数据校验 | SQLite `quick_check`/`integrity_check`/`foreign_key_check` + revision checksum | 启动、迁移和恢复时识别不兼容或损坏数据 |

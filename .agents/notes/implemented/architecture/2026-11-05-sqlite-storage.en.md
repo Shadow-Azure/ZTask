@@ -10,7 +10,7 @@ The current storage splits members, folders, task aggregates, history, share lin
 
 ## Decision
 
-- Use a single `ztask.db` as the only authoritative business database, opened through `node:sqlite` `DatabaseSync` with WAL, `synchronous=FULL`, and foreign keys on; keep the data-directory lock and the single-process write queue.
+- Use a single `ztask.db` as the only authoritative business database, opened through `better-sqlite3` (Kysely `SqliteDialect`) with WAL, `synchronous=FULL`, and foreign keys on; keep the data-directory lock and the single-process write queue.
 - Normalize current state into `members`, `folders`, `tasks`, `assignments`, `share_links`, `auth_sessions`, `network_config`, and `meta`; main tasks and subtasks share the version in `task_aggregates`.
 - Keep history as immutable full JSON snapshots in `task_revisions`, with the existing canonical-JSON SHA-256 checksum; current state and history are not synchronized in both directions.
 - Make every effective change one `BEGIN IMMEDIATE` transaction: revision, current state, and aggregate tip commit together; re-check version conflicts inside the transaction; write no revision for a no-op.
@@ -24,7 +24,7 @@ The detailed contract is in [fullstack design 06](../../../../plan/fullstack-des
 ## Alternatives considered
 
 - Keep per-aggregate JSON + JSONL and harden recovery: preserves plain-text readability and no native dependency, but atomic writes, tail recovery, current reconciliation, and derived indexes remain application responsibilities, and cross-entity consistency remains by convention; rejected.
-- Use `better-sqlite3`: more stable API, but a native dependency and installation/CI cost; `node:sqlite` already covers single-process synchronous access, so the built-in driver comes first; switch only if the Node floor is unacceptable.
+- Use `node:sqlite`: no native dependency, but an experimental API and a Node 22.13+ floor; high-star Node/Electron projects use better-sqlite3 or sqlite3, so this was rejected.
 - Introduce an ORM: the query surface is small and precise transaction and SQL-plan control matters, so hand-written SQL plus repositories is more transparent; rejected.
 - One database per aggregate: smaller transaction boundaries, but backup, migration, cross-entity queries, and reference checks are more complex; a single database fits the current scale; rejected.
 - Normalize history fully into relational tables: history is an immutable whole snapshot, and old snapshots would be affected by new constraints as fields evolve; keep the JSON snapshot; rejected.
@@ -33,7 +33,7 @@ The detailed contract is in [fullstack design 06](../../../../plan/fullstack-des
 
 - Lose the transparency of one readable JSON file per entity; diagnostics move to `sqlite3` or read-only connections, and manual editing is no longer supported.
 - Migration is one-way: an older application cannot read `ztask.db`, and rollback relies on `backups/pre-sqlite-*`.
-- `node:sqlite` requires Node >= 22.13 and is still experimental; `engines.node` must rise, and the driver replacement point stays in the connection adapter.
+- `better-sqlite3` needs a native module (prebuilt or locally built), and CI must allow its install script; `engines.node` is `>=22`, and the driver replacement point stays in the connection adapter.
 - SQLite does not encrypt data at rest; database file permissions become the only protection, matching the threat model of the old JSON files.
 - A test matrix for schema migration, backup/restore, and revision checksums is required; the old atomic-write, JSONL, and tail-recovery tests will be replaced.
 - This is an architecture-level change: `docs/architecture.md` is updated in this PR, and implementation is tracked by m14 / issue #79.

@@ -19,7 +19,7 @@
 
 ### 2.1 Database 与事务
 
-`db.ts` 负责打开 `node:sqlite` `DatabaseSync`、设置 pragma、提供 `transaction(fn)` 封装和关闭。连接是进程内单例；写事务使用 `BEGIN IMMEDIATE`，异常一律 `ROLLBACK` 后按现有错误类型抛出。业务层不直接持有 SQL 语句，仓储函数集中在 `storage/`。
+`db.ts` 负责打开 `better-sqlite3` 连接（Kysely `SqliteDialect`）、设置 pragma、提供 `transaction(fn)` 封装和关闭。连接是进程内单例；写事务使用 `BEGIN IMMEDIATE`，异常一律 `ROLLBACK` 后按现有错误类型抛出。业务层不直接持有 SQL 语句，仓储函数集中在 `storage/`。
 
 连接打开后必须设置 `journal_mode=WAL`、`synchronous=FULL`、`foreign_keys=ON`、`busy_timeout=5000`、`trusted_schema=OFF`。数据库文件和数据目录权限在创建时收紧；sidecar 文件同样按 0600 校验。
 

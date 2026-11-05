@@ -5,7 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22"
   },
   "scripts": {
     "test:gates": "node --test scripts/prototype-tracker.spec.mjs && vitest run scripts --exclude scripts/prototype-tracker.spec.mjs",
@@ -41,5 +41,10 @@
     "@tanstack/vue-query": "^5.95.0",
     "vue-router": "^4.6.3",
     "@vitejs/plugin-vue": "^6.0.4"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
   }
 }

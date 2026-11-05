@@ -33,7 +33,7 @@ pnpm build
 pnpm serve
 ```
 
-Node 22.13+ and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for setup and the everyday loop.
+Node 22+ and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for setup and the everyday loop.
 
 ## Documentation
 

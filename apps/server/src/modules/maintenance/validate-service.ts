@@ -1,10 +1,9 @@
 import { readFile, readdir, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { Kysely, sql } from "kysely";
-import { NodeNativeSqliteDialect } from "kysely-node-native-sqlite";
+import { sql } from "kysely";
 import { checksumOf } from "../../storage/checksum.js";
-import type { DB } from "../../storage/db.js";
+import { openDiagnosticDb } from "../../storage/db.js";
 import type { Manifest } from "../../storage/manifest-store.js";
 import { SUPPORTED_FORMAT_VERSION } from "../../storage/manifest-store.js";
 import { SCHEMA_VERSION } from "../../storage/migrations.js";
@@ -556,7 +555,7 @@ async function validateSqliteDataDir(root: string): Promise<ValidationResult> {
     byteCount: files.reduce((sum, file) => sum + file.size, 0),
   };
 
-  const db = new Kysely<DB>({ dialect: new NodeNativeSqliteDialect(dbPath) });
+  const { db, raw } = openDiagnosticDb(dbPath);
   let manifest: Manifest | null = null;
   const add = (kind: ValidationIssue["kind"], detail: string): void => {
     issues.push({ path: "ztask.db", kind, fixable: false, detail });
@@ -647,6 +646,11 @@ async function validateSqliteDataDir(root: string): Promise<ValidationResult> {
     add("sqlite", `数据库无法完成校验：${cause instanceof Error ? cause.message : String(cause)}`);
   } finally {
     await db.destroy().catch(() => undefined);
+    try {
+      raw.close();
+    } catch {
+      // Kysely 的 destroy 可能已经关闭原生连接。
+    }
   }
 
   return {
