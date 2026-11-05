@@ -34,6 +34,7 @@ The detailed contract is in [fullstack design 06](../../../../plan/fullstack-des
 - Lose the transparency of one readable JSON file per entity; diagnostics move to `sqlite3` or read-only connections, and manual editing is no longer supported.
 - Migration is one-way: an older application cannot read `ztask.db`, and rollback relies on `backups/pre-sqlite-*`.
 - `better-sqlite3` is a native module, but v13 ships prebuilt binaries for each platform, so installation needs no local compile; `engines.node` is `>=22`, and the driver replacement point stays in the connection adapter.
+- Migrations are guarded by a golden checksum and a real v1 fixture upgrade test: a new migration must update the checksum manifest; editing a released migration fails CI, and upgrades keep data and pass backup/restore.
 - SQLite does not encrypt data at rest; database file permissions become the only protection, matching the threat model of the old JSON files.
 - A test matrix for schema migration, backup/restore, and revision checksums is required; the old atomic-write, JSONL, and tail-recovery tests will be replaced.
 - This is an architecture-level change: `docs/architecture.md` is updated in this PR, and implementation is tracked by m14 / issue #79.

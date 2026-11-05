@@ -47,6 +47,7 @@ export { buildIndexes } from "./storage/indexes.js";
 export type { DerivedIndexes } from "./storage/indexes.js";
 export { initStore } from "./storage/store.js";
 export { openDiagnosticDb } from "./storage/db.js";
+export { MIGRATION_CHECKSUMS, SCHEMA_VERSION } from "./storage/migrations.js";
 export type { FolderFile, MemberFile, StoreInitOptions, ZtaskStore } from "./storage/store.js";
 export {
   EntryNotFoundError,
