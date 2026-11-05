@@ -17,9 +17,10 @@ milestones:
   - m10
   - m11
   - m12
+  - m14
 ```
 
-ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。
+ZTask 以本地 CLI、Web 服务和 SQLite 存储提供任务协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。
 
 ## 交付序列
 
@@ -27,7 +28,7 @@ ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [R
 - m2：同源 CLI、可靠文件写协议与 Vue 共享壳。
 - m3：任务夹、成员、任务管理与事项跟踪。
 - m4：LAN 分享、安全会话与负责人最小写入。
-- m5：看板、双列 diff、备份恢复与端到端验收。
+- m5：看板、双列 diff、备份恢复与验收。
 - m6：界面与原型逐屏对齐与差异清零。
 - m7：项目展示图与仓库首页介绍。
 - m8：任务管理原型负责人筛选补充。
@@ -35,6 +36,7 @@ ZTask 以本地 CLI、Web 服务和文件存储提供任务协作。规则见 [R
 - m10：看板筛选修复。
 - m11：任务卡浮窗。
 - m12：启动占用错误可诊断。
+- m14：SQLite 存储迁移。
 
 ## 推进原则
 
