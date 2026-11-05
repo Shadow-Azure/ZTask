@@ -1,0 +1,81 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本，须与 apps/ztask/package.json 一致（例如 0.1.0）"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    # 发布与冒烟共用同一套构建，避免「已经打包成功但装不上」。
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - name: 校验触发点与包版本一致
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          VERSION=$(node -p "require('./apps/ztask/package.json').version")
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "$INPUT_VERSION" != "$VERSION" ]; then
+              echo "输入版本 $INPUT_VERSION 与 apps/ztask/package.json 的 $VERSION 不一致" >&2
+              exit 1
+            fi
+            TAG="v$VERSION"
+          else
+            if [ "${GITHUB_REF_NAME}" != "v$VERSION" ]; then
+              echo "标签 ${GITHUB_REF_NAME} 与包版本 v$VERSION 不一致" >&2
+              exit 1
+            fi
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "发布提交必须已在 main 上，不能从分支打标签发布" >&2
+            exit 1
+          fi
+          echo "TAG=$TAG" >> "$GITHUB_ENV"
+      - run: pnpm test
+      - run: pnpm build
+      - run: pnpm package:smoke
+      - name: 打包
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          npm pack --pack-destination "$RUNNER_TEMP/release" apps/ztask
+          TARBALL=$(ls "$RUNNER_TEMP/release"/*.tgz)
+          echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
+      - name: 发布到 npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "缺少仓库 secret NPM_TOKEN：在 Settings → Secrets and variables → Actions 配置 npm 发布令牌后重试" >&2
+            exit 1
+          fi
+          npm publish "$TARBALL" --provenance --access public
+      - name: 创建 GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$TAG" "$TARBALL" --generate-notes --title "ZTask $TAG"
