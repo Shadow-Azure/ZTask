@@ -17,6 +17,7 @@ The current storage splits members, folders, task aggregates, history, share lin
 - Import legacy files through a one-time loader into a temporary database, verify it, atomically rename it, then move the old tree to `backups/pre-sqlite-*`; the same loader restores old backups.
 - Store the schema version in `PRAGMA user_version`, take a `VACUUM INTO` backup before migration, and run migrations in a transaction; use `integrity_check`, `foreign_key_check`, and revision-sequence/tip assertions at startup, backup, restore, and in doctor.
 - Produce single-file consistent snapshots for online backup with `VACUUM INTO`; the backup directory holds `ztask.db` plus `backup.json`.
+- Use a lightweight in-house schema-migration runner by default: `schema_migrations` records version and checksum, migrations run transactionally at startup after a `VACUUM INTO` backup; Kysely/Umzug, Drizzle/Prisma, and external CLIs are alternatives in 06 §7.3.1.
 
 The detailed contract is in [fullstack design 06](../../../../plan/fullstack-design/06-database-design.md).
 

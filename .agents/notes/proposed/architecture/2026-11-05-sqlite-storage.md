@@ -17,6 +17,7 @@ Status: proposed
 - 旧文件通过一次性导入器进入临时库，校验后原子 rename，再把旧目录移入 `backups/pre-sqlite-*`；旧备份可由同一导入器恢复。
 - schema 版本用 `PRAGMA user_version`，迁移前 `VACUUM INTO` 备份，迁移在事务内执行；`integrity_check`、`foreign_key_check` 和 revision 序列与 tip 断言用于启动、备份、恢复和 doctor。
 - 在线备份用 `VACUUM INTO` 生成单文件一致性快照；备份目录为 `ztask.db` 加 `backup.json`。
+- schema migration 默认用自研轻量 runner：`schema_migrations` 记录版本与 checksum，启动时事务化执行，迁移前 `VACUUM INTO` 备份；Kysely/Umzug、Drizzle/Prisma 和外部 CLI 作为备选，对比见 06 §7.3.1。
 
 详细契约见[全栈设计 06](../../../../plan/fullstack-design/06-database-design.md)。
 

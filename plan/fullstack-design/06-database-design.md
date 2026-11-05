@@ -332,6 +332,38 @@ revision 行、当前状态和 tip 在同一事务提交；不存在“revision 
 - 迁移脚本只做 schema 和数据变换，不依赖网络或外部文件；每一步可重入或在失败时整体回滚。
 - 首版没有历史 migration；旧文件导入是独立的一次性路径，不占用 `user_version` 的 schema 迁移序列。
 
+### 7.3.1 迁移框架选型
+
+SQLite 的 `ALTER TABLE` 能力有限：改列类型、约束、主键或 `STRICT` 声明通常要按官方“12 步”重建表；迁移必须在失败时整体回滚，且要能在 CI 里用旧版本数据验证。业界成熟的版本化迁移骨架是 `schema_migrations(version, name, checksum, applied_at, app_version)` 加 `PRAGMA user_version`：启动时按版本顺序执行未应用项，每个迁移一个事务，迁移前备份，失败拒绝启动。dbmate、goose、Kysely Migrator、Umzug、Flyway 和 Liquibase 都是这个骨架的不同实现。
+
+| 方案 | 代表 | 优点 | 代价 |
+| --- | --- | --- | --- |
+| A. 自研轻量 runner | 本仓库 | 无新运行时依赖，直接配合 `node:sqlite`、数据目录锁和 `VACUUM INTO` 备份；DDL 与数据迁移都可控 | runner、checksum 和测试要自己写；没有现成的 down/rollback |
+| B. 轻量框架 | Kysely Migrator + `kysely-node-native-sqlite`；Umzug | 迁移表、顺序、锁、up/down 现成；Kysely 还提供查询构建器 | 多一个或两个依赖；Umzug 需自定义 storage；仍要自己接备份和校验 |
+| C. ORM 迁移 | Drizzle ORM + drizzle-kit；Prisma | schema 即代码，自动生成 SQL，类型安全，带漂移检查 | 与 ORM 绑定；`node:sqlite` 驱动支持需确认（Drizzle 主推 better-sqlite3/libsql），工具链更重 |
+| D. 外部 CLI | dbmate、goose、Atlas、Sqitch、Flyway | 成熟、语言无关、适合 CI 和运维 | 不是 `ztask serve` 内嵌路径；本地单命令启动还要额外安装或调用二进制 |
+
+推荐 A：ZTask 是单进程、单库、本地启动的应用，迁移必须在 `ztask serve` 内自动完成，且已经具备数据目录锁和 `VACUUM INTO` 备份边界；自研 runner 约 150–250 行，换来没有新依赖和完全可控的失败处理。若希望少写 runner，选 B；若决定引入 ORM，选 C；D 只用于 CI 的 schema lint 或漂移检查，不作为运行时入口。
+
+### 7.3.2 推荐执行流程
+
+1. 启动持锁后读取 `PRAGMA user_version`；高于 `SCHEMA_VERSION` 拒绝启动，等于则继续。
+2. 低于时先 `VACUUM INTO` 到 `backups/pre-migrate-<时间戳>/`，并校验副本。
+3. 按 `schema_migrations` 顺序执行未应用迁移；每个迁移 `BEGIN IMMEDIATE`，DDL、数据变换、写 `schema_migrations`、更新 `user_version` 后 `COMMIT`；失败 `ROLLBACK` 并保留备份。
+4. 全部成功后跑 `foreign_key_check`、`integrity_check` 和 §7.4 的业务断言；失败拒绝启动。
+5. 已应用迁移的 `checksum` 与文件不一致时拒绝启动（防止发布后改历史迁移）；只允许追加新迁移。
+6. 迁移是单向的：不自动 down；回滚用 `pre-migrate` 备份或旧版本应用加旧备份。复杂表变更按 SQLite 官方 12 步重建：事务外 `PRAGMA foreign_keys=OFF`，建新表，复制，删旧表，改名，重建索引和触发器，`foreign_key_check`，再 `COMMIT`。
+
+### 7.3.3 测试与发布纪律
+
+- 每个已发布 schema 版本保留一个 fixture；测试从版本 N 的库跑到最新，断言数据、外键、revision checksum 和 `user_version`。
+- 同一 PR 新增迁移和 fixture；不允许改已发布迁移（checksum 会拒绝）。
+- CI 对最新库做 schema 快照或漂移检查（`sqlite3 .schema` 或迁移后 schema dump），并跑 `integrity_check`。
+- 迁移脚本里不做网络、文件系统或耗时操作；数据迁移用 TS 函数时也要保持确定性、可重入。
+- 备份和恢复测试覆盖“迁移前备份可恢复”和“迁移失败不改变原库”。
+
+**调研依据**：[SQLite ALTER TABLE](https://www.sqlite.org/lang_altertable.html)、[PRAGMA user_version](https://www.sqlite.org/pragma.html#pragma_user_version)、[Kysely Migrator](https://kysely.dev/docs/migrations)、[Umzug](https://github.com/sequelize/umzug)、[Drizzle Kit migrations](https://orm.drizzle.team/docs/migrations)、[dbmate](https://github.com/amacneil/dbmate)、[goose](https://github.com/pressly/goose)、[Atlas 版本化迁移](https://atlasgo.io/concepts/declarative-vs-versioned)、[Sqitch SQLite](https://sqitch.org/docs/manual/sqitchtutorial-sqlite/)、[kysely-node-native-sqlite](https://www.npmjs.com/package/kysely-node-native-sqlite)、[node:sqlite](https://nodejs.org/docs/latest-v22.x/api/sqlite.html)。
+
 ### 7.4 一致性校验
 
 启动与 doctor 共用一组 SQL 断言：
@@ -425,3 +457,4 @@ pauseWrites()（停新写入并等待在途事务）
 2. 历史保留：revision 仍保存完整 JSON 快照；确认接受“当前状态关系化、历史快照 JSON”的混合形态，而不是把历史也完全拆表。
 3. 旧文件处理：迁移成功后把旧文件移入 `backups/pre-sqlite-*` 保留回滚，而不是删除。
 4. 网络配置：`network.json` 也并入数据库；`locks/`、`backups/`、`tmp/` 仍是文件系统。若希望保留 `network.json` 便于手工查看，可在实施前调整。
+5. 迁移框架：默认 A（自研轻量 runner），备选 B（Kysely Migrator 或 Umzug）、C（Drizzle/Prisma）、D（dbmate/goose/Atlas 外部 CLI）；对比和调研链接见 §7.3.1。
