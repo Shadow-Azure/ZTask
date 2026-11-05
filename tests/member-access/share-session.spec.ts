@@ -9,6 +9,7 @@ import {
   readSessionFile,
   readShareLink,
   seedShareLink,
+  updateShareLink,
   sessionIdOf,
   sha256,
   tmpDataDir,
@@ -169,9 +170,7 @@ describe("GET /share/session（会话恢复）", () => {
 
   it("链接重置为 revoked 后旧会话立即失效（link 状态兜底）", async () => {
     const cookieA = await exchangeCookie(app, tokenA);
-    const link = await readShareLink(dataDir, memberA);
-    const { writeJsonAtomic } = await import("@ztask/server");
-    await writeJsonAtomic(`${dataDir}/share-links/${memberA}.json`, { ...link, status: "revoked" });
+    await updateShareLink(dataDir, memberA, { status: "revoked" });
 
     const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(response.statusCode).toBe(401);

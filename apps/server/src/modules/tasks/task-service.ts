@@ -399,25 +399,29 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
           });
           pendingSubtaskAssignments.push({ taskId: subId, memberId: ownerId, kind: "owner" });
         }
+        const task: TaskAggregate["task"] = {
+          folderId,
+          parentId: null,
+          description,
+          progress,
+          detailText: detail,
+          importance,
+          dueDate,
+          createdAt: now,
+          deletedAt: null,
+        };
+        const assignments: TaskAggregate["assignments"] = [
+          ...ownerIds.map((memberId: string) => ({ taskId, memberId, kind: "owner" as const })),
+          ...collaboratorIds.map((memberId: string) => ({ taskId, memberId, kind: "collaborator" as const })),
+          ...pendingSubtaskAssignments,
+        ];
+        // 创建路径也要走与 commit 相同的分配唯一性/小任务约束，避免数据库约束把 422 变成 500。
+        validateDraft({ task, subtasks: pendingSubtasks, assignments }, taskId);
         const aggregate = await taskStore.createAggregate({
           taskId,
-          task: {
-            folderId,
-            parentId: null,
-            description,
-            progress,
-            detailText: detail,
-            importance,
-            dueDate,
-            createdAt: now,
-            deletedAt: null,
-          },
+          task,
           subtasks: pendingSubtasks,
-          assignments: [
-            ...ownerIds.map((memberId: string) => ({ taskId, memberId, kind: "owner" as const })),
-            ...collaboratorIds.map((memberId: string) => ({ taskId, memberId, kind: "collaborator" as const })),
-            ...pendingSubtaskAssignments,
-          ],
+          assignments,
           actor: { kind: "admin", memberId: null, name: "管理员" },
         });
         return toTask(aggregate, await memberMap());

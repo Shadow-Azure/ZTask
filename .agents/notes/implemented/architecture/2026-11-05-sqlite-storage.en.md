@@ -1,6 +1,6 @@
 # Agent Note: Replacing per-aggregate file storage with a single SQLite database
 
-Status: proposed
+Status: implemented
 
 English | [中文](2026-11-05-sqlite-storage.md)
 
@@ -17,7 +17,7 @@ The current storage splits members, folders, task aggregates, history, share lin
 - Import legacy files through a one-time loader into a temporary database, verify it, atomically rename it, then move the old tree to `backups/pre-sqlite-*`; the same loader restores old backups.
 - Store the schema version in `PRAGMA user_version`, take a `VACUUM INTO` backup before migration, and run migrations in a transaction; use `integrity_check`, `foreign_key_check`, and revision-sequence/tip assertions at startup, backup, restore, and in doctor.
 - Produce single-file consistent snapshots for online backup with `VACUUM INTO`; the backup directory holds `ztask.db` plus `backup.json`.
-- Use a lightweight in-house schema-migration runner by default: `schema_migrations` records version and checksum, migrations run transactionally at startup after a `VACUUM INTO` backup; Kysely/Umzug, Drizzle/Prisma, and external CLIs are alternatives in 06 §7.3.1.
+- Run schema migrations through Kysely Migrator: `kysely_migration` records execution state and `schema_migrations` stores version/checksum audit rows; take a `VACUUM INTO` backup first, then run transactionally at startup. An in-house runner, Umzug, Drizzle/Prisma, and external CLIs remain alternatives in 06 §7.3.1.
 
 The detailed contract is in [fullstack design 06](../../../../plan/fullstack-design/06-database-design.md).
 
@@ -36,4 +36,4 @@ The detailed contract is in [fullstack design 06](../../../../plan/fullstack-des
 - `node:sqlite` requires Node >= 22.13 and is still experimental; `engines.node` must rise, and the driver replacement point stays in the connection adapter.
 - SQLite does not encrypt data at rest; database file permissions become the only protection, matching the threat model of the old JSON files.
 - A test matrix for schema migration, backup/restore, and revision checksums is required; the old atomic-write, JSONL, and tail-recovery tests will be replaced.
-- This is an architecture-level change: `docs/architecture.md` is updated in the implementation PR, and the development issue/milestone are created after confirmation; this round delivers only the design review.
+- This is an architecture-level change: `docs/architecture.md` is updated in this PR, and implementation is tracked by m14 / issue #79.

@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/milestones/m14-sqlite-storage.md
-m14-sqlite-storage.md: 5987ba79779be44a6a259be7a8b42cc3b5b7cc70
-m14-sqlite-storage.en.md: 64a658cfff32dbefb4f90ecddef4c47fa4ff850b
+m14-sqlite-storage.md: 55f5b3fe27e2b55b5087af7d1800f8a71c3c3725
+m14-sqlite-storage.en.md: cc03c555dc8f3406a2430420ee5684ba590deae3

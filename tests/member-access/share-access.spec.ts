@@ -1,10 +1,9 @@
 // @vitest-environment node
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { rm } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { readJsonFile, writeJsonAtomic } from "@ztask/server";
+import { createTaskStore, readTaskAggregate } from "@ztask/server";
 import {
   createFolder,
   createMember,
@@ -247,9 +246,8 @@ describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
     expect(deleted.statusCode).toBe(404);
 
     // 小任务的软删除也由同一读取路径兜底。
-    const deletedSubId = (await readJsonFile(path.join(dataDir, "tasks", taskDeletedSub, "current.json")) as {
-      subtasks: Array<{ id: string; deletedAt: string | null }>;
-    }).subtasks.find((subtask) => subtask.deletedAt !== null)!.id;
+    const deletedAggregate = await readTaskAggregate(dataDir, taskDeletedSub);
+    const deletedSubId = deletedAggregate!.subtasks.find((subtask) => subtask.deletedAt !== null)!.id;
     const deletedSub = await shareGet(`/api/v1/share/tasks/${deletedSubId}`, cookieA);
     expect(deletedSub.statusCode).toBe(404);
   });
@@ -360,11 +358,16 @@ describe("成员可见任务夹树（05 §6.11）", () => {
 
 describe("小任务 owner 兜底（对齐管理端 tasks 映射）", () => {
   it("无 owner 分配时给「待分配」摘要，不用 sub.id 冒充成员 ID", async () => {
-    const currentPath = path.join(dataDir, "tasks", taskC, "current.json");
-    const aggregate = (await readJsonFile(currentPath)) as { assignments: Array<{ taskId: string }> } & Record<string, unknown>;
-    await writeJsonAtomic(currentPath, {
-      ...aggregate,
-      assignments: aggregate.assignments.filter((assignment) => assignment.taskId !== subA),
+    const aggregate = await readTaskAggregate(dataDir, taskC);
+    if (!aggregate) throw new Error("taskC missing");
+    const tasks = createTaskStore({ dataDir });
+    await tasks.commit(taskC, {
+      expectedVersion: aggregate.taskVersion,
+      changeKind: "update",
+      actor: { kind: "admin", memberId: null, name: "管理员" },
+      mutate: (draft) => {
+        draft.assignments = draft.assignments.filter((assignment) => assignment.taskId !== subA);
+      },
     });
 
     const detail = await shareGet(`/api/v1/share/tasks/${taskC}`, cookieA);

@@ -1,6 +1,6 @@
 # Agent Note: 用 SQLite 单库取代分聚合文件存储
 
-Status: proposed
+Status: implemented
 
 [English](2026-11-05-sqlite-storage.en.md) | 中文
 
@@ -17,7 +17,7 @@ Status: proposed
 - 旧文件通过一次性导入器进入临时库，校验后原子 rename，再把旧目录移入 `backups/pre-sqlite-*`；旧备份可由同一导入器恢复。
 - schema 版本用 `PRAGMA user_version`，迁移前 `VACUUM INTO` 备份，迁移在事务内执行；`integrity_check`、`foreign_key_check` 和 revision 序列与 tip 断言用于启动、备份、恢复和 doctor。
 - 在线备份用 `VACUUM INTO` 生成单文件一致性快照；备份目录为 `ztask.db` 加 `backup.json`。
-- schema migration 默认用自研轻量 runner：`schema_migrations` 记录版本与 checksum，启动时事务化执行，迁移前 `VACUUM INTO` 备份；Kysely/Umzug、Drizzle/Prisma 和外部 CLI 作为备选，对比见 06 §7.3.1。
+- schema migration 用 Kysely Migrator 执行：`kysely_migration` 记录执行状态，`schema_migrations` 保存版本与 checksum 审计；启动时先在 `VACUUM INTO` 备份，再事务化执行；自研 runner、Umzug、Drizzle/Prisma 和外部 CLI 作为备选，对比见 06 §7.3.1。
 
 详细契约见[全栈设计 06](../../../../plan/fullstack-design/06-database-design.md)。
 
@@ -36,4 +36,4 @@ Status: proposed
 - `node:sqlite` 要求 Node >= 22.13，且仍是 experimental；`engines.node` 需要提升，驱动替换点集中在连接适配层。
 - SQLite 不加密静态数据；数据库文件权限成为唯一保护，和原 JSON 文件的威胁模型一致。
 - 需要建立 schema migration、备份恢复和 revision checksum 的测试矩阵；原原子写、JSONL 和尾恢复测试将被替换。
-- 这是架构级变更：`docs/architecture.md` 在实施 PR 中更新，开发流程 issue 和 milestone 在确认后创建；本轮只交付设计评审。
+- 这是架构级变更：`docs/architecture.md` 已在本 PR 更新；实现由 m14 / issue #79 跟踪。

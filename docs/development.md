@@ -4,7 +4,7 @@
 
 ## 环境
 
-- Node 22 与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定。
+- Node 22.13+ 与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定（`node:sqlite` 从 22.13 起无需 flag）。
 - 首次 clone 执行 `pnpm install && pnpm install:hooks`。安装器同时注册 `.i18n.yaml` 的 fail-closed merge driver。
 - 文档门禁与流程门禁均离线运行；在线流程校验需要已认证的 `gh`。
 

@@ -2,13 +2,14 @@
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { buildApp, initStore } from "@ztask/server";
+import { buildApp, initStore, readTaskAggregate } from "@ztask/server";
 import type { FastifyInstance } from "fastify";
 
 let dataDir: string;
 let app: FastifyInstance;
 
 const TASK_1 = "11111111-1111-4111-8111-111111111111";
+const FOLDER_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 
 beforeEach(async () => {
   dataDir = path.join("/tmp", `ztask-members-api-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
@@ -27,10 +28,11 @@ afterEach(async () => {
 
 async function seedTaskWithAssignments(ownerId: string, collaboratorId: string): Promise<void> {
   const store = await initStore({ dataDir, applicationVersion: "0.1.0" });
+  await store.folders.put(FOLDER_ID, { id: FOLDER_ID, parentId: null, name: "任务夹", position: 0 });
   await store.tasks.createAggregate({
     taskId: TASK_1,
     task: {
-      folderId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      folderId: FOLDER_ID,
       parentId: null,
       description: "种子任务",
       progress: 40,
@@ -117,7 +119,8 @@ describe("PATCH /admin/members/{id}", () => {
 describe("DELETE /admin/members/{id}（归档语义）", () => {
   it("归档：archivedAt 置位；任务聚合不被重写；列表仍可见（归档态）", async () => {
     const id = await createMember("陈晨");
-    await seedTaskWithAssignments(id, "dddddddd-dddd-4ddd-8ddd-dddddddddddd");
+    const collaboratorId = await createMember("林悦");
+    await seedTaskWithAssignments(id, collaboratorId);
 
     const removed = await app.inject({ method: "DELETE", url: `/api/v1/admin/members/${id}` });
     expect(removed.statusCode).toBe(204);
@@ -130,8 +133,8 @@ describe("DELETE /admin/members/{id}（归档语义）", () => {
     expect(archived?.counts.owned).toBe(0);
 
     // 任务聚合中的 assignment 保留（不级联重写）
-    const aggregate = JSON.parse(await (await import("node:fs/promises")).readFile(`${dataDir}/tasks/${TASK_1}/current.json`, "utf8"));
-    expect(aggregate.assignments.some((a: { memberId: string }) => a.memberId === id)).toBe(true);
+    const aggregate = await readTaskAggregate(dataDir, TASK_1);
+    expect(aggregate?.assignments.some((a) => a.memberId === id)).toBe(true);
   });
 
   it("成员不存在返回 404", async () => {

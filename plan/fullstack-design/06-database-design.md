@@ -343,7 +343,7 @@ SQLite 的 `ALTER TABLE` 能力有限：改列类型、约束、主键或 `STRIC
 | C. ORM 迁移 | Drizzle ORM + drizzle-kit；Prisma | schema 即代码，自动生成 SQL，类型安全，带漂移检查 | 与 ORM 绑定；`node:sqlite` 驱动支持需确认（Drizzle 主推 better-sqlite3/libsql），工具链更重 |
 | D. 外部 CLI | dbmate、goose、Atlas、Sqitch、Flyway | 成熟、语言无关、适合 CI 和运维 | 不是 `ztask serve` 内嵌路径；本地单命令启动还要额外安装或调用二进制 |
 
-默认推荐 A：ZTask 是单进程、单库、本地启动的应用，迁移必须在 `ztask serve` 内自动完成，且已经具备数据目录锁和 `VACUUM INTO` 备份边界；自研 runner 约 150–250 行，换来没有新依赖和完全可控的失败处理。
+已确认采用 B 的 Kysely Migrator：它成熟、TypeScript 原生、可内嵌运行，迁移表、迁移锁、up/down 和 `migrateToLatest` 都是现成的，不强制采用 ORM，迁移文件仍写原生 SQL；用 `kysely-node-native-sqlite` 保留 `node:sqlite`。应用层仍补 `VACUUM INTO` 备份、`schema_migrations` checksum 审计和完整性校验。
 
 若不考虑自研，推荐 B 中的 Kysely Migrator：它成熟、TypeScript 原生、可内嵌运行，迁移表、迁移锁、up/down 和 `migrateToLatest` 都是现成的，不强制采用 ORM，迁移文件仍可写原生 SQL；用 `kysely-node-native-sqlite` 可以保留 `node:sqlite`（社区 dialect，较新）；若接受原生依赖，换 `better-sqlite3` 配 Kysely 官方 SQLite dialect 更稳。若接受 ORM 并希望 schema 即代码、自动生成 SQL 和漂移检查，选 C 的 Drizzle + drizzle-kit（官方已支持 `node:sqlite`）。Umzug 更轻但要自定义 storage；D 只用于 CI 的 schema lint 或漂移检查，不作为运行时入口。
 
@@ -351,7 +351,7 @@ SQLite 的 `ALTER TABLE` 能力有限：改列类型、约束、主键或 `STRIC
 
 1. 启动持锁后读取 `PRAGMA user_version`；高于 `SCHEMA_VERSION` 拒绝启动，等于则继续。
 2. 低于时先 `VACUUM INTO` 到 `backups/pre-migrate-<时间戳>/`，并校验副本。
-3. 按 `schema_migrations` 顺序执行未应用迁移；每个迁移 `BEGIN IMMEDIATE`，DDL、数据变换、写 `schema_migrations`、更新 `user_version` 后 `COMMIT`；失败 `ROLLBACK` 并保留备份。
+3. Kysely Migrator 按 `kysely_migration` 执行未应用迁移（每个 migration 一个事务）；执行后写 `schema_migrations` 的版本/checksum 审计并更新 `user_version`；失败回滚并保留备份。
 4. 全部成功后跑 `foreign_key_check`、`integrity_check` 和 §7.4 的业务断言；失败拒绝启动。
 5. 已应用迁移的 `checksum` 与文件不一致时拒绝启动（防止发布后改历史迁移）；只允许追加新迁移。
 6. 迁移是单向的：不自动 down；回滚用 `pre-migrate` 备份或旧版本应用加旧备份。复杂表变更按 SQLite 官方 12 步重建：事务外 `PRAGMA foreign_keys=OFF`，建新表，复制，删旧表，改名，重建索引和触发器，`foreign_key_check`，再 `COMMIT`。
@@ -459,4 +459,4 @@ pauseWrites()（停新写入并等待在途事务）
 2. 历史保留：revision 仍保存完整 JSON 快照；确认接受“当前状态关系化、历史快照 JSON”的混合形态，而不是把历史也完全拆表。
 3. 旧文件处理：迁移成功后把旧文件移入 `backups/pre-sqlite-*` 保留回滚，而不是删除。
 4. 网络配置：`network.json` 也并入数据库；`locks/`、`backups/`、`tmp/` 仍是文件系统。若希望保留 `network.json` 便于手工查看，可在实施前调整。
-5. 迁移框架：默认 A（自研轻量 runner）；若不考虑自研，首选 B 的 Kysely Migrator，C 的 Drizzle 次选，D 的外部 CLI 只用于 CI；对比和调研链接见 §7.3.1。
+5. 迁移框架：已确认 B 的 Kysely Migrator（`kysely-node-native-sqlite` 保留 `node:sqlite`）；A/C/D 仅作为后续替换备选，对比见 §7.3.1。

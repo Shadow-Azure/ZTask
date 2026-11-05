@@ -6,7 +6,7 @@ English | [中文](m14-sqlite-storage.md)
 kind: issue
 milestone: m14
 priority: P1
-status: ready
+status: in-progress
 scope:
   - apps/server/**
   - apps/cli/**
@@ -20,7 +20,7 @@ scope:
   - pnpm-lock.yaml
   - scripts/doc-budgets.manifest.json
 adr:
-  - ../../notes/proposed/architecture/2026-11-05-sqlite-storage.md
+  - ../../notes/implemented/architecture/2026-11-05-sqlite-storage.md
 github:
   number: 79
   url: https://github.com/Shadow-Azure/ZTask/issues/79
@@ -39,7 +39,7 @@ The current storage splits members, folders, task aggregates, history, share lin
 ## Design basis
 
 - `plan/fullstack-design/`: 01 §2/§6–§8, 04 §1/§5, 06 in full, 07 §1/§2/§9, 09.
-- Agent Note: `../../notes/proposed/architecture/2026-11-05-sqlite-storage.md`.
+- Agent Note: `../../notes/implemented/architecture/2026-11-05-sqlite-storage.md`.
 
 ## Implementation steps
 

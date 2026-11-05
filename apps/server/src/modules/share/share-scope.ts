@@ -1,38 +1,19 @@
-import { readdir } from "node:fs/promises";
-import { join } from "node:path";
 import type { FolderTreeNode, Task } from "@ztask/shared";
 import type { MemberFile } from "../members/member-service.js";
-import { readTaskAggregate } from "../../storage/task-store.js";
+import { readAllTaskAggregates } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
-
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** 小任务无 owner 时的展示摘要；与管理端 tasks 映射同口径（05 §6.5）。 */
 const UNASSIGNED_SUMMARY = { id: "", name: "待分配", role: "", color: "#9aa2ae" } as const;
 
 /**
- * 读取 tasks/ 下全部聚合（share 模块唯一入口，07 §5.1）。
- * 只扫描 UUID 目录；单个损坏聚合跳过，不让成员视图整体 500。
+ * 读取全部主任务聚合（share 模块唯一入口，07 §5.1）。
+ * 底层 SQLite 查询；单个损坏聚合由存储层跳过，不让成员视图整体 500。
  * @param dataDir 数据目录。
- * @returns 任务聚合列表（不保证顺序）。
+ * @returns 任务聚合列表。
  */
 export async function listTaskAggregates(dataDir: string): Promise<TaskAggregate[]> {
-  let names: string[];
-  try {
-    names = await readdir(join(dataDir, "tasks"));
-  } catch {
-    return [];
-  }
-  const aggregates: TaskAggregate[] = [];
-  for (const taskId of names.filter((name) => UUID_PATTERN.test(name))) {
-    try {
-      const aggregate = await readTaskAggregate(dataDir, taskId);
-      if (aggregate) aggregates.push(aggregate);
-    } catch {
-      // 损坏的单个聚合按不可见处理（05 §7 不泄露存储细节）
-    }
-  }
-  return aggregates;
+  return await readAllTaskAggregates(dataDir);
 }
 
 /**
