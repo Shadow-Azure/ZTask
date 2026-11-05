@@ -6,7 +6,7 @@ English | [中文](m12-startup-occupancy-error.md)
 kind: milestone
 id: m12
 title: 阶段 12：启动占用错误可诊断
-status: active
+status: done
 github:
   number: 12
   url: https://github.com/Shadow-Azure/ZTask/milestone/12
