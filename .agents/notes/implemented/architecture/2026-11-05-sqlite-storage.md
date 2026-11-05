@@ -33,7 +33,7 @@ Status: implemented
 
 - 失去“每个实体一个可读 JSON 文件”的透明度；诊断改用 `sqlite3` 或只读连接，人工编辑不再受支持。
 - 迁移单向：升级后旧应用无法读取 `ztask.db`，回滚依赖 `backups/pre-sqlite-*`。
-- `better-sqlite3` 需要原生模块（预编译或本地构建），CI 必须允许其 install script；`engines.node` 为 `>=22`，驱动替换点集中在连接适配层。
+- `better-sqlite3` 是原生模块，但 v13 自带各平台预编译二进制，安装不需要本地编译；`engines.node` 为 `>=22`，驱动替换点集中在连接适配层。
 - SQLite 不加密静态数据；数据库文件权限成为唯一保护，和原 JSON 文件的威胁模型一致。
 - 需要建立 schema migration、备份恢复和 revision checksum 的测试矩阵；原原子写、JSONL 和尾恢复测试将被替换。
 - 这是架构级变更：`docs/architecture.md` 已在本 PR 更新；实现由 m14 / issue #79 跟踪。
