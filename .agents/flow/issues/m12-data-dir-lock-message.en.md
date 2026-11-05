@@ -6,7 +6,7 @@ English | [中文](m12-data-dir-lock-message.md)
 kind: issue
 milestone: m12
 priority: P2
-status: in-progress
+status: done
 scope:
   - apps/server/**
   - apps/cli/**

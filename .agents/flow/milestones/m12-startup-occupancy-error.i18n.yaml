@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/milestones/m12-startup-occupancy-error.md
-m12-startup-occupancy-error.md: 02fb0fa61df485b2a105977cdde5e2eae87c9415
-m12-startup-occupancy-error.en.md: 142933a27d92d34e84737e58446388c856a5d8d6
+m12-startup-occupancy-error.md: 1375cc305532b48d9f0f5fbdd7adc2d5175da4cd
+m12-startup-occupancy-error.en.md: 0d2b227c2bfa7b900a42c13a126cbc11d09d6d71

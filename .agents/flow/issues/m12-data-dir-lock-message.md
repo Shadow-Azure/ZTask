@@ -6,7 +6,7 @@
 kind: issue
 milestone: m12
 priority: P2
-status: in-progress
+status: done
 scope:
   - apps/server/**
   - apps/cli/**
