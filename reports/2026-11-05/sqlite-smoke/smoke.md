@@ -20,3 +20,16 @@
 
 - ![任务管理](board.png)
 - ![情况看板](dashboard.png)
+
+## 版本升级/降级冒烟（schema 变更）
+
+在 `/tmp/ztask-version-smoke`（v1 数据库，3 个任务）上模拟一次新版本 migration：
+
+1. 给应用临时增加 `0002_probe` migration（新增 `v2_probe` 表）并把 `SCHEMA_VERSION` 提升到 2，编译后在 v1 数据目录直接启动。
+   - 启动自动应用 `0001_initial` 之后的 `0002_probe`，`user_version=2`，`kysely_migration` 含两项，`v2_probe` 表存在，3 个任务数据完整；无需手工执行迁移命令。
+2. 恢复 v1 代码并重新编译，在已被升级到 v2 的同一数据目录启动。
+   - 启动被拒绝，退出码 1：`UnsupportedFormatError: 数据库 schema 版本 2 高于应用支持的 1，请先升级应用`（`code=STORAGE_UNSUPPORTED_FORMAT`）。
+   - 失败后库内仍是 3 个任务、`user_version=2`、`v2_probe` 存在，没有被旧版本改写。
+3. 回归测试 `tests/storage/version-guard.spec.ts` 覆盖：`user_version` 高于应用、`kysely_migration` 含未知 migration、已应用 migration 的 checksum 被改动，三种情况都拒绝启动。
+
+结论：升级是启动时自动迁移；降级不会静默运行，而是被版本/未知 migration 门禁拒绝。需要降级时只能先升级应用，或从升级前的旧备份恢复。
