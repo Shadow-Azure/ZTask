@@ -6,7 +6,7 @@
 //   pnpm package:smoke -- --keep  # 保留临时目录，便于人工查看/截图
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -71,15 +71,21 @@ async function startServer(cliPath, dataDir) {
   child.stderr.on("data", (chunk) => {
     stderr += chunk;
   });
-  const base = await watchBaseUrl(child);
-  await waitFor(
-    async () => {
-      const response = await fetch(`${base}/api/v1/health`);
-      return response.ok ? response : null;
-    },
-    15000,
-    `${base}/api/v1/health`,
-  );
+  let base;
+  try {
+    base = await watchBaseUrl(child);
+    await waitFor(
+      async () => {
+        const response = await fetch(`${base}/api/v1/health`);
+        return response.ok ? response : null;
+      },
+      15000,
+      `${base}/api/v1/health`,
+    );
+  } catch (cause) {
+    child.kill("SIGKILL");
+    throw cause;
+  }
   const stop = async () => {
     if (child.exitCode !== null) return;
     child.kill("SIGTERM");
@@ -119,7 +125,6 @@ async function main() {
   let server = null;
   try {
     console.log(`1. 打包 ztask ${packageJson.version}`);
-    const { mkdir } = await import("node:fs/promises");
     await mkdir(packDir, { recursive: true });
     await mkdir(projectDir, { recursive: true });
     execFileSync("npm", ["pack", "--pack-destination", packDir], { cwd: packageDir, stdio: ["ignore", "inherit", "inherit"] });
