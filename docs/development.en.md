@@ -47,6 +47,10 @@ node apps/cli/dist/cli.js restore --backup <backup-dir> --data-dir <data-dir>
 
 Hooks provide timely feedback; CI still owns exhaustive coverage.
 
+## Single-package release
+
+`apps/ztask` is the published `ztask` package. After `pnpm build`, `pnpm package:smoke` installs it outside the repository. Push a `v<version>` tag matching the package version, or dispatch `Release`: it creates a GitHub Release with the tarball first, and publishes to npm only when `NPM_TOKEN` is configured, skipping npm otherwise; configuring the token later and rerunning the same version fills in the npm publish. Confirm the package name and license before the first release. Install a Release tarball with `npm install -g <url>`; use `pnpm pack:ztask` to pack locally only.
+
 ## Flow and CI
 
 Record each requirement in the roadmap, milestone, and issue tree under `.agents/flow/` before work starts; see [.agents/flow/README.md](../.agents/flow/README.en.md). Generate a new issue with `pnpm flow:new-issue`; backfill its number with `pnpm flow:sync`. Flow gates reconcile commit and PR titles plus scope.

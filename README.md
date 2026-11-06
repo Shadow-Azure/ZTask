@@ -26,6 +26,16 @@ ZTask 把团队进度放在团队自己手里。一条命令启动本地服务�
 
 ## 快速开始
 
+发布到 npm 后只需 Node 22+，不必 clone 仓库；GitHub Release tarball 安装见[发布包说明](apps/ztask/README.md)：
+
+```sh
+npx ztask serve
+```
+
+管理端默认位于 `http://127.0.0.1:8123`，数据目录默认为 `~/.ztask`，可用 `--data-dir` 指定。
+
+本地开发：
+
 ```sh
 pnpm install
 pnpm install:hooks
@@ -33,7 +43,7 @@ pnpm build
 pnpm serve
 ```
 
-需要 Node 22+ 与 pnpm@10。管理端默认位于 `http://127.0.0.1:8123`，数据目录默认为 `~/.ztask`，可用 `--data-dir` 指定；开发时 `pnpm dev` 并行启动 workspace。完整环境与开发循环见[开发指南](docs/development.md)。
+需要 Node 22 与 pnpm@10。管理端默认 `http://127.0.0.1:8123`，数据目录 `~/.ztask`（`--data-dir` 可改）；`pnpm dev` 并行启动 workspace，单包打包与发布见[开发指南](docs/development.md)。
 
 ## 文档
 

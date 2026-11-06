@@ -29,8 +29,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: 测试（门禁自测 + 原型 + workspace 自动化测试）
         run: pnpm test
-      - name: 生产构建（shared/server/cli/web）
+      - name: 生产构建（shared/server/cli/web/ztask）
         run: pnpm build
+      - name: 单包打包安装冒烟（clean 目录安装 tarball 并启动）
+        run: pnpm package:smoke
       - name: 文档门禁（doc-sync）
         run: pnpm verify:docs
       - name: 开发流程门禁（PR diff）

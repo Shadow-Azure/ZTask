@@ -4,12 +4,13 @@ English | [中文](architecture.md)
 
 ## Application composition
 
-ZTask is a local-first team progress tool managed as a pnpm workspace with four layers:
+ZTask is a local-first team progress tool managed as a pnpm workspace with five layers:
 
 - `apps/cli/`: the user entry point; parses `serve` arguments, builds configuration, starts the server, and handles shutdown signals.
 - `apps/server/`: the Fastify service, static frontend fallback, data-directory lock, and a local SQLite database with Kysely migrations.
 - `apps/web/`: the admin shell built with Vue 3, Vue Router, and TanStack Query.
 - `packages/shared/`: the cross-surface API prefix, DTOs, and error contract.
+- `apps/ztask/`: the release wrapper; bundles CLI, server, and shared into one ESM file with the `apps/web` build output and distributes it as the `ztask` package.
 
 `tests/` covers startup, configuration, storage recovery, the web shell, and shared behavior. `plan/fullstack-design/` holds the design and implementation basis.
 

@@ -1,0 +1,53 @@
+{
+  "name": "ztask",
+  "version": "0.1.0",
+  "description": "ZTask — 本地优先的团队进度管理工具",
+  "license": "UNLICENSED",
+  "type": "module",
+  "bin": {
+    "ztask": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shadow-Azure/ZTask.git",
+    "directory": "apps/ztask"
+  },
+  "homepage": "https://github.com/Shadow-Azure/ZTask",
+  "bugs": {
+    "url": "https://github.com/Shadow-Azure/ZTask/issues"
+  },
+  "keywords": [
+    "ztask",
+    "task-management",
+    "team-progress",
+    "local-first"
+  ],
+  "scripts": {
+    "build": "node scripts/build-package.mjs",
+    "prepack": "node scripts/build-package.mjs"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/static": "^8.3.0",
+    "better-sqlite3": "^13.0.3",
+    "commander": "^14.0.2",
+    "fastify": "^5.6.2",
+    "kysely": "^0.29.8"
+  },
+  "devDependencies": {
+    "@ztask/cli": "workspace:*",
+    "@ztask/server": "workspace:*",
+    "@ztask/shared": "workspace:*",
+    "@ztask/web": "workspace:*",
+    "esbuild": "^0.28.2"
+  }
+}

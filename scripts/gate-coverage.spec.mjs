@@ -22,7 +22,10 @@ const COVERED_BY = {
 };
 
 /** 测试基建，不是门禁。 */
-const NOT_GATES = new Set(["spec-fixture.mjs"]);
+const NOT_GATES = new Set([
+  "spec-fixture.mjs",
+  "package-smoke.mjs", // 打包安装冒烟是集成测试工具，由 CI 直接运行
+]);
 
 const scriptFiles = readdirSync(SCRIPTS_DIR).filter(
   (name) => name.endsWith(".mjs") && !name.endsWith(".spec.mjs"),

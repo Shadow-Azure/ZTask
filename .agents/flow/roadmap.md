@@ -17,10 +17,11 @@ milestones:
   - m10
   - m11
   - m12
+  - m13
   - m14
 ```
 
-ZTask 以本地 CLI、Web 服务和 SQLite 存储提供任务协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。
+ZTask 以本地 CLI、Web 服务和 SQLite 提供协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。
 
 ## 交付序列
 
@@ -32,13 +33,14 @@ ZTask 以本地 CLI、Web 服务和 SQLite 存储提供任务协作。规则见 
 - m6：界面与原型逐屏对齐与差异清零。
 - m7：项目展示图与仓库首页介绍。
 - m8：任务管理原型负责人筛选补充。
-- m9：小任务保存错误与可诊断性。
+- m9：小任务保存错误与诊断。
 - m10：看板筛选修复。
 - m11：任务卡浮窗。
-- m12：启动占用错误可诊断。
-- m14：SQLite 存储迁移。
+- m12：启动占用错误诊断。
+- m13：单包发布与 CI 流水线。
+- m14：SQLite 迁移。
 
 ## 推进原则
 
-- 里程碑按序推进，同优先级跨里程碑串行；权限、恢复与版本冲突随能力交付。
-- 新 issue 从 backlog 开始，经 `pnpm flow:sync` 回填编号后流转；M1 保持真实状态。
+- 里程碑按序推进，同档跨里程碑串行；权限、恢复与版本冲突随能力交付。
+- 新 issue 从 backlog 开始，经 `pnpm flow:sync` 回填编号后流转；M1 保持真实。

@@ -12,3 +12,4 @@ export {
   runRestore,
 } from "./maintenance.js";
 export type { RunBackupOptions, RunDoctorOptions, RunRestoreOptions } from "./maintenance.js";
+export { resolveWebDist } from "./web-dist.js";

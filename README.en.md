@@ -26,6 +26,16 @@ ZTask keeps team progress in the team's own hands. A single command starts a loc
 
 ## Quick start
 
+Once the package is on npm, only Node 22 or newer is needed; no repository clone (installing the GitHub Release tarball is described in the [package README](apps/ztask/README.md)):
+
+```sh
+npx ztask serve
+```
+
+The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set.
+
+For local development:
+
 ```sh
 pnpm install
 pnpm install:hooks
@@ -33,7 +43,7 @@ pnpm build
 pnpm serve
 ```
 
-Node 22+ and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for setup and the everyday loop.
+Node 22 and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for packaging and release.
 
 ## Documentation
 

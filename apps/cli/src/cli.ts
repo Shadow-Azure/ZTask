@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
-import path from "node:path";
 import process from "node:process";
 import { CommanderError } from "commander";
 import { defaultDataDir, LockHeldError, serve, validateServeConfig } from "@ztask/server";
@@ -10,13 +8,11 @@ import type { NetworkState } from "@ztask/shared";
 import { parseCliArgs, resolveOpenDecision, type ParsedServeArgs } from "./serve-args.js";
 import { formatLockHeldMessage } from "./lock-error.js";
 import { EXIT_USAGE, runBackup, runDoctor, runRestore } from "./maintenance.js";
+import { resolveWebDist } from "./web-dist.js";
 
 const require = createRequire(import.meta.url);
 /** CLI 版本即服务版本，健康检查回显。 */
 const VERSION: string = require("../package.json").version;
-
-/** 生产态 Vue 构建产物位置（apps/web/dist）；不存在时服务纯 API 模式。 */
-const WEB_DIST = path.resolve(import.meta.dirname, "../../web/dist");
 
 /**
  * 命令分发：serve 启动服务；backup/restore/doctor 走维护路径（#23）。
@@ -53,7 +49,7 @@ async function runServe(parsed: ParsedServeArgs): Promise<void> {
   const { input, open } = parsed;
   const config = validateServeConfig({
     ...input,
-    staticRoot: existsSync(WEB_DIST) ? WEB_DIST : null,
+    staticRoot: resolveWebDist(),
   });
 
   const handle = await serve(config, { version: VERSION }).catch((cause: unknown) => {
