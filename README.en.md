@@ -26,7 +26,7 @@ ZTask keeps team progress in the team's own hands. A single command starts a loc
 
 ## Quick start
 
-Once the package is published, only Node 22 or newer is needed; no repository clone:
+Once the package is on npm, only Node 22 or newer is needed; no repository clone (installing the GitHub Release tarball is described in the [package README](apps/ztask/README.md)):
 
 ```sh
 npx ztask serve

@@ -12,7 +12,7 @@ ZTask's install path has always targeted contributors: clone the repository, ins
 
 Add the workspace package `apps/ztask` (published as `ztask`) that uses esbuild to bundle the build outputs of `@ztask/cli`, `@ztask/server`, and `@ztask/shared` into a single ESM entry, keeping third-party dependencies (fastify, @fastify/*, commander) external and resolved from package.json dependencies; copy `apps/web/dist` to the packaged `dist/web`. The CLI's Web directory resolution accepts both "packaged `dist/web`" and "monorepo `apps/web/dist`", and reads the version from the packaged `package.json` so both layouts agree.
 
-Publishing uses two pipelines: the PR/main CI gains a package-install smoke (`npm pack` → install in a clean directory → start → health and SPA assertions); pushing a `v*` tag runs the release workflow, verifies the tag matches the package version, reuses tests, build, and smoke, then runs `npm publish --provenance` and creates a GitHub Release with the tarball. npm credentials come from the repository secret `NPM_TOKEN`; a missing secret fails the publish step explicitly.
+Publishing uses two pipelines: the PR/main CI gains a package-install smoke (`npm pack` → install in a clean directory → start → health and SPA assertions); pushing a `v*` tag or dispatching manually runs the release workflow, verifies the tag matches the package version, reuses tests, build, and smoke, then creates a GitHub Release with the tarball first; it runs `npm publish --provenance` only when the repository secret `NPM_TOKEN` is configured, otherwise it skips npm and keeps the installable Release asset.
 
 ## Alternatives considered
 
@@ -25,5 +25,5 @@ Publishing uses two pipelines: the PR/main CI gains a package-install smoke (`np
 
 - A release must run `pnpm build` (or let `prepack` trigger the pipeline build) first, otherwise the tarball may lack `dist/`; CI and local smoke both build before packing.
 - esbuild becomes a build dependency of `apps/ztask`; raising the Node target requires updating `engines` and the esbuild target together.
-- The first public release needs the maintainer to configure `NPM_TOKEN` and confirm the package name and license; until then the tag workflow fails loudly instead of skipping silently.
+- The first public release does not depend on npm: the GitHub Release yields an installable tarball first; configuring `NPM_TOKEN` additionally publishes to npm. The maintainer still confirms the package name and license.
 - The single package makes the npm install size include the Web artifacts; a later Docker image can reuse the same `dist` without business-code changes.

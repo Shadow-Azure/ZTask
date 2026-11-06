@@ -49,7 +49,7 @@ node apps/cli/dist/cli.js restore --backup <backup-dir> --data-dir <data-dir>
 
 ## 单包发布
 
-`apps/ztask` 是发布包 `ztask`。`pnpm build` 后用 `pnpm package:smoke` 在仓库外安装 tarball 并做启动、API 与重启冒烟。正式发布推送 `v<version>` 标签（版本须与 `apps/ztask/package.json` 一致），`release.yml` 重跑测试、打包、npm 发布并创建 GitHub Release；首次发布前需配置仓库 secret `NPM_TOKEN`，并确认包名与许可证。本地只打包用 `pnpm pack:ztask`。
+`apps/ztask` 是发布包 `ztask`。`pnpm build` 后用 `pnpm package:smoke` 在仓库外做安装冒烟。推送 `v<version>` 标签（须与包版本一致）或手动触发 `Release`：先创建带 tarball 的 GitHub Release，配置 `NPM_TOKEN` 时再发布 npm，否则跳过；首次发布前确认包名与许可证。Release tarball 用 `npm install -g <url>` 安装；本地只打包用 `pnpm pack:ztask`。
 
 ## 流程与 CI
 

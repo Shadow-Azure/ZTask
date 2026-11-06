@@ -26,7 +26,7 @@ ZTask 把团队进度放在团队自己手里。一条命令启动本地服务�
 
 ## 快速开始
 
-发布包上线后，只装 Node 22 或更高版本即可，不需要 clone 仓库：
+发布到 npm 后，只装 Node 22 或更高版本即可，不需要 clone 仓库（从 GitHub Release tarball 安装见[发布包说明](apps/ztask/README.md)）：
 
 ```sh
 npx ztask serve

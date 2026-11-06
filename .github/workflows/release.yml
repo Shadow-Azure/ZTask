@@ -21,8 +21,11 @@ concurrency:
 jobs:
   publish:
     # 发布与冒烟共用同一套构建，避免「已经打包成功但装不上」。
+    # GitHub Release 不依赖 npm；NPM_TOKEN 只决定是否额外发布到 npm。
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -66,16 +69,17 @@ jobs:
           npm pack --pack-destination "$RUNNER_TEMP/release" apps/ztask
           TARBALL=$(ls "$RUNNER_TEMP/release"/*.tgz)
           echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
-      - name: 发布到 npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "缺少仓库 secret NPM_TOKEN：在 Settings → Secrets and variables → Actions 配置 npm 发布令牌后重试" >&2
-            exit 1
-          fi
-          npm publish "$TARBALL" --provenance --access public
-      - name: 创建 GitHub Release
+      - name: 创建 GitHub Release（不依赖 npm）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release create "$TAG" "$TARBALL" --generate-notes --title "ZTask $TAG"
+      - name: 发布到 npm（配置 NPM_TOKEN 时）
+        if: env.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish "$TARBALL" --provenance --access public
+      - name: 未配置 NPM_TOKEN
+        if: env.NPM_TOKEN == ''
+        run: |
+          echo "未配置仓库 secret NPM_TOKEN，跳过 npm 发布；GitHub Release 已包含可安装的 tarball。" >> "$GITHUB_STEP_SUMMARY"
+          echo "跳过 npm 发布（缺少 NPM_TOKEN）"

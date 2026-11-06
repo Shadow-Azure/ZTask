@@ -12,7 +12,7 @@ ZTask 的安装路径一直面向贡献者：要 clone 仓库、装 pnpm、跑 `
 
 新增 workspace 包 `apps/ztask`（发布名 `ztask`），以 esbuild 把 `@ztask/cli`、`@ztask/server`、`@ztask/shared` 的构建产物打成单个 ESM 入口，第三方依赖（fastify、@fastify/*、commander）保持 external 走 package.json 的 dependencies；`apps/web/dist` 复制到包内 `dist/web`。CLI 的 Web 目录解析同时接受“包内 `dist/web`”与“monorepo `apps/web/dist`”，版本从包内 `package.json` 读取，保证两种布局一致。
 
-发布由两条流水线承担：PR/main 的 CI 增加打包安装冒烟（`npm pack` → clean 目录安装 → 启动 → 健康检查与 SPA 断言）；推送 `v*` 标签时运行发布工作流，校验 tag 与包版本一致，复用测试、构建与冒烟后执行 `npm publish --provenance`，并创建附带 tarball 的 GitHub Release。npm 凭据来自仓库 secret `NPM_TOKEN`，缺失时发布步骤明确失败。
+发布由两条流水线承担：PR/main 的 CI 增加打包安装冒烟（`npm pack` → clean 目录安装 → 启动 → 健康检查与 SPA 断言）；推送 `v*` 标签或手动触发时运行发布工作流，校验 tag 与包版本一致，复用测试、构建与冒烟后先创建附带 tarball 的 GitHub Release；配置了仓库 secret `NPM_TOKEN` 时再执行 `npm publish --provenance`，未配置则跳过 npm 并保留可安装的 Release 资产。
 
 ## Alternatives considered
 
@@ -25,5 +25,5 @@ ZTask 的安装路径一直面向贡献者：要 clone 仓库、装 pnpm、跑 `
 
 - 发布前必须先 `pnpm build`（或由 `prepack` 触发流水线构建），否则 tarball 可能缺 `dist/`；CI 与本地冒烟都按“构建后再 pack”执行。
 - esbuild 成为 `apps/ztask` 的构建依赖；升级 Node 目标时需同步 `engines` 与 esbuild target。
-- 首次公开发布需要维护者配置 `NPM_TOKEN`、确认包名与许可证；在此之前 tag 工作流会明确失败而不是静默跳过。
+- 首次公开发布不依赖 npm：GitHub Release 先产出可安装的 tarball；配置 `NPM_TOKEN` 后才额外发布到 npm。包名与许可证仍需维护者确认。
 - 单包使 npm 安装体积包含 Web 产物；后续若要发布 Docker 镜像，可复用同一 `dist`，不需要改业务代码。

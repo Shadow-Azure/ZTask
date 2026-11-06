@@ -49,7 +49,7 @@ Hooks provide timely feedback; CI still owns exhaustive coverage.
 
 ## Single-package release
 
-`apps/ztask` is the published `ztask` package. After `pnpm build`, `pnpm package:smoke` installs the tarball outside the repository and smoke-tests startup, the API, and restart persistence. To release, push a `v<version>` tag whose version matches `apps/ztask/package.json`; `release.yml` reruns tests, packs, publishes to npm, and creates a GitHub Release. The first release requires the repository secret `NPM_TOKEN`, plus confirming the package name and license. Use `pnpm pack:ztask` to pack locally only.
+`apps/ztask` is the published `ztask` package. After `pnpm build`, `pnpm package:smoke` installs it outside the repository. Push a `v<version>` tag matching the package version, or dispatch `Release`: it creates a GitHub Release with the tarball first, and publishes to npm only when `NPM_TOKEN` is configured, skipping npm otherwise. Confirm the package name and license before the first release. Install a Release tarball with `npm install -g <url>`; use `pnpm pack:ztask` to pack locally only.
 
 ## Flow and CI
 

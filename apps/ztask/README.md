@@ -13,6 +13,13 @@ npm install -g ztask
 ztask serve
 ```
 
+尚未发布到 npm 时，可从 GitHub Release 下载 tarball 安装（把 `v0.1.0` 换成最新 Release 的版本）：
+
+```sh
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+ztask serve
+```
+
 默认管理端为 `http://127.0.0.1:8123/`，数据目录为 `~/.ztask`（可用 `ZTASK_HOME` 或 `--data-dir` 覆盖）。`serve` 之外的 `backup`、`restore`、`doctor` 子命令与仓库内的 CLI 一致。
 
 ## 从源码发布

@@ -43,7 +43,7 @@ ZTask can currently only run from the repository: installation requires a clone,
 - Add a publishable `ztask` package: bundle CLI, server, and shared into one ESM artifact with the prebuilt Web app; include `bin.ztask`, `files`, `engines`, and repository metadata so `npm pack` yields exactly one tarball.
 - Make the CLI resolve Web assets in both the packaged layout (next to `dist/cli.js`) and the monorepo layout (`apps/web/dist`); take the version for `--version` and the health check from the packaged `package.json`.
 - Add a CI package-install smoke: install the tarball in a clean temporary directory, start it, and assert health plus the SPA page; run it on pull requests and main.
-- Add a tag-triggered release workflow: verify tag and package version match, run tests/build/package smoke, `npm publish --provenance`, and create a GitHub Release with the tarball; fail clearly when `NPM_TOKEN` is missing.
+- Add a tag- or manually-triggered release workflow: verify tag and package version match, run tests/build/package smoke, create a GitHub Release with the tarball first, then run `npm publish --provenance` only when `NPM_TOKEN` is configured; skip npm otherwise with a log note.
 - Add a single-package install entry to the README, document release steps and required credentials, and record the packaging/release decision in an Agent Note.
 
 ## Acceptance
@@ -51,5 +51,5 @@ ZTask can currently only run from the repository: installation requires a clone,
 - After `pnpm build`, `npm pack` in `apps/ztask` produces one tarball containing only `dist/` and the package README, not workspace sources.
 - In a clean temporary directory, `npm install <tarball>` then `npx ztask --version` equals the package version; `npx ztask serve --port 0 --no-open` starts, `/api/v1/health` returns 200 with the same version, and `/` returns HTML with the Vue entry.
 - Inside the monorepo, `node apps/cli/dist/cli.js serve` still loads `apps/web/dist` without regression.
-- The CI package smoke passes on pull requests; the release workflow fails with a clear message (not silently skipped) when `NPM_TOKEN` is missing.
+- The CI package smoke passes on pull requests; without `NPM_TOKEN` the release workflow still produces a GitHub Release with the tarball, and a configured token additionally completes the npm publish.
 - `pnpm test`, `pnpm lint:docs`, `pnpm verify:docs`, and `pnpm verify:flow` pass.
