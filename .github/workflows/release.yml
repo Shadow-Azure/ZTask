@@ -66,7 +66,8 @@ jobs:
       - name: 打包
         run: |
           mkdir -p "$RUNNER_TEMP/release"
-          npm pack --pack-destination "$RUNNER_TEMP/release" apps/ztask
+          # npm 会把 `apps/ztask` 当成 GitHub 简写去 ls-remote，必须进入目录再 pack。
+          (cd apps/ztask && npm pack --pack-destination "$RUNNER_TEMP/release")
           TARBALL=$(ls "$RUNNER_TEMP/release"/*.tgz)
           echo "TARBALL=$TARBALL" >> "$GITHUB_ENV"
       - name: 创建 GitHub Release（不依赖 npm）
