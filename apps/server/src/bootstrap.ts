@@ -132,7 +132,11 @@ export async function serve(config: ServerConfig, options: BuildAppOptions = {})
             try {
               await store.drain();
             } finally {
-              await lock.release();
+              try {
+                await store.close();
+              } finally {
+                await lock.release();
+              }
             }
           }
         }

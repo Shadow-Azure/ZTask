@@ -4,7 +4,7 @@
 
 ## 环境
 
-- Node 22 与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定。
+- Node 22+ 与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定。
 - 首次 clone 执行 `pnpm install && pnpm install:hooks`。安装器同时注册 `.i18n.yaml` 的 fail-closed merge driver。
 - 文档门禁与流程门禁均离线运行；在线流程校验需要已认证的 `gh`。
 
@@ -49,7 +49,7 @@ node apps/cli/dist/cli.js restore --backup <backup-dir> --data-dir <data-dir>
 
 ## 单包发布
 
-`apps/ztask` 是发布包 `ztask`。`pnpm build` 后用 `pnpm package:smoke` 在仓库外做安装冒烟。推送 `v<version>` 标签（须与包版本一致）或手动触发 `Release`：先创建带 tarball 的 GitHub Release，配置 `NPM_TOKEN` 时再发布 npm，否则跳过；首次发布前确认包名与许可证。Release tarball 用 `npm install -g <url>` 安装；本地只打包用 `pnpm pack:ztask`。
+`apps/ztask` 是发布包 `ztask`。`pnpm build` 后用 `pnpm package:smoke` 在仓库外做安装冒烟。推送 `v<version>` 标签（须与包版本一致）或手动触发 `Release`：先创建带 tarball 的 GitHub Release，配置 `NPM_TOKEN` 时再发布 npm，否则跳过；之后配置 token 可重跑同版本补齐 npm。首次发布前确认包名与许可证。Release tarball 用 `npm install -g <url>` 安装；本地只打包用 `pnpm pack:ztask`。
 
 ## 流程与 CI
 

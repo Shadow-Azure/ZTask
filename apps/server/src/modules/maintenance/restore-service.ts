@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
 import { cp, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { Manifest } from "../../storage/manifest-store.js";
@@ -120,7 +121,7 @@ async function assertTargetUsable(targetDir: string): Promise<boolean> {
  * @returns 恢复摘要。
  * @throws RestoreError 备份损坏 / 目标非空 / 目标非法；失败时不留下临时或半恢复目录。
  */
-export async function restoreFromBackup(options: RestoreOptions): Promise<RestoreSummary> {
+async function restoreLegacyBackup(options: RestoreOptions): Promise<RestoreSummary> {
   const backupDir = path.resolve(options.backupDir);
   const targetDir = path.resolve(options.targetDir);
 
@@ -185,4 +186,82 @@ export async function restoreFromBackup(options: RestoreOptions): Promise<Restor
   } finally {
     if (!published) await rm(stageDir, { recursive: true, force: true });
   }
+}
+
+
+/**
+ * 从 SQLite 备份恢复：复制单文件快照到同级 staging，真实启动一次（migration +
+ * 一致性校验），关闭后原子切换。旧格式备份仍走 legacy 路径并由 importStore 导入。
+ * @param options 备份目录、目标目录与应用版本。
+ * @returns 恢复摘要。
+ */
+async function restoreSqliteBackup(options: RestoreOptions): Promise<RestoreSummary> {
+  const backupDir = path.resolve(options.backupDir);
+  const targetDir = path.resolve(options.targetDir);
+  if (backupDir === targetDir || isInside(targetDir, backupDir) || isInside(backupDir, targetDir)) {
+    throw new RestoreError("RESTORE_TARGET_INVALID", "目标目录与备份目录不能相同或互相包含");
+  }
+
+  const validation = await validateDataDir(backupDir);
+  if (validation.manifest === null) {
+    throw new RestoreError("RESTORE_BACKUP_INVALID", `备份缺少有效的 ztask.db：${backupDir}`, validation.issues);
+  }
+  const blocking = validation.issues.filter((issue) => !issue.fixable);
+  if (blocking.length > 0) {
+    const first = blocking[0]!;
+    throw new RestoreError("RESTORE_BACKUP_INVALID", `备份校验未通过：${first.path}（${first.detail}）`, blocking);
+  }
+
+  const targetExists = await assertTargetUsable(targetDir);
+  const parent = path.dirname(targetDir);
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  const stageDir = path.join(parent, `.ztask-restore-${randomUUID()}`);
+  let published = false;
+  let summary: RestoreSummary | null = null;
+  try {
+    await mkdir(stageDir, { recursive: true, mode: 0o700 });
+    await cp(path.join(backupDir, "ztask.db"), path.join(stageDir, "ztask.db"));
+    const store = await initStore({
+      dataDir: stageDir,
+      applicationVersion: options.applicationVersion,
+      timeZone: validation.manifest.timeZone,
+    });
+    const tasks = (await store.tasks.listTaskIds()).length;
+    const folders = (await store.folders.list()).length;
+    const members = (await store.members.list()).length;
+    const manifest = store.manifest;
+    await store.drain();
+    await store.close();
+
+    summary = {
+      backupDir,
+      targetDir,
+      files: validation.stats.fileCount,
+      bytes: validation.stats.byteCount,
+      tasks,
+      folders,
+      members,
+      manifest,
+      repaired: false,
+    };
+
+    if (targetExists) await rm(targetDir, { recursive: true, force: true });
+    await rename(stageDir, targetDir);
+    published = true;
+    return summary;
+  } finally {
+    if (!published) await rm(stageDir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * 恢复入口：有 ztask.db 走 SQLite 快照恢复，否则按旧文件备份导入。
+ * @param options 备份目录、目标目录与应用版本。
+ * @returns 恢复摘要。
+ */
+export async function restoreFromBackup(options: RestoreOptions): Promise<RestoreSummary> {
+  if (existsSync(path.join(path.resolve(options.backupDir), "ztask.db"))) {
+    return await restoreSqliteBackup(options);
+  }
+  return await restoreLegacyBackup(options);
 }

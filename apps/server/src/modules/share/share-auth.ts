@@ -1,8 +1,6 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
-import { readdir, unlink } from "node:fs/promises";
-import { join } from "node:path";
-import { readJsonFile } from "../../storage/atomic-json.js";
 import { createEntityStore, type EntityStore } from "../../storage/entity-store.js";
+import { getStoreContext } from "../../storage/db.js";
 import type { MemberSummary } from "@ztask/shared";
 
 /** 会话有效期：30 天（06 §5 expiresAt）。 */
@@ -66,10 +64,6 @@ function linkStore(dataDir: string): EntityStore<ShareLinkFile> {
 
 function sessionStore(dataDir: string): EntityStore<SessionFile> {
   return createEntityStore<SessionFile>({ dataDir, subdir: "auth-sessions" });
-}
-
-function sessionDir(dataDir: string): string {
-  return join(dataDir, "auth-sessions");
 }
 
 function memberSummaryFile(file: { id: string; name: string; role: string; color: string }): MemberSummary {
@@ -239,48 +233,28 @@ export async function resolveShareSession(options: { dataDir: string; cookieHead
 }
 
 /**
- * 注销：删除会话文件（幂等）；Cookie 清除值由 clearSessionCookie 提供。
+ * 注销：删除会话行（幂等）；Cookie 清除值由 clearSessionCookie 提供。
  * @param dataDir 数据目录。
  * @param sessionId 会话 ID。
  */
 export async function destroySession(dataDir: string, sessionId: string): Promise<void> {
   if (!UUID_PATTERN.test(sessionId)) return;
-  await unlink(join(sessionDir(dataDir), `${sessionId}.json`)).catch(() => undefined);
+  const context = await getStoreContext(dataDir);
+  await context.db.deleteFrom("auth_sessions").where("session_id", "=", sessionId).execute();
 }
 
 /**
- * 删除某成员的全部会话文件（07 §3.2 / §7）：供链接轮换、吊销与成员归档复用。
+ * 删除某成员的全部会话（07 §3.2 / §7）：供链接轮换、吊销与成员归档复用。
  *
- * 这是「清理」而不是授权兜底：即使某个文件删除失败或残留，`resolveShareSession`
- * 仍会因 session.shareLinkId 不再等于当前 active link 而拒绝（06 §5）。
- * 因此本函数对单个文件读取/删除失败保持静默，只尽力清理。
+ * 这是清理而不是授权兜底：即使某个会话残留，`resolveShareSession` 仍会因
+ * session.shareLinkId 不再等于当前 active link 而拒绝（06 §5）。
  * @param dataDir 数据目录。
  * @param memberId 成员 UUID；非 UUID 直接返回。
  */
 export async function destroySessionsForMember(dataDir: string, memberId: string): Promise<void> {
   if (!UUID_PATTERN.test(memberId)) return;
-  const dir = sessionDir(dataDir);
-  let names: string[];
-  try {
-    names = await readdir(dir);
-  } catch {
-    return;
-  }
-  await Promise.all(
-    names
-      .filter((name) => name.endsWith(".json"))
-      .map(async (name) => {
-        const filePath = join(dir, name);
-        try {
-          const session = (await readJsonFile(filePath)) as Partial<SessionFile>;
-          if (session.memberId !== memberId) return;
-        } catch {
-          // 损坏的会话文件无法判定归属，留给过期清理，不在链接操作里盲删。
-          return;
-        }
-        await unlink(filePath).catch(() => undefined);
-      }),
-  );
+  const context = await getStoreContext(dataDir);
+  await context.db.deleteFrom("auth_sessions").where("member_id", "=", memberId).execute();
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

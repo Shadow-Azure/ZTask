@@ -1,8 +1,8 @@
 // @vitest-environment node
-import { appendFile, readdir, rm } from "node:fs/promises";
+import { readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createBackupService, serve, taskRevisionsPath, validateServeConfig, type ServeHandle } from "@ztask/server";
+import { createBackupService, serve, validateServeConfig, type ServeHandle } from "@ztask/server";
 import {
   EXIT_FAILURE,
   EXIT_OK,
@@ -141,7 +141,8 @@ describe("doctor / restore（离线）", () => {
       pauseWrites: () => store.pauseWrites(),
     }).create();
 
-    await appendFile(taskRevisionsPath(dataDir, TASK_ID), '{"taskVersion":2', "utf8");
+    await store.close();
+    await writeFile(path.join(dataDir, "ztask.db"), "not a sqlite database", "utf8");
     expect(await runDoctor({ dataDir })).toBe(EXIT_FAILURE);
     expect(await runDoctor({ dataDir: path.join(dataDir, "missing") })).toBe(EXIT_FAILURE);
 

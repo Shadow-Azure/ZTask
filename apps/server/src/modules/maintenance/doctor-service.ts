@@ -58,7 +58,7 @@ export async function doctor(options: { dataDir: string }): Promise<DoctorReport
     suggestions.push("在恢复前保留当前数据目录原样，便于事后取证；doctor 不会修改任何文件。");
   }
   if (validation.issues.length === 0) {
-    suggestions.push("数据目录校验通过：manifest、JSON、JSONL checksum、revisionTip 与引用关系一致。");
+    suggestions.push("数据库完整性、外键、schema 版本、revision 序列与引用关系校验通过。");
   }
 
   return {

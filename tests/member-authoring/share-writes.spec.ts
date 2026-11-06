@@ -1,10 +1,9 @@
 // @vitest-environment node
-import path from "node:path";
 import { rm } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { iterateJsonl, readJsonFile, type RevisionLine } from "@ztask/server";
+import { createTaskStore, readTaskAggregate, type RevisionLine } from "@ztask/server";
 import {
   createFolder,
   createMember,
@@ -20,7 +19,7 @@ import {
 /**
  * #19 成员个人页写端点（05 §6.6–6.10）：真实 initStore + buildApp + 真实分享链接种子，
  * 用 `POST /share/session` 交换会话；任务由真实管理端 API 创建，避免手写聚合与提交协议脱节。
- * 断言口径：响应 = 成员可见 DTO + revision；持久化以重读 GET 详情 / current.json / revisions.jsonl 为准。
+ * 断言口径：响应 = 成员可见 DTO + revision；持久化以重读 GET 详情与 SQLite 聚合/revision 为准。
  */
 
 interface MemberSubtaskDto {
@@ -111,13 +110,13 @@ async function currentTask(taskId: string, cookie: string = cookieA): Promise<Me
 }
 
 async function currentAggregate(taskId: string): Promise<AggregateShape> {
-  return (await readJsonFile(path.join(dataDir, "tasks", taskId, "current.json"))) as unknown as AggregateShape;
+  return (await readTaskAggregate(dataDir, taskId)) as unknown as AggregateShape;
 }
 
 async function revisionLines(taskId: string): Promise<RevisionShape[]> {
   const lines: RevisionShape[] = [];
-  await iterateJsonl(path.join(dataDir, "tasks", taskId, "revisions.jsonl"), (record) => {
-    lines.push(record as unknown as RevisionShape);
+  await createTaskStore({ dataDir }).readRevisions(taskId, (line) => {
+    lines.push(line as unknown as RevisionShape);
   });
   return lines;
 }

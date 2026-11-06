@@ -72,7 +72,13 @@ jobs:
       - name: 创建 GitHub Release（不依赖 npm）
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$TAG" "$TARBALL" --generate-notes --title "ZTask $TAG"
+        run: |
+          # 幂等：先无 npm token 发布 Release，之后配置 token 重跑可补齐 npm。
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$TARBALL" --clobber
+          else
+            gh release create "$TAG" "$TARBALL" --generate-notes --title "ZTask $TAG"
+          fi
       - name: 发布到 npm（配置 NPM_TOKEN 时）
         if: env.NPM_TOKEN != ''
         env:

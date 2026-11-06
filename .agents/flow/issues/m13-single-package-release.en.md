@@ -5,7 +5,7 @@ English | [中文](m13-single-package-release.md)
 ```yaml flow
 kind: issue
 milestone: m13
-priority: P1
+priority: P0
 status: in-progress
 scope:
   - apps/ztask/**
@@ -35,6 +35,8 @@ github:
 ```
 
 ## Background
+
+The user explicitly asked for single-package delivery first, and it is the active release blocker, so it proceeds as P0. The former P1 conflicted with the already-merged m14 in the same tier and made the completed SQLite migration look locked.
 
 ZTask can currently only run from the repository: installation requires a clone, pnpm, and `pnpm build`; the CLI hard-codes the Web static directory to a monorepo-relative path; the version is duplicated as a commander constant; and there is no release pipeline. The user chose Option A first — single-package publishing — ending with a CI-driven release.
 

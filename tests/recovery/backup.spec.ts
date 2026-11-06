@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   buildApp,
   createBackupService,
+  createTaskStore,
+  readTaskAggregate,
   listDataDirFiles,
-  taskCurrentPath,
-  taskRevisionsPath,
   type BackupHooks,
   type BackupResult,
   type BackupService,
@@ -27,8 +27,8 @@ import {
 } from "./support/fixtures.js";
 
 /**
- * 在线备份（#23 / 06 §10 / 07 §9）：
- * 暂停写入的一致快照、排除项、报告字段、原子发布失败不留半备份、管理端 409/403。
+ * 在线备份（#23 / 06 §8 / 07 §9）：
+ * SQLite `VACUUM INTO` 一致性快照、暂停写入、排除项、报告字段、原子发布失败不留半备份、管理端 409/403。
  */
 
 const createdDirs: string[] = [];
@@ -58,13 +58,16 @@ function serviceFor(
   });
 }
 
-/** JSONL 有效行数（半行/空文件都按现状统计）。 */
-async function lineCount(file: string): Promise<number> {
-  try {
-    return (await readFile(file, "utf8")).split("\n").filter((line) => line.trim() !== "").length;
-  } catch {
-    return 0;
-  }
+async function aggregateIn(dataDir: string) {
+  return await readTaskAggregate(dataDir, TASK_ID);
+}
+
+async function revisionCount(dataDir: string): Promise<number> {
+  let count = 0;
+  await createTaskStore({ dataDir }).readRevisions(TASK_ID, () => {
+    count += 1;
+  });
+  return count;
 }
 
 describe("在线备份的一致性边界", () => {
@@ -87,7 +90,6 @@ describe("在线备份的一致性边界", () => {
     await entered.promise;
     expect(service.isRunning()).toBe(true);
 
-    const revisionsFile = taskRevisionsPath(dataDir, TASK_ID);
     const writePromise = store.tasks.commit(TASK_ID, {
       expectedVersion: 1,
       changeKind: "progress",
@@ -96,13 +98,12 @@ describe("在线备份的一致性边界", () => {
         draft.task.progress = 90;
       },
     });
-    // 暂停期内提交：写请求必须停在闸门前，不能进入复制快照。
     const outcome = await Promise.race([
       writePromise.then(() => "written" as const),
       delay(60).then(() => "blocked" as const),
     ]);
     expect(outcome).toBe("blocked");
-    expect(await lineCount(revisionsFile)).toBe(1);
+    expect(await revisionCount(dataDir)).toBe(1);
 
     release.resolve();
     const result = await backupPromise;
@@ -111,36 +112,29 @@ describe("在线备份的一致性边界", () => {
     expect(written.task.progress).toBe(90);
     expect(service.isRunning()).toBe(false);
 
-    const backupCurrent = JSON.parse(
-      await readFile(path.join(result.backupDir, "tasks", TASK_ID, "current.json"), "utf8"),
-    ) as { taskVersion: number; task: { progress: number } };
-    expect(backupCurrent.taskVersion).toBe(1);
-    expect(backupCurrent.task.progress).toBe(20);
-    expect(await lineCount(path.join(result.backupDir, "tasks", TASK_ID, "revisions.jsonl"))).toBe(1);
-    expect(await lineCount(revisionsFile)).toBe(2);
+    const backupAggregate = await aggregateIn(result.backupDir);
+    expect(backupAggregate?.taskVersion).toBe(1);
+    expect(backupAggregate?.task.progress).toBe(20);
+    expect(await revisionCount(result.backupDir)).toBe(1);
+    expect(await revisionCount(dataDir)).toBe(2);
   });
 
-  it("快照排除 locks/tmp/backups 与原子写、尾部恢复中间文件", async () => {
+  it("快照只含 ztask.db 与报告，不复制 locks/tmp/backups", async () => {
     const dataDir = await newDataDir();
     const store = await seedDataDir(dataDir);
     await writeFile(path.join(dataDir, "locks", ".ztask-lock"), "stale-lock", "utf8");
     await writeFile(path.join(dataDir, "tmp", "leftover.txt"), "leftover", "utf8");
     await mkdir(path.join(dataDir, "backups", "previous"), { recursive: true });
     await writeFile(path.join(dataDir, "backups", "previous", "backup.json"), "{}", "utf8");
-    await writeFile(path.join(dataDir, "tasks", TASK_ID, ".ztask-tmp-abc"), "partial", "utf8");
-    await writeFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl.corrupt-20260101"), "junk", "utf8");
 
     const result = await serviceFor(store, dataDir).create();
     const files = (await listDataDirFiles(result.backupDir)).map((file) => file.path);
 
-    expect(files).toContain("manifest.json");
-    expect(files).toContain(`tasks/${TASK_ID}/current.json`);
-    expect(files).toContain(`members/${"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}.json`);
+    expect(files).toEqual(["ztask.db"]);
     expect(files.some((entry) => /^(locks|tmp|backups)\//.test(entry))).toBe(false);
-    expect(files.some((entry) => entry.includes(".ztask-tmp-") || entry.includes(".corrupt-"))).toBe(false);
+    await expect(stat(path.join(result.backupDir, "backup.json"))).resolves.toBeTruthy();
     await expect(stat(path.join(result.backupDir, "locks"))).rejects.toThrow();
-    // 报告的文件数就是快照里实际的数据文件数（不含 backup.json 自身）。
-    expect(result.report.files).toBe(files.length);
+    expect(result.report.files).toBe(1);
   });
 
   it("报告字段齐全、目录名带 UTC 时间戳、backup.json 与返回报告一致", async () => {
@@ -163,12 +157,12 @@ describe("在线备份的一致性边界", () => {
       dataDir,
       excluded: ["locks", "tmp", "backups", ".ztask-lock"],
       validation: { ok: true, issues: [] },
+      schemaVersion: 1,
     });
-    expect(result.report.files).toBeGreaterThan(0);
+    expect(result.report.files).toBe(1);
     expect(result.report.bytes).toBeGreaterThan(0);
-    // 快照里必须包含 manifest 与任务聚合（可用作恢复源）。
-    await expect(stat(path.join(result.backupDir, "manifest.json"))).resolves.toBeTruthy();
-    await expect(stat(path.join(result.backupDir, "tasks", TASK_ID, "revisions.jsonl"))).resolves.toBeTruthy();
+    expect(result.report.tables?.task_revisions).toBeGreaterThanOrEqual(1);
+    await expect(stat(path.join(result.backupDir, "ztask.db"))).resolves.toBeTruthy();
   });
 });
 
@@ -190,7 +184,6 @@ describe("原子发布与失败清理", () => {
     expect(tmpLeftovers).toEqual([]);
     expect(service.isRunning()).toBe(false);
 
-    // 失败路径必须 resume：写队列仍可正常工作。
     const committed = await store.tasks.commit(TASK_ID, {
       expectedVersion: 1,
       changeKind: "detail",
@@ -202,12 +195,13 @@ describe("原子发布与失败清理", () => {
     expect(committed.taskVersion).toBe(2);
   });
 
-  it("校验未通过：拒绝发布，备份目录保持为空", async () => {
+  it("数据库不可打开：拒绝发布，备份目录保持为空", async () => {
     const dataDir = await newDataDir();
     const store = await seedDataDir(dataDir);
-    await writeFile(taskCurrentPath(dataDir, TASK_ID), "{ not-json", "utf8");
+    await store.close();
+    await writeFile(path.join(dataDir, "ztask.db"), "not a sqlite database", "utf8");
 
-    await expect(serviceFor(store, dataDir).create()).rejects.toThrow(/校验未通过/);
+    await expect(serviceFor(store, dataDir).create()).rejects.toThrow();
     expect(await readdir(path.join(dataDir, "backups"))).toEqual([]);
   });
 });
@@ -248,8 +242,8 @@ describe("管理端备份端点", () => {
       expect(path.dirname(body.backupDir)).toBe(path.join(dataDir, "backups"));
       expect(path.basename(body.backupDir)).toMatch(/^[0-9T:.-]+Z-[0-9a-f-]{36}$/);
       await expect(stat(path.join(body.backupDir, "backup.json"))).resolves.toBeTruthy();
+      await expect(stat(path.join(body.backupDir, "ztask.db"))).resolves.toBeTruthy();
 
-      // LAN listener 上 Admin 守卫优先：备份端点同样 403，不会触发备份。
       const lanApp = await buildApp(config, { store, version: APP_VERSION, listenerKind: "lan" });
       try {
         const denied = await lanApp.inject({ method: "POST", url: "/api/v1/admin/maintenance/backup" });

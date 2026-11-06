@@ -8,7 +8,7 @@
 - Admin API 仅允许 loopback 管理员；Share API 除 `POST /share/session` 外均要求有效成员会话。LAN listener 上的 Admin API 一律 403。
 - 实体 ID 为 UUID 字符串；时间戳为 UTC RFC 3339；`dueDate` 为 `YYYY-MM-DD`。
 - `progress` 为 0–100 整数；`importance` 为 `high | mid | low`。
-- 列表默认只返回未删除实体；任务列表超过约定上限后使用 cursor 分页，`nextCursor=null` 表示没有下一页。列表稳定按 `createdAt ASC,id ASC` 排序，cursor 是服务端签发的 opaque 最后位置标记，不直接暴露 SQL/文件偏移；新增任务只影响其后页，不使用可能跳号的页码。
+- 列表默认只返回未删除实体；任务列表超过约定上限后使用 cursor 分页，`nextCursor=null` 表示没有下一页。列表稳定按 `createdAt ASC,id ASC` 排序，cursor 是服务端签发的 opaque 最后位置标记，不直接暴露 SQL 或数据库偏移；新增任务只影响其后页，不使用可能跳号的页码。
 - 请求 schema 默认拒绝未声明字段。params 中的 `{id}`、`{subtaskId}` 都是路径参数；query 参数在对应接口单独列出。
 - 更新任务必须携带 `version`。version 是主任务聚合的并发版本；小任务 DTO 返回所属主任务聚合的同一版本，任何小任务或分配变化都会递增它。
 - version 冲突返回 409 与最新可见实体；成员不可见任务统一 404；成员调用 Admin API 使用 403。
@@ -292,7 +292,7 @@ NetworkState = {
 - Body：无。
 - Response 204：空。
 
-不级联重写任务文件；历史 assignment 和 actorName 保留。
+不级联重写任务行；历史 assignment 和 actorName 保留。
 
 ### 4.5 `POST /admin/members/{id}/share-link`
 
@@ -381,7 +381,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - Body：无。
 - Response 200：`{ start, end, timeZone, items: TaskChange[] }`。
 
-历史窗口统一为 `[start,end)`：before 取 `<start` 的最后快照，after 取 `<end` 的最后快照。default 由服务端按 manifest 时区计算昨天 00:00 至 now；custom 的 endDate 解析为次日 00:00 以包含结束日全天。响应中的 start/end 是实际解析后的 UTC 边界。历史候选包含 active 与软删除任务；成员权限采用“当前相关任务的历史”，按 after/delete 快照 assignment 与当前 active member 计算。
+历史窗口统一为 `[start,end)`：before 取 `<start` 的最后快照，after 取 `<end` 的最后快照。default 由服务端按 `meta.time_zone` 计算昨天 00:00 至 now；custom 的 endDate 解析为次日 00:00 以包含结束日全天。响应中的 start/end 是实际解析后的 UTC 边界。历史候选包含 active 与软删除任务；成员权限采用“当前相关任务的历史”，按 after/delete 快照 assignment 与当前 active member 计算。
 
 ### 5.4 `POST /admin/maintenance/backup`
 
@@ -390,7 +390,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - Body：无。
 - Response 201：`{ backupDir, report }`。
 
-服务端暂停写队列并等待在途写入，复制数据目录到临时目录（排除 `locks/`、`tmp/`、`backups/`），校验 manifest、JSON、JSONL checksum、revision tip 与引用关系后写 `backup.json`（`formatVersion/appVersion/createdAt/timeZone/dataDir/files/bytes/excluded/validation`），再原子发布到 `<dataDir>/backups/<UTC 时间戳>-<uuid>/`。并发备份返回 409 `BACKUP_IN_PROGRESS`。恢复与诊断只通过 CLI 离线执行，不暴露 HTTP。
+服务端暂停写队列并等待在途事务，用 `VACUUM INTO` 生成一致性数据库快照，校验 schema 版本、`integrity_check`、外键、revision checksum 与引用关系后写 `backup.json`（`formatVersion/appVersion/createdAt/timeZone/dataDir/files/bytes/excluded/validation`，并增加 `schemaVersion` 与表行数摘要），再原子发布到 `<dataDir>/backups/<UTC 时间戳>-<uuid>/`。并发备份返回 409 `BACKUP_IN_PROGRESS`。恢复与诊断只通过 CLI 离线执行，不暴露 HTTP。
 
 ## 6. 成员分享域
 
@@ -558,7 +558,7 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 | 429 | `SHARE_EXCHANGE_RATE_LIMITED` | 令牌交换过频 |
 | 500 | `INTERNAL_ERROR` | 已脱敏的内部异常 |
 
-错误消息必须可操作：400 定位到字段并给出中文修改建议（AJV 英文消息在边界翻译），500 不得只返回“内部错误”，而应按存储损坏、条目不存在、目录不可写、磁盘不足等分类说明原因和下一步动作；无法分类时返回请求编号并提示重试或反馈。服务端日志按同一 `requestId` 记录方法、路由模板、错误码与堆栈。响应绝不包含数据目录路径、token 或内部文件结构。
+错误消息必须可操作：400 定位到字段并给出中文修改建议（AJV 英文消息在边界翻译），500 不得只返回“内部错误”，而应按存储损坏、条目不存在、目录不可写、磁盘不足等分类说明原因和下一步动作；无法分类时返回请求编号并提示重试或反馈。服务端日志按同一 `requestId` 记录方法、路由模板、错误码与堆栈。响应绝不包含数据目录路径、token 或数据库内部结构。
 
 小任务写入载荷的结构错误（`subtasks` 非对象、`create/update` 非数组、`deleteIds` 非字符串数组、条目为 `null`）属于 400 `INVALID_REQUEST`，必须先于聚合写入拒绝，不能因为遍历抛 `TypeError` 而落入 500。
 
@@ -567,8 +567,8 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 - 每个 route 验证 method、URL、params、body、成功 response schema 和额外字段拒绝。
 - 管理员/成员/匿名对所有端点跑权限矩阵，而非只测 happy path。
 - 两个成员固定 fixture：A 的任务绝不出现在 B 的任一响应；B 的 ID 对 A 返回 404；A 不能访问成员管理路由或目录端点，相关任务中的成员摘要不含分享凭证。
-- 所有管理员 mutation 及成员进度/详情/小任务 mutation 验证 version 缺失/过期/最新；collaborator、第三层任务和主任务其他字段写请求不能产生文件变化。
+- 所有管理员 mutation 及成员进度/详情/小任务 mutation 验证 version 缺失/过期/最新；collaborator、第三层任务和主任务其他字段写请求不能产生数据库变化。
 - 删除主任务、小任务分别验证 version 冲突；小任务删除响应必须是更新后的父聚合。
 - `GET /share/tasks` 分别验证 home 的 owned/collaborated 与 tracker 的 items/nextCursor，两个视图都不能泄露无关任务。
-- 网络端点验证非本机/wildcard IP、bind 失败回滚、network.json 状态和 shareBaseUrl 更新。
+- 网络端点验证非本机/wildcard IP、bind 失败回滚、network_config 状态和 shareBaseUrl 更新。
 - OpenAPI diff 进入 CI；不兼容变更必须升级 `/api/v2` 或明确迁移，不在 v1 中静默改字段含义。

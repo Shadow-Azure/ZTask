@@ -12,7 +12,7 @@ ZTask 的安装路径一直面向贡献者：要 clone 仓库、装 pnpm、跑 `
 
 新增 workspace 包 `apps/ztask`（发布名 `ztask`），以 esbuild 把 `@ztask/cli`、`@ztask/server`、`@ztask/shared` 的构建产物打成单个 ESM 入口，第三方依赖（fastify、@fastify/*、commander）保持 external 走 package.json 的 dependencies；`apps/web/dist` 复制到包内 `dist/web`。CLI 的 Web 目录解析同时接受“包内 `dist/web`”与“monorepo `apps/web/dist`”，版本从包内 `package.json` 读取，保证两种布局一致。
 
-发布由两条流水线承担：PR/main 的 CI 增加打包安装冒烟（`npm pack` → clean 目录安装 → 启动 → 健康检查与 SPA 断言）；推送 `v*` 标签或手动触发时运行发布工作流，校验 tag 与包版本一致，复用测试、构建与冒烟后先创建附带 tarball 的 GitHub Release；配置了仓库 secret `NPM_TOKEN` 时再执行 `npm publish --provenance`，未配置则跳过 npm 并保留可安装的 Release 资产。
+发布由两条流水线承担：PR/main 的 CI 增加打包安装冒烟（`npm pack` → clean 目录安装 → 启动 → 健康检查与 SPA 断言）；推送 `v*` 标签或手动触发时运行发布工作流，校验 tag 与包版本一致，复用测试、构建与冒烟后先创建附带 tarball 的 GitHub Release；配置了仓库 secret `NPM_TOKEN` 时再执行 `npm publish --provenance`，未配置则跳过 npm 并保留可安装的 Release 资产；配置 token 后重跑同一版本可补齐 npm 发布，Release 创建是幂等的。
 
 ## Alternatives considered
 

@@ -5,7 +5,7 @@
 ```yaml flow
 kind: issue
 milestone: m13
-priority: P1
+priority: P0
 status: in-progress
 scope:
   - apps/ztask/**
@@ -35,6 +35,8 @@ github:
 ```
 
 ## 背景
+
+用户已明确要求先交付单包发布；它当前是进行中的发布阻塞项，因此按 P0 推进。原 P1 与已合并的 m14 同档冲突，会把已完成的 SQLite 迁移判成未解锁。
 
 ZTask 目前只能从仓库运行：安装要求 clone、pnpm 与 `pnpm build`，CLI 的 Web 静态目录写死为 monorepo 相对路径，版本号在 commander 里另写一份常量，仓库也没有任何发布流水线。用户已决定先做方案 A 的单包发布，最终把发布做成 CI 流水线。
 

@@ -1,32 +1,37 @@
-import { mkdir, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   EntryNotFoundError,
   VersionConflictError,
+  canonicalJson,
   checksumOf,
-  createTaskStore,
+  initStore,
   readTaskAggregate,
+  type RevisionLine,
+  type TaskStoreHooks,
+  type ZtaskStore,
 } from "@ztask/server";
-import type { TaskStore } from "@ztask/server";
 
 const TASK_ID = "11111111-1111-4111-8111-111111111111";
+const FOLDER_ID = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+const MEMBER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const CLOCK = "2026-11-02T03:00:00.000Z";
 
 let dataDir: string;
 
 beforeEach(async () => {
   dataDir = await mkdtemp(path.join(tmpdir(), "ztask-taskspec-"));
-  await mkdir(path.join(dataDir, "tasks"), { recursive: true });
 });
 
 afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
-function baseTask() {
+function rawTask() {
   return {
-    folderId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+    folderId: FOLDER_ID,
     parentId: null,
     description: "任务树组件重构",
     progress: 10,
@@ -38,202 +43,270 @@ function baseTask() {
   };
 }
 
+function baseTask(overrides: Partial<ReturnType<typeof rawTask>> = {}) {
+  return { ...rawTask(), ...overrides };
+}
+
 function actor() {
   return { kind: "admin" as const, memberId: null, name: "管理员" };
 }
 
-async function makeStore(overrides: Partial<ConstructorParameters<typeof createTaskStore>[0]> = {}): Promise<TaskStore> {
-  return createTaskStore({ dataDir, clock: () => new Date("2026-11-02T03:00:00.000Z"), ...overrides });
+async function makeStore(hooks?: TaskStoreHooks): Promise<ZtaskStore> {
+  const store = await initStore({
+    dataDir,
+    applicationVersion: "0.1.0",
+    clock: () => new Date(CLOCK),
+    ...(hooks === undefined ? {} : { hooks }),
+  });
+  await store.folders.put(FOLDER_ID, { id: FOLDER_ID, parentId: null, name: "任务夹", position: 0 });
+  await store.members.put(MEMBER_ID, {
+    id: MEMBER_ID,
+    name: "陈晨",
+    role: "前端工程师",
+    color: "#2f6fe0",
+    archivedAt: null,
+  });
+  return store;
+}
+
+async function revisionsOf(store: ZtaskStore, taskId = TASK_ID): Promise<RevisionLine[]> {
+  const lines: RevisionLine[] = [];
+  await store.tasks.readRevisions(taskId, (line) => {
+    lines.push(line);
+  });
+  return lines;
 }
 
 describe("createAggregate", () => {
-  it("发布 taskVersion=1 的 current，并落一条 create revision", async () => {
+  it("创建 version=1 聚合与一条 create revision", async () => {
     const store = await makeStore();
-    const aggregate = await store.createAggregate({
+    const aggregate = await store.tasks.createAggregate({
       taskId: TASK_ID,
       task: baseTask(),
       subtasks: [],
-      assignments: [{ taskId: TASK_ID, memberId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", kind: "owner" }],
+      assignments: [{ taskId: TASK_ID, memberId: MEMBER_ID, kind: "owner" }],
       actor: actor(),
     });
     expect(aggregate.taskVersion).toBe(1);
-    expect(aggregate.revisionTip?.changeKind).toBe("create");
-    expect(aggregate.revisionTip?.taskVersion).toBe(1);
+    expect(aggregate.revisionTip.changeKind).toBe("create");
 
     const onDisk = await readTaskAggregate(dataDir, TASK_ID);
-    expect(onDisk?.taskVersion).toBe(1);
     expect(onDisk?.task.description).toBe("任务树组件重构");
-
-    const revFiles = await readdir(path.join(dataDir, "tasks", TASK_ID));
-    expect(revFiles.sort()).toEqual(["current.json", "revisions.jsonl"]);
-    const revRaw = await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8");
-    const lines = revRaw.trim().split("\n");
+    const lines = await revisionsOf(store);
     expect(lines.length).toBe(1);
-    const line = JSON.parse(lines[0]!) as Record<string, unknown>;
-    expect(line.changeKind).toBe("create");
-    expect(line.taskVersion).toBe(1);
-    expect((line.actor as Record<string, unknown>).kind).toBe("admin");
+    const [line] = lines;
+    expect(line?.changeKind).toBe("create");
+    expect(line?.actor.kind).toBe("admin");
+    const { checksum, ...rest } = line!;
+    expect(checksumOf(rest)).toBe(checksum);
+    await store.close();
   });
 
-  it("taskId 非法（路径穿越/非 UUID）直接拒绝", async () => {
+  it("非法 taskId 直接拒绝", async () => {
     const store = await makeStore();
-    await expect(store.createAggregate({ taskId: "../evil", task: baseTask(), subtasks: [], assignments: [], actor: actor() })).rejects.toThrow();
-    await expect(readTaskAggregate(dataDir, "../evil")).rejects.toThrow();
-  });
-
-  it("重复创建同一聚合报错，不产生第二条 create", async () => {
-    const store = await makeStore();
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
     await expect(
-      store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() }),
+      store.tasks.createAggregate({ taskId: "../evil", task: baseTask(), subtasks: [], assignments: [], actor: actor() }),
     ).rejects.toThrow();
-    const revRaw = await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8");
-    expect(revRaw.trim().split("\n").length).toBe(1);
+    await expect(readTaskAggregate(dataDir, "../evil")).rejects.toThrow();
+    await store.close();
+  });
+
+  it("重复创建同一聚合报错，不产生第二条 revision", async () => {
+    const store = await makeStore();
+    await store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
+    await expect(
+      store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() }),
+    ).rejects.toThrow();
+    expect((await revisionsOf(store)).length).toBe(1);
+    await store.close();
   });
 });
 
-describe("commit（乐观版本 + 队列内复查）", () => {
-  it("版本匹配：mutation 生效，版本递增，current 与 revision 同步", async () => {
+describe("commit", () => {
+  it("版本匹配时递增版本并写入完整 revision", async () => {
     const store = await makeStore();
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
+    await store.tasks.createAggregate({
+      taskId: TASK_ID,
+      task: baseTask(),
+      subtasks: [],
+      assignments: [{ taskId: TASK_ID, memberId: MEMBER_ID, kind: "owner" }],
+      actor: actor(),
+    });
 
-    const updated = await store.commit(TASK_ID, {
+    const updated = await store.tasks.commit(TASK_ID, {
       expectedVersion: 1,
       changeKind: "progress",
-      actor: actor(),
+      actor: { kind: "member", memberId: MEMBER_ID, name: "陈晨" },
       mutate: (draft) => {
-        draft.task.progress = 70;
+        draft.task.progress = 40;
+        draft.task.detailText = "更新后的详情";
       },
     });
     expect(updated.taskVersion).toBe(2);
-    expect(updated.task.progress).toBe(70);
-    expect(updated.revisionTip?.changeKind).toBe("progress");
+    expect(updated.task.progress).toBe(40);
+    expect(updated.revisionTip.changeKind).toBe("progress");
 
-    const onDisk = await readTaskAggregate(dataDir, TASK_ID);
-    expect(onDisk?.taskVersion).toBe(2);
-    const revRaw = await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8");
-    const lines = revRaw.trim().split("\n");
-    expect(lines.length).toBe(2);
-    const second = JSON.parse(lines[1]!) as Record<string, unknown>;
-    const { checksum, ...rest } = second;
-    expect(checksum).toBe(checksumOf(rest));
+    const lines = await revisionsOf(store);
+    expect(lines.map((line) => line.taskVersion)).toEqual([1, 2]);
+    expect(lines[1]?.actor).toEqual({ kind: "member", memberId: MEMBER_ID, name: "陈晨" });
+    expect(lines[1]?.snapshot.task.detailText).toBe("更新后的详情");
+    await store.close();
   });
 
-  it("版本过期：抛 VersionConflictError 携带最新版本，历史不重复、current 不变", async () => {
+  it("过期 expectedVersion 返回 VersionConflictError，版本不变", async () => {
     const store = await makeStore();
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
-    await store.commit(TASK_ID, {
-      expectedVersion: 1, changeKind: "progress", actor: actor(),
-      mutate: (draft) => { draft.task.progress = 50; },
-    });
-
-    const revBefore = await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8");
-    let conflict: VersionConflictError | undefined;
-    try {
-      await store.commit(TASK_ID, {
-        expectedVersion: 1, changeKind: "progress", actor: actor(),
-        mutate: (draft) => { draft.task.progress = 99; },
-      });
-    } catch (cause) {
-      conflict = cause as VersionConflictError;
-    }
-    expect(conflict).toBeInstanceOf(VersionConflictError);
-    expect(conflict?.latestTaskVersion).toBe(2);
-
-    expect(await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8")).toBe(revBefore);
-    expect((await readTaskAggregate(dataDir, TASK_ID))?.task.progress).toBe(50);
-  });
-
-  it("并发提交同聚合：只有一个成功", async () => {
-    const store = await makeStore();
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
-    const results = await Promise.allSettled([
-      store.commit(TASK_ID, { expectedVersion: 1, changeKind: "progress", actor: actor(), mutate: (d) => { d.task.progress = 30; } }),
-      store.commit(TASK_ID, { expectedVersion: 1, changeKind: "progress", actor: actor(), mutate: (d) => { d.task.progress = 60; } }),
-    ]);
-    const fulfilled = results.filter((r) => r.status === "fulfilled");
-    const rejected = results.filter((r) => r.status === "rejected");
-    expect(fulfilled.length).toBe(1);
-    expect(rejected[0]?.reason).toBeInstanceOf(VersionConflictError);
-    const final = await readTaskAggregate(dataDir, TASK_ID);
-    expect(final?.taskVersion).toBe(2);
-    const revRaw = await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8");
-    expect(revRaw.trim().split("\n").length).toBe(2);
-  });
-
-  it("mutate 校验失败不写任何文件", async () => {
-    const store = await makeStore();
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
-    const before = await readTaskAggregate(dataDir, TASK_ID);
+    await store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
     await expect(
-      store.commit(TASK_ID, {
-        expectedVersion: 1, changeKind: "update", actor: actor(),
-        mutate: () => { throw new Error("校验失败"); },
+      store.tasks.commit(TASK_ID, {
+        expectedVersion: 0,
+        changeKind: "progress",
+        actor: actor(),
+        mutate: (draft) => {
+          draft.task.progress = 99;
+        },
       }),
-    ).rejects.toThrow("校验失败");
-    expect(await readTaskAggregate(dataDir, TASK_ID)).toEqual(before);
-    const revRaw = await readFile(path.join(dataDir, "tasks", TASK_ID, "revisions.jsonl"), "utf8");
-    expect(revRaw.trim().split("\n").length).toBe(1);
+    ).rejects.toBeInstanceOf(VersionConflictError);
+    expect((await readTaskAggregate(dataDir, TASK_ID))?.task.progress).toBe(10);
+    await store.close();
+  });
+
+  it("无实际变化不写 revision", async () => {
+    const store = await makeStore();
+    await store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
+    const unchanged = await store.tasks.commit(TASK_ID, {
+      expectedVersion: 1,
+      changeKind: "update",
+      actor: actor(),
+      mutate: () => undefined,
+    });
+    expect(unchanged.taskVersion).toBe(1);
+    expect((await revisionsOf(store)).length).toBe(1);
+    await store.close();
+  });
+
+  it("并发提交同聚合只有一个成功", async () => {
+    const store = await makeStore();
+    await store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
+    const results = await Promise.allSettled([
+      store.tasks.commit(TASK_ID, {
+        expectedVersion: 1,
+        changeKind: "progress",
+        actor: actor(),
+        mutate: (draft) => {
+          draft.task.progress = 30;
+        },
+      }),
+      store.tasks.commit(TASK_ID, {
+        expectedVersion: 1,
+        changeKind: "progress",
+        actor: actor(),
+        mutate: (draft) => {
+          draft.task.progress = 60;
+        },
+      }),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled").length).toBe(1);
+    expect(results.find((result) => result.status === "rejected")?.reason).toBeInstanceOf(VersionConflictError);
+    expect((await readTaskAggregate(dataDir, TASK_ID))?.taskVersion).toBe(2);
+    expect((await revisionsOf(store)).length).toBe(2);
+    await store.close();
+  });
+
+  it("任务不存在返回 EntryNotFoundError", async () => {
+    const store = await makeStore();
+    await expect(
+      store.tasks.commit(TASK_ID, {
+        expectedVersion: 1,
+        changeKind: "update",
+        actor: actor(),
+        mutate: () => undefined,
+      }),
+    ).rejects.toBeInstanceOf(EntryNotFoundError);
+    await store.close();
   });
 });
 
-describe("fault injection（故障注入缝）", () => {
-  it("afterAppend 注入失败：current 保持旧状态（append 已 fsync）", async () => {
-    let failNextAppend = false;
+describe("事务回滚", () => {
+  it("afterAppend 抛错时 revision 与当前状态都不落库", async () => {
     const store = await makeStore({
-      hooks: {
-        afterAppend: () => {
-          if (failNextAppend) throw new Error("injected-after-append");
-        },
+      afterAppend: () => {
+        throw new Error("injected afterAppend");
       },
     });
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
-    failNextAppend = true;
     await expect(
-      store.commit(TASK_ID, { expectedVersion: 1, changeKind: "progress", actor: actor(), mutate: (d) => { d.task.progress = 80; } }),
-    ).rejects.toThrow("injected-after-append");
-    const onDisk = await readTaskAggregate(dataDir, TASK_ID);
-    expect(onDisk?.taskVersion).toBe(1);
-    expect(onDisk?.task.progress).toBe(10);
+      store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() }),
+    ).rejects.toThrow("injected afterAppend");
+    expect(await readTaskAggregate(dataDir, TASK_ID)).toBeNull();
+    await store.close();
   });
 
-  it("afterPublish 注入失败：current 已是新状态（恢复责任在启动重建）", async () => {
-    let failNextPublish = false;
+  it("afterPublish 抛错时整个提交回滚", async () => {
+    const setup = await makeStore();
+    await setup.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
     const store = await makeStore({
-      hooks: {
-        afterPublish: () => {
-          if (failNextPublish) throw new Error("injected-after-publish");
-        },
+      afterPublish: () => {
+        throw new Error("injected afterPublish");
       },
     });
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
-    failNextPublish = true;
     await expect(
-      store.commit(TASK_ID, { expectedVersion: 1, changeKind: "progress", actor: actor(), mutate: (d) => { d.task.progress = 90; } }),
-    ).rejects.toThrow("injected-after-publish");
-    expect((await readTaskAggregate(dataDir, TASK_ID))?.task.progress).toBe(90);
+      store.tasks.commit(TASK_ID, {
+        expectedVersion: 1,
+        changeKind: "progress",
+        actor: actor(),
+        mutate: (draft) => {
+          draft.task.progress = 80;
+        },
+      }),
+    ).rejects.toThrow("injected afterPublish");
+    expect((await readTaskAggregate(dataDir, TASK_ID))?.task.progress).toBe(10);
+    expect((await revisionsOf(setup)).length).toBe(1);
+    await store.close();
+    await setup.close();
   });
 });
 
 describe("readRevisions", () => {
-  it("按顺序流出全部 revision（含 checksum 校验）", async () => {
+  it("按 taskVersion 顺序返回且校验 checksum", async () => {
     const store = await makeStore();
-    await store.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
-    await store.commit(TASK_ID, { expectedVersion: 1, changeKind: "detail", actor: actor(), mutate: (d) => { d.task.detailText = "新详情"; } });
-    const versions: number[] = [];
-    const kinds: string[] = [];
-    await store.readRevisions(TASK_ID, (record) => {
-      versions.push(record.taskVersion as number);
-      kinds.push(record.changeKind as string);
+    await store.tasks.createAggregate({ taskId: TASK_ID, task: baseTask(), subtasks: [], assignments: [], actor: actor() });
+    await store.tasks.commit(TASK_ID, {
+      expectedVersion: 1,
+      changeKind: "progress",
+      actor: actor(),
+      mutate: (draft) => {
+        draft.task.progress = 60;
+      },
     });
-    expect(versions).toEqual([1, 2]);
-    expect(kinds).toEqual(["create", "detail"]);
+    const lines = await revisionsOf(store);
+    expect(lines.map((line) => line.taskVersion)).toEqual([1, 2]);
+    for (const line of lines) {
+      const { checksum, ...rest } = line;
+      expect(checksumOf(rest)).toBe(checksum);
+    }
+    await store.close();
   });
 
-  it("聚合不存在时 readRevisions 抛 EntryNotFoundError", async () => {
+  it("不存在的聚合返回 EntryNotFoundError", async () => {
     const store = await makeStore();
-    await expect(store.readRevisions("22222222-2222-4222-8222-222222222222", () => undefined)).rejects.toBeInstanceOf(
-      EntryNotFoundError,
+    await expect(store.tasks.readRevisions(TASK_ID, () => undefined)).rejects.toBeInstanceOf(EntryNotFoundError);
+    await store.close();
+  });
+});
+
+describe("canonical snapshot", () => {
+  it("快照与 TaskAggregate 结构一致", async () => {
+    const store = await makeStore();
+    const aggregate = await store.tasks.createAggregate({
+      taskId: TASK_ID,
+      task: baseTask(),
+      subtasks: [],
+      assignments: [{ taskId: TASK_ID, memberId: MEMBER_ID, kind: "owner" }],
+      actor: actor(),
+    });
+    const [line] = await revisionsOf(store);
+    expect(canonicalJson(line!.snapshot)).toBe(
+      canonicalJson({ task: aggregate.task, subtasks: aggregate.subtasks, assignments: aggregate.assignments }),
     );
+    await store.close();
   });
 });

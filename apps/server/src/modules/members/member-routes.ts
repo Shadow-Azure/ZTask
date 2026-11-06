@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { readTaskAggregate } from "../../storage/task-store.js";
+import { readAllTaskAggregates } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
 import type { ShareLinkService } from "../share/share-links.js";
 import { createMemberService } from "./member-service.js";
@@ -15,22 +15,8 @@ export async function memberRoutes(
 ): Promise<void> {
   const { service } = createMemberService({ dataDir: options.dataDir, shareLinks: options.shareLinkService });
 
-  const uuidLike = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   async function loadAggregates(): Promise<TaskAggregate[]> {
-    const { readdir } = await import("node:fs/promises");
-    const dir = `${options.dataDir}/tasks`;
-    let ids: string[] = [];
-    try {
-      ids = await readdir(dir);
-    } catch {
-      ids = [];
-    }
-    const aggregates: TaskAggregate[] = [];
-    for (const taskId of ids.filter((name) => uuidLike.test(name))) {
-      const aggregate = await readTaskAggregate(options.dataDir, taskId);
-      if (aggregate) aggregates.push(aggregate);
-    }
-    return aggregates;
+    return await readAllTaskAggregates(options.dataDir);
   }
 
   app.get("/api/v1/admin/members", async () => ({

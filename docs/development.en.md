@@ -4,7 +4,7 @@ English | [中文](development.md)
 
 ## Environment
 
-- Node 22 and pnpm (v10); versions are pinned by `engines` and `packageManager`.
+- Node 22+ and pnpm (v10); versions are pinned by `engines` and `packageManager`.
 - On the first clone, run `pnpm install && pnpm install:hooks`. The installer also registers the fail-closed merge driver for `.i18n.yaml`.
 - Documentation and flow gates run offline; online flow verification requires an authenticated `gh`.
 
@@ -49,7 +49,7 @@ Hooks provide timely feedback; CI still owns exhaustive coverage.
 
 ## Single-package release
 
-`apps/ztask` is the published `ztask` package. After `pnpm build`, `pnpm package:smoke` installs it outside the repository. Push a `v<version>` tag matching the package version, or dispatch `Release`: it creates a GitHub Release with the tarball first, and publishes to npm only when `NPM_TOKEN` is configured, skipping npm otherwise. Confirm the package name and license before the first release. Install a Release tarball with `npm install -g <url>`; use `pnpm pack:ztask` to pack locally only.
+`apps/ztask` is the published `ztask` package. After `pnpm build`, `pnpm package:smoke` installs it outside the repository. Push a `v<version>` tag matching the package version, or dispatch `Release`: it creates a GitHub Release with the tarball first, and publishes to npm only when `NPM_TOKEN` is configured, skipping npm otherwise; configuring the token later and rerunning the same version fills in the npm publish. Confirm the package name and license before the first release. Install a Release tarball with `npm install -g <url>`; use `pnpm pack:ztask` to pack locally only.
 
 ## Flow and CI
 
