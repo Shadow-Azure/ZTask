@@ -26,15 +26,25 @@ ZTask keeps team progress in the team's own hands. A single command starts a loc
 
 ## Quick start
 
-Once the package is on npm, only Node 22 or newer is needed; no repository clone (installing the GitHub Release tarball is described in the [package README](apps/ztask/README.md)):
+Install the current release from [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases); Node.js 22 or newer is all you need, with no repository clone. The examples use `v0.1.0`; replace the version number for a newer release.
+
+Linux / macOS:
 
 ```sh
-npx ztask serve
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+ztask serve
 ```
 
-The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set.
+Windows (PowerShell or Command Prompt):
 
-For local development:
+```powershell
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+ztask serve
+```
+
+The admin UI is at `http://127.0.0.1:8123` by default; open it manually if the browser does not open, and press `Ctrl+C` to stop. Data lives in `~/.ztask` (`C:\Users\<username>\.ztask` on Windows) unless `--data-dir` or `ZTASK_HOME` is set.
+
+For local development (Node.js 22 and pnpm@10):
 
 ```sh
 pnpm install
@@ -43,7 +53,7 @@ pnpm build
 pnpm serve
 ```
 
-Node 22 and pnpm@10 are required. The admin UI is at `http://127.0.0.1:8123` by default and data lives in `~/.ztask` unless `--data-dir` is set; `pnpm dev` starts the workspace in parallel. See the [development guide](docs/development.en.md) for packaging and release.
+`pnpm dev` starts the workspace in parallel; see the [development guide](docs/development.en.md) for packaging and release.
 
 ## Documentation
 
