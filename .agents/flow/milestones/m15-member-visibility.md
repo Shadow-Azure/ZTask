@@ -6,7 +6,7 @@
 kind: milestone
 id: m15
 title: 阶段 15：成员链接全团队可见与负责人写边界
-status: planned
+status: done
 github:
   number: 17
   url: https://github.com/Shadow-Azure/ZTask/milestone/17

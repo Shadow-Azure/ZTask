@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/issues/m15-member-task-visibility.md
-m15-member-task-visibility.md: 24157e7c8f1d3c791ae16f82eb9c9ee3b2f5a26f
-m15-member-task-visibility.en.md: 234cba02647251528e4458f7911a2b12f9e73f71
+m15-member-task-visibility.md: 65249975409e849c9b71a28373f59a28149abd30
+m15-member-task-visibility.en.md: b935aafdf6deab36912c9129981be381d3bb72df
