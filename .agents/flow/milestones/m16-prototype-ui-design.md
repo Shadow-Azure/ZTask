@@ -6,7 +6,7 @@
 kind: milestone
 id: m16
 title: 阶段 15：原型 UI 与详细设计
-status: active
+status: done
 github:
   number: 16
   url: https://github.com/Shadow-Azure/ZTask/milestone/16
