@@ -8,9 +8,8 @@ import type {
 } from "@ztask/shared";
 import { createFolderService } from "../folders/folder-service.js";
 import { createMemberService } from "../members/member-service.js";
-import { isRelated, listTaskAggregates } from "../share/share-scope.js";
+import { listTaskAggregates } from "../share/share-scope.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
-import { ApiError } from "@ztask/shared";
 
 /** 统计桶键（05 §5.1–5.2）：done=100、gt50=51–99、lt50=0–50。 */
 export type DashboardBucketKey = "done" | "gt50" | "lt50";
@@ -18,13 +17,11 @@ export type DashboardBucketKey = "done" | "gt50" | "lt50";
 /**
  * 看板查询范围（05 §5.1–5.2/§6.12–6.13）：
  * - folderId 必填，统计该任务夹及全部后代；
- * - memberIds 仅管理员使用，只保留有效 owner 命中所选成员的任务；空 = 全部；
- * - shareMemberId 存在时先按 isRelated 限定到该成员相关任务，再与任务夹范围求交。
+ * - memberIds 只保留有效 owner 命中所选成员的任务；空 = 全部；
  */
 export interface DashboardScopeInput {
   folderId: string;
   memberIds?: string[];
-  shareMemberId?: string;
 }
 
 /** 看板服务：管理员与分享域共用同一口径（#21）。 */
@@ -132,7 +129,6 @@ function dueBucketOf(diff: number): DueBucketKey {
  * - 只统计未软删除的主任务，小任务不重复计数；
  * - 范围 = folderId 及全部后代任务夹；未知/空 folderId 得到空集，不 404；
  * - 管理员 memberIds 非空时只保留「未归档成员作为主任务 owner」命中所选集合的任务；
- * - 分享域先按 isRelated(aggregate, memberId) 限定，再与任务夹范围求交；
  * - dueDate=null 不进入预计完成分布（DTO 无未排期桶），且固定返回四桶。
  * @param deps 数据目录、manifest 时区与时钟。
  * @returns 看板服务。
@@ -185,27 +181,10 @@ export function createDashboardService(deps: DashboardServiceDeps): DashboardSer
     let items = (await listTaskAggregates(deps.dataDir)).filter(
       (aggregate) => aggregate.task.deletedAt === null && scope.has(aggregate.task.folderId),
     );
-    if (input.shareMemberId !== undefined) {
-      const memberId = input.shareMemberId;
-      items = items.filter((aggregate) => isRelated(aggregate, memberId).related);
-    }
     const selected = input.memberIds ?? [];
     if (selected.length > 0) {
       const active = await activeMemberIds();
       const wanted = new Set(selected.filter((memberId) => active.has(memberId)));
-      if (input.shareMemberId !== undefined) {
-        // 05 §6.12：成员域筛选只能缩小范围。可见成员集合来自「该成员相关任务」的
-        // 任意分配（owner/collaborator/小任务 owner），筛选之后再按 owner 口径统计；
-        // 选到可见的协作者会得到空集（合法的缩小），选到不可见成员才 400。
-        const visibleMembers = new Set(
-          items.flatMap((aggregate) => aggregate.assignments.map((assignment) => assignment.memberId)),
-        );
-        for (const memberId of selected) {
-          if (!visibleMembers.has(memberId)) {
-            throw new ApiError(400, "INVALID_REQUEST", "成员筛选超出当前可见范围");
-          }
-        }
-      }
       items = items.filter((aggregate) =>
         aggregate.assignments.some(
           (assignment) =>

@@ -45,7 +45,7 @@ apps/server/src/
     share/session.ts
     share/tasks.ts
     share/folders.ts          只读可见任务夹树
-    share/dashboard.ts        只读可见范围看板/历史
+    share/dashboard.ts        只读团队看板/历史
     health.ts
   services/
     folder-service.ts          树、防环、后代范围
@@ -73,7 +73,7 @@ apps/server/src/
   domain/
     models.ts                  内部实体、聚合与 principal 类型
     errors.ts                  NotFound/Conflict/Forbidden/Validation
-    policies.ts                owner/collaborator 与资源范围判断
+    policies.ts                owner 写权限与任务关系分组
   schemas/                     API 与持久化格式 schema（分开命名和版本）
   support/
     clock.ts                   可测试时钟、UTC 与服务时区边界
@@ -115,7 +115,7 @@ error handler
 
 `MemberPrincipal` 只包含 `memberId`、`sessionId`、`shareLinkId`。每次请求同时验证 session 未过期、member 未归档、session.shareLinkId 等于当前 active link.id。残留 session 记录本身不是有效授权。
 
-任务读取按 owner/collaborator 索引过滤，不可见任务返回 404。管理员任务列表的 `ownerIds` 只是展示筛选，不是权限范围：服务端先固定管理员全范围，再按主任务/子任务负责人裁剪结果，不能把过滤结果当作授权依据。share scope 不提供成员目录、成员管理或链接管理端点；事项跟踪只使用 GET。个人页额外提供 owner 主任务进度、完整详情和小任务管理写端点，service 必须再次校验 session.memberId 是该主任务 owner；collaborator 只读，主任务其他字段、任何任务分配和主任务删除仅管理员可操作。客户端不能通过 body/query 指定权限 memberId。
+任务读取对有效成员返回团队全部任务；非 owner 写返回 403，不存在/软删除任务或小任务 id 返回 404。管理员任务列表的 `ownerIds` 只是展示筛选，不是权限范围：服务端先固定管理员全范围，再按主任务/子任务负责人裁剪结果，不能把过滤结果当作授权依据。share scope 不提供成员目录、成员管理或链接管理端点；事项跟踪只使用 GET。个人页额外提供 owner 主任务进度、完整详情和小任务管理写端点，service 必须再次校验 session.memberId 是该主任务 owner；collaborator 与其他成员只读，主任务其他字段、任何任务分配和主任务删除仅管理员可操作。客户端不能通过 body/query 指定权限 memberId。
 
 ## 5. 写协议与版本
 

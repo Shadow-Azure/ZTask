@@ -7,7 +7,7 @@ import {
 } from "@ztask/shared";
 import { createFolderService } from "../folders/folder-service.js";
 import { createMemberService, type MemberFile } from "../members/member-service.js";
-import { listTaskAggregates, mainAssignmentRole } from "../share/share-scope.js";
+import { listTaskAggregates } from "../share/share-scope.js";
 import { createTaskStore, type TaskStore } from "../../storage/task-store.js";
 import type { RevisionLine, TaskAggregate } from "../../storage/task-types.js";
 
@@ -17,13 +17,11 @@ export type ChangesMode = "default" | "custom";
 /**
  * 历史查询输入（05 §5.3/§6.14）：
  * - folderId 必填，范围含全部后代任务夹与软删除任务；
- * - memberIds 只在可见范围内缩小（管理员按 after 快照 owner，成员域先校验可见性）；
- * - shareMemberId 存在时走成员域裁剪。
+ * - memberIds 按 after 快照 owner 过滤；空 = 全部；
  */
 export interface ChangesInput {
   folderId: string;
   memberIds?: string[];
-  shareMemberId?: string;
   mode: ChangesMode;
   /** custom 必填，YYYY-MM-DD。 */
   startDate?: string;
@@ -322,23 +320,6 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
     return { before, after };
   }
 
-  /**
-   * 判定成员是否出现在指定快照的**主任务** assignment 中。
-   *
-   * 只认主任务 owner/collaborator：仅小任务被分配者在读取侧拿不到主任务 detail
-   * （#18 的 toMemberTask 会抹除），历史若把主任务详情返回给他们就是越权泄露。
-   * 小任务级历史不在首版范围。
-   * @param line after 快照。
-   * @param taskId 聚合主任务 ID。
-   * @param memberId 成员 ID。
-   * @returns 是否命中主任务分配。
-   */
-  function snapshotMainRelated(line: RevisionLine, taskId: string, memberId: string): boolean {
-    return line.snapshot.assignments.some(
-      (assignment) => assignment.memberId === memberId && assignment.taskId === taskId,
-    );
-  }
-
   /** 快照中的主任务 owner 列表（历史 owner 口径，不看 current）。 */
   function ownerIdsOf(line: RevisionLine, taskId: string): string[] {
     return line.snapshot.assignments
@@ -433,34 +414,9 @@ export function createHistoryService(deps: HistoryServiceDeps): HistoryService {
 
       const activeMembers = await activeMemberIds();
       let visible = candidates;
-      if (input.shareMemberId !== undefined) {
-        // 05 §6.14 / 06 §7.3：当前主任务分配 ∪ after/delete 快照的主任务 assignment 命中当前成员。
-        // 仅小任务被分配者被排除：历史会返回主任务完整 detail，必须在入口就收紧（#18 同口径）。
-        const shareMemberId = input.shareMemberId;
-        visible = candidates.filter(
-          (candidate) =>
-            mainAssignmentRole(candidate.aggregate, shareMemberId) !== null ||
-            snapshotMainRelated(candidate.after, candidate.aggregate.taskId, shareMemberId),
-        );
-      }
-
       const selected = [...new Set(input.memberIds ?? [])];
       if (selected.length > 0) {
-        if (input.shareMemberId !== undefined) {
-          // 成员筛选只能在可见范围内缩小：出现在可见候选快照中的成员才可选，否则 400 不泄露范围。
-          const visibleMembers = new Set<string>();
-          for (const candidate of visible) {
-            for (const assignment of candidate.after.snapshot.assignments) {
-              visibleMembers.add(assignment.memberId);
-            }
-          }
-          for (const memberId of selected) {
-            if (!visibleMembers.has(memberId)) {
-              throw new ApiError(400, "INVALID_REQUEST", "成员筛选超出当前可见范围");
-            }
-          }
-        }
-        // 管理员与成员域都按 after/delete 快照的主任务 owner 过滤；归档/未知成员自然落空。
+        // 按 after/delete 快照的主任务 owner 过滤；归档/未知成员自然落空。
         const wanted = new Set(selected.filter((memberId) => activeMembers.has(memberId)));
         visible = visible.filter((candidate) =>
           ownerIdsOf(candidate.after, candidate.aggregate.taskId).some((memberId) => wanted.has(memberId)),

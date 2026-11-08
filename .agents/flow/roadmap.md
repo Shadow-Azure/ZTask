@@ -19,6 +19,7 @@ milestones:
   - m12
   - m13
   - m14
+  - m15
 ```
 
 ZTask 以本地 CLI、Web 服务和 SQLite 提供协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。

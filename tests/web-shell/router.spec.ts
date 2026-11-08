@@ -97,7 +97,10 @@ describe("路由与访问模式（03 §2）", () => {
 
     await vi.waitFor(() => expect(wrapper.text()).toContain("暂无你负责的任务"));
     expect(wrapper.text()).toContain("暂无你协作的任务");
-    expect(wrapper.findAll("button")).toHaveLength(1);
+    expect(wrapper.text()).toContain("暂无其他成员的任务");
+    // 三个分组折叠按钮 + 注销；没有管理员按钮。
+    expect(wrapper.findAll(".group-toggle")).toHaveLength(3);
+    expect(wrapper.findAll("button")).toHaveLength(4);
     wrapper.unmount();
   });
 

@@ -29,7 +29,7 @@
 | `/#/members` | 成员与分享链接管理 | admin API |
 | `/#/s/<token>` | 分享令牌交换，成功进入 `/#/s/home` | 匿名交换，之后 share API |
 | `/#/s/home` | 成员个人页：负责/协作任务，负责人管理进度/详情/小任务 | share API，owner 主任务进度/完整详情/小任务 |
-| `/#/s/tracker?...` | 成员只读事项跟踪，含看板与只读详情 | share GET API，相关任务范围 |
+| `/#/s/tracker?...` | 成员只读事项跟踪，含看板与只读详情 | share GET API，团队全部任务 |
 | `/#/share-invalid` | 失效链接页 | 无业务数据 |
 
 管理页中的 folder/tab/members/owners/task 是可分享、可后退的 UI 状态；owners 按成员 ID 稳定排序后写入 URL。搜索文本和临时浮窗草稿默认不进入 URL。成员 token 在交换成功后立即从地址栏移除，因此刷新后的路由为 `/#/s/home` 或 `/#/s/tracker`，由 Cookie 恢复会话；没有 `/#/s/members`。

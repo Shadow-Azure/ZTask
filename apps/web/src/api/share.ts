@@ -38,7 +38,7 @@ export const shareApi = {
   /** 个人页：我负责的/我协作的两组只读任务。 */
   home: () => requestJson<ShareHomeTasks>(`${API_PREFIX}/share/tasks`, { query: { view: "home" } }),
 
-  /** 只读事项跟踪：相关任务列表（可带任务夹/搜索/重要度/游标）。 */
+  /** 只读事项跟踪：团队全部任务列表（可带任务夹/搜索/重要度/游标）。 */
   tracker: (params: ShareTrackerParams = {}) =>
     requestJson<ShareTrackerTasks>(`${API_PREFIX}/share/tasks`, {
       query: {
@@ -50,10 +50,10 @@ export const shareApi = {
       },
     }),
 
-  /** 任务详情（不相关任务 404；主任务/小任务两种形态）。 */
+  /** 任务详情（不存在/软删除 404；主任务/小任务两种形态）。 */
   task: (id: string) => requestJson<ShareTaskDetail>(`${API_PREFIX}/share/tasks/${id}`),
 
-  /** 成员可见任务夹树（相关任务及祖先）。 */
+  /** 成员任务夹树（完整团队树，含空夹）。 */
   foldersTree: () => requestJson<{ tree: FolderTreeNode[] }>(`${API_PREFIX}/share/folders/tree`),
 
   /** 负责人保存主任务进度（05 §6.6）：progress 0–100 + 聚合 version。 */
@@ -82,7 +82,7 @@ export const shareApi = {
       body,
     }),
 
-  /** 成员看板三统计卡（05 §6.12）：只看当前成员相关任务，不能传 memberIds。 */
+  /** 成员看板三统计卡（05 §6.12）：统计团队全部任务，可按 owner 传 memberIds。 */
   dashboardSummary: (params: { folderId: string; memberIds?: string[] }) =>
     requestJson<DashboardSummary>(`${API_PREFIX}/share/dashboard/summary`, {
       query: {
@@ -91,7 +91,7 @@ export const shareApi = {
       },
     }),
 
-  /** 成员时间段历史变化（05 §6.14）：只能看当前相关任务的历史。 */
+  /** 成员时间段历史变化（05 §6.14）：看团队全部任务的历史。 */
   dashboardChanges: (params: {
     folderId: string;
     memberIds?: string[];

@@ -18,6 +18,7 @@ import type {
   DashboardSummary,
   ShareHomeTasks,
   ShareSessionResponse,
+  ShareTaskDetail,
   ShareTaskMutation,
   ShareTrackerTasks,
   Subtask,
@@ -306,36 +307,33 @@ describe("首版主流程（真实端口 + fetch）", () => {
       const homeA = await call<ShareHomeTasks>(shareBase, "/api/v1/share/tasks?view=home", { cookie: cookieA });
       expect(homeA.owned.map((entry) => entry.id)).toEqual([task.id]);
       expect(homeA.collaborated).toEqual([]);
+      expect(homeA.others.map((entry) => entry.id)).toEqual([privateTask.id]);
 
       const homeB = await call<ShareHomeTasks>(shareBase, "/api/v1/share/tasks?view=home", { cookie: cookieB });
       expect(homeB.collaborated.map((entry) => entry.id)).toEqual([task.id]);
       expect(homeB.owned.map((entry) => entry.id)).toEqual([privateTask.id]);
+      expect(homeB.others).toEqual([]);
 
-      // C 只被分配小任务：个人页两组都为空，但只读事项跟踪能看到父任务。
+      // C 只被分配小任务：个人页 owned/collaborated 为空，父任务归入 others；事项跟踪看到团队全部任务。
       const cookieC = await exchangeToken(shareBase, await issueLink(memberC.id));
       const homeC = await call<ShareHomeTasks>(shareBase, "/api/v1/share/tasks?view=home", { cookie: cookieC });
       expect(homeC.owned).toEqual([]);
       expect(homeC.collaborated).toEqual([]);
-      const trackerC = await call<ShareTrackerTasks>(shareBase, "/api/v1/share/tasks?view=tracker", {
-        cookie: cookieC,
-      });
-      expect(trackerC.items.map((entry) => entry.id)).toEqual([task.id]);
+      expect(new Set(homeC.others.map((entry) => entry.id))).toEqual(new Set([task.id, privateTask.id]));
 
-      const trackerA = await call<ShareTrackerTasks>(shareBase, "/api/v1/share/tasks?view=tracker", {
+      const allTaskIds = new Set([task.id, privateTask.id]);
+      for (const cookie of [cookieA, cookieB, cookieC]) {
+        const tracker = await call<ShareTrackerTasks>(shareBase, "/api/v1/share/tasks?view=tracker", { cookie });
+        expect(new Set(tracker.items.map((entry) => entry.id))).toEqual(allTaskIds);
+      }
+
+      // A 深链 B 的独占任务 → 全员可见，角色为 viewer。
+      const visible = await send<ShareTaskDetail>(shareBase, `/api/v1/share/tasks/${privateTask.id}`, {
         cookie: cookieA,
       });
-      expect(trackerA.items.map((entry) => entry.id)).toEqual([task.id]);
-      const trackerB = await call<ShareTrackerTasks>(shareBase, "/api/v1/share/tasks?view=tracker", {
-        cookie: cookieB,
-      });
-      expect(new Set(trackerB.items.map((entry) => entry.id))).toEqual(new Set([task.id, privateTask.id]));
-
-      // A 深链 B 的独占任务 → 404，不泄露存在性。
-      const forbidden = await send<unknown>(shareBase, `/api/v1/share/tasks/${privateTask.id}`, {
-        cookie: cookieA,
-      });
-      expect(forbidden.status).toBe(404);
-      expect(errorCode(forbidden.body)).toBe("TASK_NOT_FOUND");
+      expect(visible.status).toBe(200);
+      expect((visible.body as Task & { memberRole: string }).id).toBe(privateTask.id);
+      expect((visible.body as Task & { memberRole: string }).memberRole).toBe("viewer");
 
       // collaborator 只读：写进度 403（只有 owner 能改，05 §6.6）。
       const readOnly = await send<unknown>(shareBase, `/api/v1/share/tasks/${task.id}/progress`, {
@@ -398,7 +396,7 @@ describe("首版主流程（真实端口 + fetch）", () => {
         expect(memberAdminProbe.status).toBe(403);
       }
 
-      // ---- 6. 看板与历史（管理员 + 成员裁剪）----
+      // ---- 6. 看板与历史（管理员 + 成员全员可见）----
       const adminSummary = await call<DashboardSummary>(
         base,
         `/api/v1/admin/dashboard/summary?folderId=${rootFolder.id}`,
@@ -414,7 +412,7 @@ describe("首版主流程（真实端口 + fetch）", () => {
         { cookie: cookieA },
       );
       expect(memberSummary.buckets.gt50.total).toBe(1);
-      expect(memberSummary.buckets.lt50.total).toBe(0);
+      expect(memberSummary.buckets.lt50.total).toBe(1);
 
       const dueDistribution = await call<{ buckets: Array<{ key: string; total: number }> }>(
         base,
@@ -442,8 +440,8 @@ describe("首版主流程（真实端口 + fetch）", () => {
         `/api/v1/share/dashboard/changes?folderId=${rootFolder.id}&mode=default`,
         { cookie: cookieA },
       );
-      // A 只看到自己相关任务的变更，B 的独占任务不出现。
-      expect(new Set(memberChanges.items.map((entry) => entry.taskId))).toEqual(new Set([task.id]));
+      // 全员可见后，A 与管理员看到同一批任务变更。
+      expect(new Set(memberChanges.items.map((entry) => entry.taskId))).toEqual(new Set([task.id, privateTask.id]));
 
       // 成员请求管理端看板：Admin 守卫在 LAN 入口直接 403（成员没有管理权限）。
       if (lanEnabled) {

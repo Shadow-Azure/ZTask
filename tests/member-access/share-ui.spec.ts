@@ -95,7 +95,7 @@ describe("ShareSessionPage（令牌交换）", () => {
         if ((init?.method ?? "GET") === "POST") return jsonResponse(201, { member: MEMBER });
         return jsonResponse(200, { member: MEMBER });
       }
-      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [] });
+      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [], others: [] });
       return jsonResponse(200, emptyTree());
     }) as typeof fetch;
 
@@ -141,7 +141,7 @@ describe("ShareLayout（成员壳）", () => {
         if (method === "DELETE") return new Response(null, { status: 204 });
         return jsonResponse(200, { member: MEMBER });
       }
-      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [] });
+      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [], others: [] });
       return jsonResponse(200, emptyTree());
     }) as typeof fetch;
 
@@ -174,7 +174,7 @@ describe("ShareLayout（成员壳）", () => {
         }
         return jsonResponse(200, { member: MEMBER });
       }
-      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [] });
+      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [], others: [] });
       return jsonResponse(200, emptyTree());
     }) as typeof fetch;
 
@@ -210,7 +210,7 @@ describe("ShareLayout（成员壳）", () => {
         await restoreGate;
         return jsonResponse(200, { member: MEMBER });
       }
-      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [] });
+      if (url.includes("/api/v1/share/tasks")) return jsonResponse(200, { owned: [], collaborated: [], others: [] });
       return jsonResponse(200, emptyTree());
     }) as typeof fetch;
 
@@ -247,8 +247,17 @@ describe("MemberHomePage（成员个人页只读）", () => {
     collaborators: [MEMBER, THIRD],
     detail: "",
   });
+  const othersTask = makeTask({
+    id: "t-others",
+    description: "其他成员的任务",
+    importance: "low",
+    progress: 45,
+    owners: [OTHER],
+    collaborators: [THIRD],
+    detail: "同事的进展",
+  });
 
-  function installHomeFetch(home: { owned: Task[]; collaborated: Task[] }): void {
+  function installHomeFetch(home: { owned: Task[]; collaborated: Task[]; others: Task[] }): void {
     globalThis.fetch = (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes("/api/v1/share/session")) return jsonResponse(200, { member: MEMBER });
@@ -258,20 +267,28 @@ describe("MemberHomePage（成员个人页只读）", () => {
     }) as typeof fetch;
   }
 
-  it("两组分组+计数：负责人卡有受限编辑控件、协作卡零控件、任务夹路径与协作徽标", async () => {
-    installHomeFetch({ owned: [ownedTask], collaborated: [collabTask] });
+  it("三组分组+计数：默认展开，标题可折叠/展开；负责人卡可编辑，另两组零控件", async () => {
+    installHomeFetch({ owned: [ownedTask], collaborated: [collabTask], others: [othersTask] });
     const { wrapper } = await mountApp("/s/home");
     await vi.waitFor(() => expect(wrapper.text()).toContain("更新登录页"));
 
     expect(wrapper.text()).toContain("你好，陈晨");
-    expect(wrapper.text()).toContain("你负责的 1 项 · 你协作的 1 项");
+    expect(wrapper.text()).toContain("此链接展示与管理员相同的团队全部事项（共 3 项）：你负责的 1 项可更新，其余 2 项只读。");
 
     const groups = wrapper.findAll(".share-group");
-    expect(groups).toHaveLength(2);
+    expect(groups).toHaveLength(3);
     expect(groups[0].find(".cnt").text()).toBe("1");
     expect(groups[1].find(".cnt").text()).toBe("1");
+    expect(groups[2].find(".cnt").text()).toBe("1");
     expect(groups[0].text()).toContain("我负责的任务");
     expect(groups[1].text()).toContain("我协作的任务");
+    expect(groups[2].text()).toContain("其他成员的任务");
+
+    // 默认全部展开。
+    for (const group of groups) {
+      expect(group.find(".group-body").isVisible()).toBe(true);
+      expect(group.find(".group-toggle").attributes("aria-expanded")).toBe("true");
+    }
 
     const ownedCard = groups[0].find(".stask");
     expect(ownedCard.exists()).toBe(true);
@@ -279,7 +296,6 @@ describe("MemberHomePage（成员个人页只读）", () => {
     expect(ownedCard.find(".ro-tag").exists()).toBe(false);
     expect(ownedCard.text()).toContain("📁 迭代 / 子夹");
     expect(ownedCard.text()).toContain("重要度 · 高");
-    // #19：owner 卡开放受限编辑（进度/详情/小任务），但不含分配、主任务描述或删除入口。
     expect(ownedCard.find("input[type='range']").exists()).toBe(true);
     expect(ownedCard.find("textarea").exists()).toBe(true);
     expect(ownedCard.text()).toContain("保存进度");
@@ -291,21 +307,36 @@ describe("MemberHomePage（成员个人页只读）", () => {
     expect(collabCard.exists()).toBe(true);
     expect(collabCard.text()).toContain("协作任务 · 只读");
     expect(collabCard.find(".ro-tag").text()).toBe("协作任务 · 只读");
-    // D17：负责人/协作渲染为头像组（首字），完整姓名保留在头像 title 上。
     const avaTitles = collabCard.findAll(".ava").map((item) => item.attributes("title") ?? "");
     expect(avaTitles.some((title) => title.includes("李雷"))).toBe(true);
     expect(avaTitles.some((title) => title.includes("韩梅梅"))).toBe(true);
     expect(collabCard.text()).toContain("（暂无进展记录）");
-    // 协作卡必须零控件，不能依赖前端隐藏来兜底服务端权限。
     expect(collabCard.findAll("input")).toHaveLength(0);
     expect(collabCard.findAll("button")).toHaveLength(0);
     expect(collabCard.text()).not.toContain("保存");
 
+    const othersCard = groups[2].find(".stask");
+    expect(othersCard.exists()).toBe(true);
+    expect(othersCard.find(".ro-tag").text()).toBe("其他成员 · 只读");
+    expect(othersCard.text()).toContain("同事的进展");
+    expect(othersCard.findAll("input")).toHaveLength(0);
+    expect(othersCard.findAll("button")).toHaveLength(0);
+
+    // 点击标题折叠第一组，再点展开；aria-expanded 同步。
+    const ownedToggle = groups[0].find(".group-toggle");
+    await ownedToggle.trigger("click");
+    expect(groups[0].classes()).toContain("collapsed");
+    expect(groups[0].find(".group-body").isVisible()).toBe(false);
+    expect(ownedToggle.attributes("aria-expanded")).toBe("false");
+    await ownedToggle.trigger("click");
+    expect(groups[0].classes()).not.toContain("collapsed");
+    expect(groups[0].find(".group-body").isVisible()).toBe(true);
+    expect(ownedToggle.attributes("aria-expanded")).toBe("true");
+
     expect(wrapper.text()).not.toContain("暂无你负责的任务");
     expect(wrapper.text()).not.toContain("暂无你协作的任务");
+    expect(wrapper.text()).not.toContain("暂无其他成员的任务");
 
-    // 最小写面：整页不出现主任务分配/重要度/预计完成/任务夹的编辑控件，
-    // 也不出现管理员专属的「分配」入口（小任务编辑器未打开时不应有 select）。
     expect(wrapper.findAll(".share-page select")).toHaveLength(0);
     expect(wrapper.findAll(".share-page input[type='date']")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("分配");
@@ -313,12 +344,13 @@ describe("MemberHomePage（成员个人页只读）", () => {
     wrapper.unmount();
   });
 
-  it("空态：两组各自显示原型文案，计数为 0", async () => {
-    installHomeFetch({ owned: [], collaborated: [] });
+  it("空态：三组各自显示原型文案，计数为 0", async () => {
+    installHomeFetch({ owned: [], collaborated: [], others: [] });
     const { wrapper } = await mountApp("/s/home");
     await vi.waitFor(() => expect(wrapper.text()).toContain("暂无你负责的任务"));
     expect(wrapper.text()).toContain("暂无你协作的任务");
-    expect(wrapper.text()).toContain("你负责的 0 项 · 你协作的 0 项");
+    expect(wrapper.text()).toContain("暂无其他成员的任务");
+    expect(wrapper.text()).toContain("共 0 项");
     expect(wrapper.find(".share-page").findAll(".stask")).toHaveLength(0);
     wrapper.unmount();
   });

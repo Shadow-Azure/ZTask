@@ -11,12 +11,12 @@ import ChangesPanel from "../history/ChangesPanel.vue";
 /**
  * 情况看板（05 §5.1–5.2、§6.12–6.13，02 §7，原型 1352–1445）：
  * 三统计卡 + 成员多选过滤 + 点击卡片展开该集合的预计完成时间堆叠柱。
- * 管理员与成员复用同一组 DTO 与渲染，只有数据范围不同（成员域不提供成员过滤，避免探测他人）。
+ * 管理员与成员复用同一组 DTO 与渲染；全员可见后两边都统计团队全部任务，成员筛选按 owner 口径缩小。
  * 视觉对齐原型 269–298（D14）：统计卡三格居中、24px mono 总数；58px 渐变柱、段内白色计数、
  * 柱顶总数、x 轴动态日期副标签、图例右置；栅格按后端固定 5 桶展开（含「未排期」，02 §7.6）。
  */
 const props = defineProps<{
-  /** admin = 全团队可筛选；share = 当前成员相关任务，无成员筛选。 */
+  /** admin / share 都统计团队全部任务；share 的成员筛选选项来自任务卡里的成员摘要。 */
   access: "admin" | "share";
   /** 必填：看板统计以当前任务夹及后代为范围。 */
   folderId: string | null;
@@ -53,7 +53,7 @@ const membersQuery = useQuery({
   staleTime: 15_000,
 });
 
-/** 分享域没有成员目录端点：从「我的相关任务」的分配里汇总可见成员（08 §4.1 脱敏目录）。 */
+/** 分享域没有成员目录端点：从团队全部任务的分配里汇总成员摘要（08 §4.1 脱敏目录）。 */
 const shareHomeQuery = useQuery({
   queryKey: ["share", "tasks", "home"],
   queryFn: shareApi.home,
@@ -61,7 +61,7 @@ const shareHomeQuery = useQuery({
   staleTime: 15_000,
 });
 
-/** chips 列表：管理员=在册成员；分享域=相关任务里出现过的成员摘要（去重、稳定排序）。 */
+/** chips 列表：管理员=在册成员；分享域=团队任务里出现过的成员摘要（去重、稳定排序）。 */
 const chipMembers = computed(() => {
   if (props.access === "admin") {
     return (membersQuery.data.value?.items ?? [])
@@ -72,6 +72,7 @@ const chipMembers = computed(() => {
   for (const task of [
     ...(shareHomeQuery.data.value?.owned ?? []),
     ...(shareHomeQuery.data.value?.collaborated ?? []),
+    ...(shareHomeQuery.data.value?.others ?? []),
   ]) {
     for (const member of [...task.owners, ...task.collaborators, ...task.subtasks.map((subtask) => subtask.owner)]) {
       if (!seen.has(member.id)) seen.set(member.id, { id: member.id, name: member.name, color: member.color });
@@ -228,7 +229,7 @@ function dueLabel(key: DueKey): string {
         <span class="chip-ava" :style="{ background: member.color }" aria-hidden="true">{{ member.name.slice(0, 1) }}</span>
         {{ member.name }}
       </button>
-      <span class="all-hint">{{ access === "admin" ? "不选 = 查看整体任务情况" : "不选 = 我的相关任务整体" }}</span>
+      <span class="all-hint">{{ access === "admin" ? "不选 = 查看整体任务情况" : "不选 = 团队全部任务" }}</span>
     </div>
 
     <div v-if="!folderId" class="dash-empty">

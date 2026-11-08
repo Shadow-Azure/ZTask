@@ -216,7 +216,7 @@ describe("管理员看板 summary：软删除", () => {
 });
 
 describe("分享域看板", () => {
-  it("只统计 isRelated 的相关任务，并与任务夹范围求交；成员筛选只能缩小可见范围", async () => {
+  it("统计团队全部任务并与任务夹范围求交；memberIds 按 owner 口径筛选", async () => {
     const folderId = await createFolder(app, "分享看板");
     const otherFolder = await createFolder(app, "其他夹");
     const memberA = await createMember(app, "陈晨");
@@ -249,54 +249,54 @@ describe("分享域看板", () => {
     expect(anonymous.statusCode).toBe(401);
     expect((anonymous.json() as { error: { code: string } }).error.code).toBe("SHARE_SESSION_REQUIRED");
 
+    // 全员可见：A、B 看到同一份团队任务统计。
     const summaryA = await shareSummary(cookieA, folderId);
     expect(summaryA.scope).toEqual({ folderId, memberIds: [] });
-    expect(summaryA.buckets.done.total).toBe(1);
+    expect(summaryA.buckets.done.total).toBe(2);
     expect(summaryA.buckets.gt50.total).toBe(1);
     expect(summaryA.buckets.lt50.total).toBe(1);
-    // B 的任务对 A 不可见。
-    expect(totalOf(summaryA)).toBe(3);
+    expect(totalOf(summaryA)).toBe(4);
 
     const summaryB = await shareSummary(cookieB, folderId);
-    expect(summaryB.buckets.done.total).toBe(1);
+    expect(summaryB.buckets.done.total).toBe(2);
     expect(summaryB.buckets.gt50.total).toBe(1);
     expect(summaryB.buckets.lt50.total).toBe(1);
-    expect(totalOf(summaryB)).toBe(3);
+    expect(totalOf(summaryB)).toBe(4);
 
     // 其他任务夹里的相关任务仍属于该成员，但被 folderId 范围排除。
     expect(totalOf(await shareSummary(cookieA, otherFolder))).toBe(1);
 
     const dueA = await shareDue(cookieA, folderId, "done");
-    expect(dueTotals(dueA)).toEqual({ overdue: 0, week: 1, month: 0, later: 0, unscheduled: 0 });
+    expect(dueTotals(dueA)).toEqual({ overdue: 0, week: 1, month: 0, later: 0, unscheduled: 1 });
 
-    // 05 §6.12：memberIds 先限定相关任务，再按 owner 口径筛选，不能扩大范围。
+    // memberIds 在团队全部任务范围内按 owner 口径筛选。
     const onlyA = await shareSummary(cookieA, folderId, `&memberIds=${memberA}`);
-    expect(totalOf(onlyA)).toBe(1); // A 作为 owner 的任务只有「A 负责」（done）
+    expect(totalOf(onlyA)).toBe(1); // A 作为 owner 的任务只有「A 负责」
     expect(onlyA.scope.memberIds).toEqual([memberA]);
 
     const onlyB = await shareSummary(cookieA, folderId, `&memberIds=${memberB}`);
-    expect(totalOf(onlyB)).toBe(2); // A 相关任务里 B 作为 owner 的两项
+    expect(totalOf(onlyB)).toBe(3); // B 作为 owner 的三项
 
     const emptySelection = await shareSummary(cookieA, folderId, "&memberIds=");
-    expect(totalOf(emptySelection)).toBe(3);
+    expect(totalOf(emptySelection)).toBe(4);
     expect(emptySelection.scope.memberIds).toEqual([]);
 
-    // A 不可见的成员（C 与 A 无任何共同任务）用于探测时 400，不泄露其任务量。
+    // 全员可见后，任意在册成员都可作为筛选条件；没有 owner 命中时是合法空集。
     const memberC = await createMember(app, "赵敏");
     const probe = await app.inject({
       method: "GET",
       url: `/api/v1/share/dashboard/summary?folderId=${folderId}&memberIds=${memberC}`,
       headers: { cookie: cookieA },
     });
-    expect(probe.statusCode).toBe(400);
-    expect((probe.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+    expect(probe.statusCode).toBe(200);
+    expect(totalOf(probe.json() as never)).toBe(0);
 
     const probeDue = await app.inject({
       method: "GET",
       url: `/api/v1/share/dashboard/due-distribution?folderId=${folderId}&bucket=done&memberIds=${memberC}`,
       headers: { cookie: cookieA },
     });
-    expect(probeDue.statusCode).toBe(400);
+    expect(probeDue.statusCode).toBe(200);
   });
 });
 

@@ -18,16 +18,18 @@ import BaseDialog from "../../components/ui/BaseDialog.vue";
  *   409 时保留草稿并提示刷新。
  * 分配、重要度、预计完成、所在任务夹与主任务描述永不提供编辑入口（02 §4.2）。
  */
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   /** 分享域返回的主任务聚合。 */
   task: Task;
-  /** 协作任务标记：为 true 时追加「协作任务 · 只读」徽标。 */
+  /** 只读标记：为 true 时追加只读徽标；协作者默认「协作任务 · 只读」。 */
   readonly?: boolean;
+  /** 只读徽标文案；其他成员的任务可覆盖为「其他成员 · 只读」。 */
+  readonlyLabel?: string;
   /** 由调用方用可见任务夹树算出的路径（如「迭代 / 子夹」），省略时不渲染。 */
   folderPath?: string;
   /** 是否展示 owner 编辑控件（只有「我负责的」卡片为 true）。 */
   editable?: boolean;
-}>();
+}>(), { readonlyLabel: "协作任务 · 只读" });
 
 const queryClient = useQueryClient();
 const toast = useToast();
@@ -285,7 +287,7 @@ function discardDraftsAndRefresh(): void {
       <span class="desc">{{ task.description }}</span>
       <span v-if="folderPath" class="folder-path">📁 {{ folderPath }}</span>
       <span class="imp" :class="task.importance">重要度 · {{ IMPORTANCE_NAMES[task.importance] }}</span>
-      <span v-if="readonly" class="ro-tag">协作任务 · 只读</span>
+      <span v-if="readonly" class="ro-tag">{{ readonlyLabel }}</span>
     </div>
 
     <div class="meta">

@@ -13,7 +13,7 @@ import FolderTreeCreateRow from "./FolderTreeCreateRow.vue";
  * 空态为原型式纯文本（.empty-tip，D18）。「＋ 新建任务夹」入口由 TrackerView 的树头承载（D19），
  * 点击后行内输入渲染在选中夹的 `.tchildren` 末尾（原型 1120–1121，状态由 TrackerView 持有并向下传递）；
  * 管理端未选中夹（树为空 / 加载中，原型恒有选中夹）时退化为树根新建行，保留建首个夹的能力。
- * scope=share 时树只含相关任务及祖先，且不含任何写入口。
+ * scope=share 时树为完整团队树（含空夹），且不含任何写入口。
  * 任务行 open-task 事件向上转发给 TrackerView（管理端开编辑浮窗 / 成员端开只读详情）。
  */
 const props = defineProps<{

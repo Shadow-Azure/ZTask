@@ -429,9 +429,15 @@
   .share-id .scope { font-size: 11.5px; color: var(--text-dim); }
   .share-body { height: calc(100% - 48px - 57px); overflow-y: auto; padding: 18px 22px 44px; }
   .share-group { margin-bottom: 22px; }
-  .share-group > h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+  .share-group > h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
   .share-group > h3 .cnt { font-family: var(--mono); font-size: 11px; color: var(--text-faint); font-weight: 400; }
-  .share-group > .gdesc { font-size: 11.5px; color: var(--text-faint); margin-bottom: 10px; }
+  .group-toggle { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; padding: 2px 6px; margin-left: -6px; border: 0; border-radius: 6px; background: none; font: inherit; font-weight: inherit; color: inherit; cursor: pointer; text-align: left; }
+  .group-toggle:hover { color: var(--blue); background: color-mix(in srgb, var(--blue) 6%, transparent); }
+  .group-toggle:focus-visible { outline: 2px solid color-mix(in srgb, var(--blue) 55%, transparent); outline-offset: 3px; border-radius: 4px; }
+  .group-toggle .chevron { display: inline-block; width: 14px; font-size: 12px; color: var(--text-dim); transition: transform .15s; }
+  .share-group.collapsed .group-toggle .chevron { transform: rotate(-90deg); }
+  .share-group.collapsed .group-body { display: none; }
+  .share-group .gdesc { font-size: 11.5px; color: var(--text-faint); margin-bottom: 10px; }
   .stask { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); margin-bottom: 12px; }
   .stask .r1 { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
   .stask .r1 .desc { font-size: 13.5px; font-weight: 650; flex: 1; }
@@ -557,7 +563,7 @@
   <div class="ov-wrap">
     <div class="ov-hero">
       <h1>ZTask · <em>团队事项跟踪</em> 原型总览</h1>
-      <p>本地服务 + Web UI + 本地存储的单机工具（架构形态参考 DeepSeek Harness）；通过局域网分享「成员链接」，让每位成员只能查看并更新与自己相关的事项。本原型为单文件静态页面，覆盖产品全部界面与关键交互。</p>
+      <p>本地服务 + Web UI + 本地存储的单机工具（架构形态参考 DeepSeek Harness）；通过局域网分享「成员链接」，让每位成员查看团队全部事项，但只能更新自己负责的事项。本原型为单文件静态页面，覆盖产品全部界面与关键交互。</p>
     </div>
 
     <div class="ov-grid">
@@ -577,17 +583,18 @@
           <li>团队成员列表：角色、负责/协作中任务数</li>
           <li>添加 / 编辑 / 移除成员</li>
           <li>按成员生成分享链接：复制 / 重置 / 吊销</li>
-          <li>每个成员独立链接，互不可见</li>
+          <li>每个成员独立链接；任务数据全员可见，写权限按负责人区分</li>
         </ul>
         <button data-goto="members">打开界面 →</button>
       </div>
       <div class="ov-card">
         <h3><span class="no">S3</span>成员视图（分享链接落地页）</h3>
         <ul>
-          <li>通过局域网链接访问，仅展示与自己相关的事项</li>
+          <li>通过局域网链接访问，展示与管理员相同的团队全部事项</li>
           <li>「我负责的」任务可更新进度与进展详情</li>
-          <li>「我协作的」任务只读</li>
-          <li>对比 A（陈晨）/ B（林悦）两个链接所见内容的差异</li>
+          <li>「我协作的」和「其他成员的任务」只读</li>
+          <li>三组标题可点击折叠 / 展开，标题保留分组计数</li>
+          <li>对比 A（陈晨）/ B（林悦）两个链接：数据相同，可编辑范围不同</li>
         </ul>
         <button data-goto="share-a">打开 A 的链接 →</button>
       </div>
@@ -601,7 +608,7 @@
         <span class="node">Web UI（本机 & 局域网）<br><span style="font-weight:400;font-size:10.5px">http://192.168.1.5:8123</span></span>
         <span class="arrow">→</span>
         <span class="node">本地数据文件<br><span style="font-weight:400;font-size:10.5px">~/.ztask/data.json</span></span>
-        <span class="note">管理员访问完整 Web UI；成员通过 <code>/#/s/&lt;token&gt;</code> 链接进入只含自己事项的视图</span>
+        <span class="note">管理员访问完整 Web UI；成员通过 <code>/#/s/&lt;token&gt;</code> 链接查看团队全部事项，仅自己负责的事项可编辑</span>
       </div>
     </div>
 
@@ -613,7 +620,7 @@
         <li>情况看板：成员 chips 多选（不选 = 整体）；点击统计卡片在下方展开该集合的预计完成时间分布柱状图，再点一次收起。</li>
         <li>时间段查询：默认自动查询昨天 00:00:00 至当前时刻并列出变化任务；可修改起止日期重新查询（自定义结束日期包含至 23:59:59），查询结果默认全部展开，支持单个或批量展开 / 折叠左右并排的进展详情 diff（红 = 删除，绿 = 新增）。</li>
         <li>成员管理：行内生成 / 复制 / 重置 / 吊销分享链接（危险操作有确认弹窗）；「添加成员」弹窗。</li>
-        <li>成员视图：进展详情为追加式（历史保留，供时间段 diff 对比）；被重置/吊销的链接进入「链接已失效」页（见顶部导航「失效链接」）。</li>
+        <li>成员视图：展示团队全部事项；只有「我负责的」任务可改进度与追加进展，其他任务只读。进展详情为追加式（历史保留，供时间段 diff 对比）；被重置/吊销的链接进入「链接已失效」页（见顶部导航「失效链接」）。</li>
       </ul>
     </div>
 
@@ -727,7 +734,7 @@
   <div class="members-body">
     <div class="page-title-row">
       <h2>团队成员</h2>
-      <span class="sub">成员通过各自的分享链接访问，仅能查看与更新和自己相关的事项</span>
+      <span class="sub">成员通过各自的分享链接访问，可查看团队全部事项，仅能更新自己负责的事项</span>
       <span class="spacer" style="flex:1"></span>
       <button class="btn primary" id="btn-add-member">＋ 添加成员</button>
     </div>
@@ -2006,17 +2013,41 @@ $('#member-modal-close').addEventListener('click', () => $('#member-modal-overla
 $('#member-modal-overlay').addEventListener('click', e => { if (e.target.id === 'member-modal-overlay') e.target.classList.remove('open'); });
 
 /* ════════════════ 成员视图（分享链接落地页） ════════════════ */
+/* 成员可见范围：团队全部事项；按关系分组，写权限只给负责人。 */
+const shareCollapsed = new Set();
+/** 折叠按钮语义：标题可点击，aria-expanded 跟随展开状态。 */
+function shareGroupToggleAttrs(id, collapsed) {
+  return `type="button" data-share-group="${id}" aria-expanded="${!collapsed}" aria-controls="share-group-${id}" title="点击折叠或展开该组"`;
+}
+function shareTaskGroups(mid, tasks = TASKS) {
+  const active = Object.values(tasks).filter(t => !t.deletedAt);
+  const isOwner = t => (t.owners || []).includes(mid);
+  const isCollab = t => (t.collabs || []).includes(mid);
+  return {
+    owned: active.filter(isOwner),
+    collab: active.filter(t => !isOwner(t) && isCollab(t)),
+    others: active.filter(t => !isOwner(t) && !isCollab(t)),
+  };
+}
+/* 可编辑判定与只读标记：负责人可编辑，协作人和其他成员只读。 */
+function shareCardState(task, mid) {
+  if ((task.owners || []).includes(mid)) return {editable: true, tag: ''};
+  const isCollab = (task.collabs || []).includes(mid);
+  return {editable: false, tag: isCollab ? '协作任务 · 只读' : '其他成员 · 只读'};
+}
 function renderShare(mid) {
   const m = member(mid);
-  const owned = Object.values(TASKS).filter(t => !t.deletedAt && t.owners.includes(mid));
-  const collab = Object.values(TASKS).filter(t => !t.deletedAt && t.collabs.includes(mid));
-  const card = (t, ro) => `<div class="stask${ro ? ' readonly' : ''}">
+  const {owned, collab, others} = shareTaskGroups(mid);
+  const card = (t, mid) => {
+    const state = shareCardState(t, mid);
+    const ro = !state.editable;
+    return `<div class="stask${ro ? ' readonly' : ''}">
     <div class="r1">
       <span class="imp-dot ${t.imp}"></span>
       <span class="desc">${esc(t.desc)}</span>
       <span class="sub-badge">📁 ${esc(folderPathOfTask(t.id).join(' / '))}</span>
       <span class="imp ${t.imp}">重要度 · ${impName[t.imp]}</span>
-      ${ro ? '<span class="ro-tag">协作任务 · 只读</span>' : ''}
+      ${ro ? `<span class="ro-tag">${state.tag}</span>` : ''}
     </div>
     <div class="meta">
       <span><span class="k">负责人</span>${avaGroup(t.owners, true)}</span>
@@ -2046,6 +2077,7 @@ function renderShare(mid) {
       <span style="font-size:11px;color:var(--text-faint)">追加的进展立即生效；进度调整需点击「保存进度」后生效</span>
     </div>`}
   </div>`;
+  };
   $('#page-share').innerHTML = `
     <div class="share-bar">
       <div class="logo"><span class="mark">Z</span>ZTask<span class="sub">成员视图</span></div>
@@ -2055,22 +2087,47 @@ function renderShare(mid) {
       <span class="ava" style="background:${m.color};width:34px;height:34px;font-size:15px">${esc(m.name[0])}</span>
       <div>
         <div class="hello">你好，${esc(m.name)}</div>
-        <div class="scope">此链接仅展示与你相关的事项（你负责的 ${owned.length} 项 · 你协作的 ${collab.length} 项），其他成员的任务不可见。</div>
+        <div class="scope">此链接展示与管理员相同的团队全部事项（共 ${owned.length + collab.length + others.length} 项）：你负责的 ${owned.length} 项可更新，其余 ${collab.length + others.length} 项只读。</div>
       </div>
     </div>
     <div class="share-body"><div class="share-body-inner">
-      <div class="share-group">
-        <h3>我负责的任务 <span class="cnt">${owned.length}</span></h3>
-        <p class="gdesc">可以更新进度（需保存）、追加进展详情（立即生效，历史保留供管理员侧对比）。</p>
-        ${owned.length ? owned.map(t => card(t, false)).join('') : '<div class="empty-tip">暂无你负责的任务</div>'}
+      <div class="share-group${shareCollapsed.has('owned') ? ' collapsed' : ''}">
+        <h3><button class="group-toggle" ${shareGroupToggleAttrs('owned', shareCollapsed.has('owned'))}>
+          <span class="chevron" aria-hidden="true">▾</span>我负责的任务 <span class="cnt">${owned.length}</span>
+        </button></h3>
+        <div class="group-body" id="share-group-owned">
+          <p class="gdesc">可以更新进度（需保存）、追加进展详情（立即生效，历史保留供管理员侧对比）。</p>
+          ${owned.length ? owned.map(t => card(t, mid)).join('') : '<div class="empty-tip">暂无你负责的任务</div>'}
+        </div>
       </div>
-      <div class="share-group">
-        <h3>我协作的任务 <span class="cnt">${collab.length}</span></h3>
-        <p class="gdesc">协作任务由负责人维护进度，此处只读。</p>
-        ${collab.length ? collab.map(t => card(t, true)).join('') : '<div class="empty-tip">暂无你协作的任务</div>'}
+      <div class="share-group${shareCollapsed.has('collab') ? ' collapsed' : ''}">
+        <h3><button class="group-toggle" ${shareGroupToggleAttrs('collab', shareCollapsed.has('collab'))}>
+          <span class="chevron" aria-hidden="true">▾</span>我协作的任务 <span class="cnt">${collab.length}</span>
+        </button></h3>
+        <div class="group-body" id="share-group-collab">
+          <p class="gdesc">协作任务由负责人维护进度，此处只读。</p>
+          ${collab.length ? collab.map(t => card(t, mid)).join('') : '<div class="empty-tip">暂无你协作的任务</div>'}
+        </div>
+      </div>
+      <div class="share-group${shareCollapsed.has('others') ? ' collapsed' : ''}">
+        <h3><button class="group-toggle" ${shareGroupToggleAttrs('others', shareCollapsed.has('others'))}>
+          <span class="chevron" aria-hidden="true">▾</span>其他成员的任务 <span class="cnt">${others.length}</span>
+        </button></h3>
+        <div class="group-body" id="share-group-others">
+          <p class="gdesc">由其他成员负责的任务；你可以查看全部进展，但不能编辑。</p>
+          ${others.length ? others.map(t => card(t, mid)).join('') : '<div class="empty-tip">暂无其他成员的任务</div>'}
+        </div>
       </div>
     </div></div>`;
   const page = $('#page-share');
+  page.querySelectorAll('[data-share-group]').forEach(btn => btn.addEventListener('click', () => {
+    const id = btn.dataset.shareGroup;
+    const group = btn.closest('.share-group');
+    if (!group) return;
+    const collapsed = group.classList.toggle('collapsed');
+    btn.setAttribute('aria-expanded', String(!collapsed));
+    if (collapsed) shareCollapsed.add(id); else shareCollapsed.delete(id);
+  }));
   page.querySelectorAll('input[type="range"]').forEach(r => r.addEventListener('input', () => {
     $('#pv-' + r.dataset.tid).textContent = r.value + '%';
   }));
@@ -2125,11 +2182,12 @@ setDefaultRange();
 renderRangeQuery();
 $('#proto-today').textContent = formatLocalDate(new Date());
 
-/* 深链：#page=tracker&tab=dash&card=done&query=1&modal=t1&folder=f2&members=chen,lin */
+/* 深链：#page=tracker&tab=dash&card=done&query=1&modal=t1&folder=f2&members=chen,lin&collapsed=owned,others */
 (function initHash() {
   const h = new URLSearchParams(location.hash.slice(1));
   if (!h.get('page')) return;
   if (h.get('folder')) selFolder = h.get('folder');
+  if (h.get('collapsed')) h.get('collapsed').split(',').filter(Boolean).forEach(id => shareCollapsed.add(id));
   showPage(h.get('page'));
   if (h.get('members')) { h.get('members').split(',').forEach(m => dashSel.add(m)); renderDashChips(); renderStats(); }
   if (h.get('tab') === 'dash') document.querySelector('.tabs button[data-tab="dash"]').click();

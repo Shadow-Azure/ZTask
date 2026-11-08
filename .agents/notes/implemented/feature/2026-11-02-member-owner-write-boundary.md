@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-- **只认主任务 owner**：`assignments` 中 `(taskId = 主任务, kind = owner, memberId = 会话成员)` 才可写；不可见任务（无关成员、软删、小任务 id）一律 404 `TASK_NOT_FOUND`；可见但非 owner（主任务 collaborator、仅小任务被分配者）403 `OWNER_REQUIRED`。
+- **只认主任务 owner**：`assignments` 中 `(taskId = 主任务, kind = owner, memberId = 会话成员)` 才可写；不存在/软删除任务或小任务 id 一律 404 `TASK_NOT_FOUND`；非 owner（主任务 collaborator、仅小任务被分配者、其他成员）403 `OWNER_REQUIRED`。
 - **写面最小化**：只开放 `progress`、`detail`、`subtasks` 五个端点；主任务描述、分配、重要度、预计完成、`folderId`、删除主任务、新建顶级任务全部不开放。JSON schema `additionalProperties:false` 先拦，服务层再拒绝未知字段（小任务显式拒绝 `owner`/`ownerId`）。
 - **小任务规则**：只能一层；创建时 owner 强制为当前成员；编辑不能改 owner；删除为软删除并移除该小任务的 assignments；`subtaskId` 必须属于路径上的父主任务。
 - **共享一条写队列**：管理端与成员写共用 `buildApp` 注入的 `store.tasks`（同一 `WriteQueue`），不各自 `createTaskStore`。否则两个写者各排一条队，同 `expectedVersion` 的并发提交会双成功、revision 出现重复版本，最坏让 `revisionTip` 与最新 revision 不一致、下次启动拒绝修复。队列内 `mutate` 会基于最新 current 再复查一次 owner（07 §2.3），预检后被撤销 owner 的写入不落盘。

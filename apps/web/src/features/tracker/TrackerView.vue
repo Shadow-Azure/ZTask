@@ -49,7 +49,7 @@ watch(treeWidth, (value) => {
 
 const activeTab = computed<"tasks" | "dash">(() => (route.query.tab === "dash" ? "dash" : "tasks"));
 const selectedFolderId = computed(() => (typeof route.query.folder === "string" && route.query.folder ? route.query.folder : null));
-/** 成员域未选任务夹时展示「全部任务夹」的相关任务；管理端由 D8 默认选首个根夹。 */
+/** 成员域未选任务夹时展示「全部任务夹」的任务；管理端由 D8 默认选首个根夹。 */
 const canLoadTasks = computed(() => isShareScope.value || selectedFolderId.value !== null);
 
 function switchTab(tab: "tasks" | "dash"): void {
@@ -207,7 +207,7 @@ const folderPathById = computed(() => {
   return map;
 });
 
-// 成员树只含相关任务夹：URL 里的 folder 若不在可见树中，回退到「全部任务夹」（08 §2.1）。
+// 成员树为完整团队树：URL 里的 folder 若不在树中，回退到「全部任务夹」（08 §2.1）。
 watch([() => foldersQuery.data.value, selectedFolderId], ([tree]) => {
   if (!isShareScope.value || !tree) return;
   const folderId = selectedFolderId.value;
@@ -237,9 +237,9 @@ const showLoadMoreError = computed(
   () => isShareScope.value && pageCursor.value !== null && tasksQuery.isError.value && !taskErrorIsAuth.value,
 );
 
-/** D18（原型 1196）：列表空态为纯文本行，管理端提示新建，成员端说明只读范围。 */
+/** D18（原型 1196）：列表空态为纯文本行，管理端提示新建，成员端说明只读。 */
 const emptyTip = computed(() => {
-  if (isShareScope.value) return "当前范围内没有与你相关的任务；成员视图为只读。";
+  if (isShareScope.value) return "当前范围内没有任务；成员视图为只读。";
   if (ownerFilter.value.length > 0) return "没有同时满足负责人、重要度和搜索条件的任务。调整筛选条件后再试。";
   return "当前条件下没有任务。点击工具栏「＋ 新建任务」创建第一条任务。";
 });
@@ -466,7 +466,7 @@ function closeCreateFolder(): void {
       <div v-if="activeTab === 'tasks'" class="board-body">
         <div class="toolbar">
           <button v-if="isAdmin" class="btn primary" type="button" :disabled="!selectedFolderId" title="先选择任务夹" @click="openCreate">＋ 新建任务</button>
-          <span v-if="!isAdmin" class="ro-tag">只读视图 · 数据来自你有权查看的范围</span>
+          <span v-if="!isAdmin" class="ro-tag">只读视图 · 团队全部事项</span>
           <span class="spacer" />
           <span class="flabel">重要度</span>
           <button

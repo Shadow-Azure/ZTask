@@ -151,18 +151,19 @@ export interface DashboardChanges {
   items: TaskChange[];
 }
 
-/** 成员在相关任务中的角色（05 §6.5）；决定个人页写权限，只读跟踪忽略它。 */
-export type ShareMemberRole = "owner" | "collaborator";
+/** 成员在任务中的角色（05 §6.5）：owner 可写，collaborator / viewer 只读。 */
+export type ShareMemberRole = "owner" | "collaborator" | "viewer";
 
 /** `/share/session` 的 200/201 响应：只含最小成员摘要，不含 token/verifier（05 §6.1–6.2）。 */
 export interface ShareSessionResponse {
   member: MemberSummary;
 }
 
-/** `GET /share/tasks?view=home` 的响应（05 §6.4）：负责/协作两组已按 memberId 裁剪。 */
+/** `GET /share/tasks?view=home` 的响应（05 §6.4）：团队全部任务按当前成员关系分三组。 */
 export interface ShareHomeTasks {
   owned: Task[];
   collaborated: Task[];
+  others: Task[];
 }
 
 /** 成员写操作响应（05 §6.6–6.10）：更新后的成员可见任务与本次 revision。 */
