@@ -44,6 +44,8 @@ ztask serve
 
 启动后管理端默认位于 `http://127.0.0.1:8123`，浏览器未自动打开时手动访问，按 `Ctrl+C` 停止。数据目录默认为 `~/.ztask`（Windows 为 `C:\Users\<用户名>\.ztask`），可用 `--data-dir` 或 `ZTASK_HOME` 指定。
 
+若 `ztask serve` 提示找不到命令，先执行一次 `npx ztask init`，它会把 npm 全局可执行目录写入 shell 启动文件；重新打开终端后即可直接运行 `ztask serve`。不改 PATH 时，也可以直接用 `npx ztask serve` 启动。
+
 本地开发（Node.js 22 与 pnpm@10）：
 
 ```sh

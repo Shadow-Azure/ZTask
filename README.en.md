@@ -44,6 +44,8 @@ ztask serve
 
 The admin UI is at `http://127.0.0.1:8123` by default; open it manually if the browser does not open, and press `Ctrl+C` to stop. Data lives in `~/.ztask` (`C:\Users\<username>\.ztask` on Windows) unless `--data-dir` or `ZTASK_HOME` is set.
 
+If `ztask serve` reports that the command is not found, run `npx ztask init` once to add the npm global executable directory to your shell startup file; reopen the terminal and `ztask serve` works directly. Without changing PATH, `npx ztask serve` starts the server as well.
+
 For local development (Node.js 22 and pnpm@10):
 
 ```sh

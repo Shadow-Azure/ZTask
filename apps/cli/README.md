@@ -1,6 +1,6 @@
 # ztask CLI
 
-`ztask` 是 ZTask 本地服务的命令入口。当前只提供 `serve` 子命令：单进程同源启动 Fastify API 与 Vue 管理端壳；任务、成员、分享等业务由后续里程碑接入。自动打开浏览器仅支持 macOS（`open`）与 Linux（`xdg-open`）；Windows 可手动访问打印出的管理 URL。
+`ztask` 是 ZTask 本地服务的命令入口，提供 `serve`、`init` 与 `backup`/`restore`/`doctor` 子命令。`serve` 单进程同源启动 Fastify API 与 Vue 管理端壳；`init` 把 npm 全局可执行目录写入 PATH。自动打开浏览器仅支持 macOS（`open`）与 Linux（`xdg-open`）；Windows 可手动访问打印出的管理 URL。
 
 ## 安装与启动
 
