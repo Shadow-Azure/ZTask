@@ -33,6 +33,14 @@ Linux / macOS:
 ```sh
 npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
 ztask serve
+
+# ztask: command not found -> add the npm global executable directory to PATH
+# init writes ~/.zshrc (or ~/.bashrc), then reopen the terminal or run source when prompted
+npx ztask init
+# scripts/CI: skip the y/n confirmation
+npx ztask init --yes
+# or start without changing PATH
+npx ztask serve
 ```
 
 Windows (PowerShell or Command Prompt):
@@ -40,11 +48,17 @@ Windows (PowerShell or Command Prompt):
 ```powershell
 npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
 ztask serve
+
+# ztask: command not found -> add the npm global executable directory to the user PATH
+# init asks for confirmation and writes the user PATH, then reopen the terminal (no source on Windows)
+npx ztask init
+# scripts/CI: skip the y/n confirmation
+npx ztask init --yes
+# or start without changing PATH
+npx ztask serve
 ```
 
 The admin UI is at `http://127.0.0.1:8123` by default; open it manually if the browser does not open, and press `Ctrl+C` to stop. Data lives in `~/.ztask` (`C:\Users\<username>\.ztask` on Windows) unless `--data-dir` or `ZTASK_HOME` is set.
-
-If `ztask serve` reports that the command is not found, run `npx ztask init`: it shows the npm global executable directory and the shell startup file it will write, asks for confirmation, and then writes it. Reopen the terminal or run the printed `source` command and `ztask serve` works directly; use `--yes` to skip the confirmation in non-interactive shells. Without changing PATH, `npx ztask serve` starts the server as well.
 
 For local development (Node.js 22 and pnpm@10):
 

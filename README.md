@@ -33,6 +33,14 @@ Linux / macOS：
 ```sh
 npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
 ztask serve
+
+# ztask: command not found -> add the npm global executable directory to PATH
+# init writes ~/.zshrc (or ~/.bashrc), then reopen the terminal or run source when prompted
+npx ztask init
+# scripts/CI: skip the y/n confirmation
+npx ztask init --yes
+# or start without changing PATH
+npx ztask serve
 ```
 
 Windows（PowerShell 或命令提示符）：
@@ -40,11 +48,17 @@ Windows（PowerShell 或命令提示符）：
 ```powershell
 npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
 ztask serve
+
+# ztask: command not found -> add the npm global executable directory to the user PATH
+# init asks for confirmation and writes the user PATH, then reopen the terminal (no source on Windows)
+npx ztask init
+# scripts/CI: skip the y/n confirmation
+npx ztask init --yes
+# or start without changing PATH
+npx ztask serve
 ```
 
 启动后管理端默认位于 `http://127.0.0.1:8123`，浏览器未自动打开时手动访问，按 `Ctrl+C` 停止。数据目录默认为 `~/.ztask`（Windows 为 `C:\Users\<用户名>\.ztask`），可用 `--data-dir` 或 `ZTASK_HOME` 指定。
-
-若 `ztask serve` 提示找不到命令，执行 `npx ztask init`：它会显示 npm 全局可执行目录与将要写入的 shell 启动文件，确认后写入；重新打开终端或执行提示里的 `source` 命令后即可直接运行 `ztask serve`。非交互环境可加 `--yes` 跳过确认。不改 PATH 时，也可以直接用 `npx ztask serve` 启动。
 
 本地开发（Node.js 22 与 pnpm@10）：
 
