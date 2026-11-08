@@ -112,53 +112,72 @@ afterEach(async () => {
 });
 
 describe("home 视图分组（05 §6.4 / 07 §5.1）", () => {
-  it("A：owned 只含主任务 owner 的任务，collaborated 为空，B 的数据不可见", async () => {
+  it("A：owned 含自己负责的全部任务，others 含其他成员任务，三组不重不漏", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=home", cookieA)).json();
     expectSet(descriptions(body.owned as MemberTask[]), ["A 独有任务", "A 与 B 协作", "C 被分配小任务的父任务", "含已删除小任务"]);
     expect(body.collaborated).toEqual([]);
-    expect(JSON.stringify(body)).not.toContain("B 独有任务");
-    // 主任务 owner 仍能看到完整 detail（与下面 C 的空 detail 形成对照，07 §5.1）。
+    expectSet(descriptions(body.others as MemberTask[]), ["B 独有任务"]);
+
     const parent = (body.owned as MemberTask[]).find((task) => task.id === taskC)!;
     expect(parent.detail).toBe("C 被分配小任务的父任务详情");
+
+    const all = [...body.owned, ...body.collaborated, ...body.others] as MemberTask[];
+    expect(new Set(all.map((task) => task.id)).size).toBe(all.length);
   });
 
-  it("B：owned 主任务 owner + collaborated 主任务 collaborator，互不重复", async () => {
+  it("B：owned / collaborated / others 覆盖团队全部任务，互不重复", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=home", cookieB)).json();
     expectSet(descriptions(body.owned as MemberTask[]), ["B 独有任务"]);
     expectSet(descriptions(body.collaborated as MemberTask[]), ["A 与 B 协作"]);
-    const allIds = [...body.owned, ...body.collaborated].map((task: MemberTask) => task.id);
-    expect(new Set(allIds).size).toBe(allIds.length);
-    expect(JSON.stringify(body)).not.toContain("A 独有任务");
-    expect(JSON.stringify(body)).not.toContain("C 的小任务");
+    expectSet(descriptions(body.others as MemberTask[]), ["A 独有任务", "C 被分配小任务的父任务", "含已删除小任务"]);
+    const all = [...body.owned, ...body.collaborated, ...body.others] as MemberTask[];
+    expect(new Set(all.map((task) => task.id)).size).toBe(all.length);
+    expect(new Set(all.map((task) => task.id)).size).toBe(5);
   });
 
-  it("C：仅小任务被分配者两组都不出现（07 §5.1 subtask-only 只进只读事项跟踪）", async () => {
+  it("C：仅小任务被分配者不进入 owned/collaborated，父任务归入 others 且详情完整", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=home", cookieC)).json();
     expect(body.owned).toEqual([]);
     expect(body.collaborated).toEqual([]);
-    // 父任务卡（含 description / detail 文本）整体不进入个人页。
-    expect(JSON.stringify(body)).not.toContain("C 被分配小任务的父任务");
-    expect(JSON.stringify(body)).not.toContain("C 的小任务");
+    expectSet(descriptions(body.others as MemberTask[]), [
+      "A 独有任务",
+      "B 独有任务",
+      "A 与 B 协作",
+      "C 被分配小任务的父任务",
+      "含已删除小任务",
+    ]);
+    const parent = (body.others as MemberTask[]).find((task) => task.id === taskC)!;
+    expect(parent.detail).toBe("C 被分配小任务的父任务详情");
+    expectSet(parent.subtasks.map((subtask) => subtask.description), ["C 的小任务", "A 的小任务"]);
   });
 });
 
 describe("tracker 视图（05 §6.4 / 07 §5.1）", () => {
-  it("B 只看到相关任务；无关任务与 A 私有任务不出现", async () => {
+  it("B 看到团队全部任务，不再按成员关系裁剪", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=tracker", cookieB)).json();
-    expectSet(descriptions(body.items as MemberTask[]), ["B 独有任务", "A 与 B 协作"]);
+    expectSet(descriptions(body.items as MemberTask[]), [
+      "A 独有任务",
+      "B 独有任务",
+      "A 与 B 协作",
+      "C 被分配小任务的父任务",
+      "含已删除小任务",
+    ]);
     expect(body.nextCursor).toBeNull();
-    expect(JSON.stringify(body)).not.toContain("A 独有任务");
+    expect(JSON.stringify(body)).toContain("A 独有任务");
   });
 
-  it("C：subtask-only 只出现在只读事项跟踪，父任务 detail 为空串且只含自己的小任务", async () => {
+  it("C 看到全部任务与完整父任务详情、全部未删除小任务", async () => {
     const body = (await shareGet("/api/v1/share/tasks?view=tracker", cookieC)).json();
-    expectSet(descriptions(body.items as MemberTask[]), ["C 被分配小任务的父任务"]);
-    const parent = (body.items as MemberTask[])[0]!;
-    // 07 §5.1「不看主任务 detail」：只抹 detail，其余字段保留。
-    expect(parent.detail).toBe("");
-    expect(parent.description).toBe("C 被分配小任务的父任务");
-    expectSet(parent.subtasks.map((subtask) => subtask.description), ["C 的小任务"]);
-    expect(JSON.stringify(body)).not.toContain("A 的小任务");
+    expectSet(descriptions(body.items as MemberTask[]), [
+      "A 独有任务",
+      "B 独有任务",
+      "A 与 B 协作",
+      "C 被分配小任务的父任务",
+      "含已删除小任务",
+    ]);
+    const parent = (body.items as MemberTask[]).find((task) => task.id === taskC)!;
+    expect(parent.detail).toBe("C 被分配小任务的父任务详情");
+    expectSet(parent.subtasks.map((subtask) => subtask.description), ["C 的小任务", "A 的小任务"]);
     expect(JSON.stringify(body)).not.toContain("C 已删除的小任务");
   });
 
@@ -176,8 +195,8 @@ describe("tracker 视图（05 §6.4 / 07 §5.1）", () => {
   });
 });
 
-describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
-  it("A 可读自己的主任务与小任务；B 的 taskId 对 A 返回 404 TASK_NOT_FOUND", async () => {
+describe("任务详情（全员可见）", () => {
+  it("A 可读自己的主任务与小任务；B 的主任务对 A 也可读，角色为 viewer", async () => {
     const own = await shareGet(`/api/v1/share/tasks/${taskA}`, cookieA);
     expect(own.statusCode).toBe(200);
     expect(own.json().memberRole).toBe("owner");
@@ -189,21 +208,21 @@ describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
     expect(ownSub.json().parent.id).toBe(taskC);
     expect(ownSub.json().memberRole).toBe("owner");
 
-    for (const id of [taskB]) {
-      const foreign = await shareGet(`/api/v1/share/tasks/${id}`, cookieA);
-      expect(foreign.statusCode).toBe(404);
-      expect(foreign.json().error.code).toBe("TASK_NOT_FOUND");
-    }
-    const foreignSub = await shareGet(`/api/v1/share/tasks/${subC}`, cookieB);
-    expect(foreignSub.statusCode).toBe(404);
-    expect(foreignSub.json().error.code).toBe("TASK_NOT_FOUND");
+    const foreign = await shareGet(`/api/v1/share/tasks/${taskB}`, cookieA);
+    expect(foreign.statusCode).toBe(200);
+    expect(foreign.json().id).toBe(taskB);
+    expect(foreign.json().memberRole).toBe("viewer");
+    expect(foreign.json().detail).toBe("B 独有任务详情");
+
+    const foreignSub = await shareGet(`/api/v1/share/tasks/${subC}`, cookieA);
+    expect(foreignSub.statusCode).toBe(200);
+    expect(foreignSub.json().memberRole).toBe("owner");
   });
 
-  it("B 以协作者身份读 taskAB；C 读自己的小任务返回 {task,parent,memberRole} 且 parent 无主任务 detail", async () => {
+  it("B 以协作者身份读 taskAB；C 读自己的小任务返回 {task,parent,memberRole} 且 parent 详情完整", async () => {
     const collaboratorMain = await shareGet(`/api/v1/share/tasks/${taskAB}`, cookieB);
     expect(collaboratorMain.statusCode).toBe(200);
     expect(collaboratorMain.json().memberRole).toBe("collaborator");
-    // 主任务 collaborator 属于主任务分配，仍能看完整 detail（07 §5.1）。
     expect(collaboratorMain.json().detail).toBe("A 与 B 协作详情");
 
     const ownSub = await shareGet(`/api/v1/share/tasks/${subC}`, cookieC);
@@ -211,26 +230,25 @@ describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
     const body = ownSub.json();
     expect(body.task.id).toBe(subC);
     expect(body.parent.id).toBe(taskC);
-    expect(body.memberRole).toBe("collaborator");
-    expect(body.parent.subtasks.map((subtask: { id: string }) => subtask.id)).toEqual([subC]);
-    // 07 §5.1：subtask-only 的 parent 上下文同样不含主任务 detail。
-    expect(body.parent.detail).toBe("");
+    expect(body.memberRole).toBe("viewer");
+    expectSet(body.parent.subtasks.map((subtask: { id: string }) => subtask.id), [subA, subC]);
+    expect(body.parent.detail).toBe("C 被分配小任务的父任务详情");
     expect(body.parent.description).toBe("C 被分配小任务的父任务");
 
     const otherSub = await shareGet(`/api/v1/share/tasks/${subA}`, cookieC);
-    expect(otherSub.statusCode).toBe(404);
-    expect(otherSub.json().error.code).toBe("TASK_NOT_FOUND");
+    expect(otherSub.statusCode).toBe(200);
+    expect(otherSub.json().task.id).toBe(subA);
+    expect(otherSub.json().memberRole).toBe("viewer");
 
-    // C 读父任务本身仍可见（父任务上下文），但 detail 被抹空、小任务只剩自己的。
     const parentTask = await shareGet(`/api/v1/share/tasks/${taskC}`, cookieC);
     expect(parentTask.statusCode).toBe(200);
-    expect(parentTask.json().detail).toBe("");
-    expect(parentTask.json().subtasks.map((subtask: { id: string }) => subtask.id)).toEqual([subC]);
+    expect(parentTask.json().detail).toBe("C 被分配小任务的父任务详情");
+    expectSet(parentTask.json().subtasks.map((subtask: { id: string }) => subtask.id), [subA, subC]);
 
-    // 父任务上下文之外的任务（B 的任务）对 C 仍不可见。
     const foreignTask = await shareGet(`/api/v1/share/tasks/${taskB}`, cookieC);
-    expect(foreignTask.statusCode).toBe(404);
-    expect(foreignTask.json().error.code).toBe("TASK_NOT_FOUND");
+    expect(foreignTask.statusCode).toBe(200);
+    expect(foreignTask.json().id).toBe(taskB);
+    expect(foreignTask.json().memberRole).toBe("viewer");
   });
 
   it("非法 / 不存在 / 软删除 id 一律 404 TASK_NOT_FOUND（不 500、不泄露存储错误）", async () => {
@@ -245,7 +263,6 @@ describe("任务详情与跨成员隔离（05 §6.5 / §8）", () => {
     const deleted = await shareGet(`/api/v1/share/tasks/${taskDeleted}`, cookieA);
     expect(deleted.statusCode).toBe(404);
 
-    // 小任务的软删除也由同一读取路径兜底。
     const deletedAggregate = await readTaskAggregate(dataDir, taskDeletedSub);
     const deletedSubId = deletedAggregate!.subtasks.find((subtask) => subtask.deletedAt !== null)!.id;
     const deletedSub = await shareGet(`/api/v1/share/tasks/${deletedSubId}`, cookieA);
@@ -324,35 +341,34 @@ describe("写端点边界（#19 起只开放 §6.6–6.10 五条写路由）", (
   });
 });
 
-describe("成员可见任务夹树（05 §6.11）", () => {
-  it("A 的树只含相关任务夹及祖先，不含无关任务夹名", async () => {
+describe("成员任务夹树（05 §6.11）", () => {
+  it("A 的树是完整团队树，包含无关任务夹与全部任务", async () => {
     const body = (await shareGet("/api/v1/share/folders/tree", cookieA)).json();
-    const rootNode = (body.tree as FolderNode[]).find((node) => node.name === "迭代");
-    expect(rootNode).toBeTruthy();
-    expect(rootNode!.children.map((node) => node.name)).toEqual(["迭代 / 子"]);
+    const topNames = (body.tree as FolderNode[]).map((node) => node.name);
+    expectSet(topNames, ["迭代", "无关任务夹"]);
 
-    const childNode = rootNode!.children[0]!;
+    const rootNode = (body.tree as FolderNode[]).find((node) => node.name === "迭代")!;
+    expect(rootNode.children.map((node) => node.name)).toEqual(["迭代 / 子"]);
+    expectSet(rootNode.tasks.map((task) => task.description), ["A 独有任务", "含已删除小任务"]);
+    const childNode = rootNode.children[0]!;
     expectSet(childNode.tasks.map((task) => task.description), ["A 与 B 协作", "C 被分配小任务的父任务"]);
-    expectSet(rootNode!.tasks.map((task) => task.description), ["A 独有任务", "含已删除小任务"]);
-    expect(rootNode!.counts).toEqual({ done: 0, todo: 2 });
+    expect(rootNode.counts).toEqual({ done: 0, todo: 2 });
     expect(childNode.counts).toEqual({ done: 0, todo: 2 });
 
-    expect(JSON.stringify(body)).not.toContain("无关任务夹");
-    expect(JSON.stringify(body)).not.toContain("无关子夹");
-    expect(JSON.stringify(body)).not.toContain("B 独有任务");
+    const unrelatedNode = (body.tree as FolderNode[]).find((node) => node.name === "无关任务夹")!;
+    expectSet(unrelatedNode.children[0]!.tasks.map((task) => task.description), ["B 独有任务"]);
+    expect(JSON.stringify(body)).not.toContain("已删除任务");
   });
 
-  it("B 的树包含自己任务的任务夹与祖先；C 的树只含父任务所在夹", async () => {
-    const treeB = (await shareGet("/api/v1/share/folders/tree", cookieB)).json();
-    const topNamesB = (treeB.tree as FolderNode[]).map((node) => node.name);
-    expectSet(topNamesB, ["迭代", "无关任务夹"]);
-    expect(JSON.stringify(treeB)).not.toContain("A 独有任务");
-
-    const treeC = (await shareGet("/api/v1/share/folders/tree", cookieC)).json();
-    const rootNodeC = (treeC.tree as FolderNode[]).find((node) => node.name === "迭代");
-    expect(rootNodeC).toBeTruthy();
-    expect(rootNodeC!.children.map((node) => node.name)).toEqual(["迭代 / 子"]);
-    expectSet(rootNodeC!.children[0]!.tasks.map((task) => task.description), ["C 被分配小任务的父任务"]);
+  it("B / C 也拿到同一棵完整树", async () => {
+    for (const cookie of [cookieB, cookieC]) {
+      const body = (await shareGet("/api/v1/share/folders/tree", cookie)).json();
+      const topNames = (body.tree as FolderNode[]).map((node) => node.name);
+      expectSet(topNames, ["迭代", "无关任务夹"]);
+      expect(JSON.stringify(body)).toContain("A 独有任务");
+      expect(JSON.stringify(body)).toContain("B 独有任务");
+      expect(JSON.stringify(body)).toContain("C 被分配小任务的父任务");
+    }
   });
 });
 

@@ -446,14 +446,14 @@ describe("成员裁剪", () => {
     ]);
   });
 
-  it("仅小任务被分配者看不到父任务历史（避免泄露主任务详情）", async () => {
+  it("全员可见后仅小任务被分配者也能看到父任务历史与完整详情", async () => {
     const folderId = await createFolder(app, "小任务历史");
     const ownerA = await createMember(app, "陈晨");
     const ownerC = await createMember(app, "赵敏");
     at(BEFORE_WINDOW);
     const parent = await createTask(app, { folderId, description: "主任务", ownerIds: [ownerA], detail: "主任务私密详情" });
     const subtask = await createSubtask(app, { folderId, parentId: parent.id, description: "C 的小任务", ownerId: ownerC });
-    // 区间内由 owner A 改动主任务进度，产生一条 A 可见、C 不可见的 updated 历史。
+    // 区间内由 owner A 改动主任务进度，产生一条 A 与 C 都能看到的 updated 历史。
     at("2026-05-08T02:00:00.000Z");
     await patchTask(parent.id, subtask.parentVersion, { progress: 50 });
     at(DEFAULT_NOW);
@@ -466,9 +466,11 @@ describe("成员裁剪", () => {
       headers: { cookie: cookieC },
     });
     expect(asC.statusCode).toBe(200);
-    expect((asC.json() as DashboardChanges).items).toEqual([]);
+    const asCItems = (asC.json() as DashboardChanges).items;
+    expect(asCItems.map((item) => item.description)).toEqual(["主任务"]);
+    expect(asCItems[0]!.after.detail).toBe("主任务详情");
 
-    // owner A 仍能看到同一条历史。
+    // owner A 也看到同一条历史。
     const { token: tokenA } = await seedShareLink({ dataDir, memberId: ownerA });
     const cookieA = await exchangeCookie(app, tokenA);
     const asA = await app.inject({
@@ -526,30 +528,24 @@ describe("分享域历史", () => {
     cookieB = await exchangeCookie(app, tokenB);
   });
 
-  it("成员只能看当前相关任务的历史，memberIds 只能在可见范围内缩小", async () => {
+  it("成员看到团队全部任务历史，memberIds 按 owner 口径筛选", async () => {
+    const allTaskIds = new Set([aOnly.id, bOnly.id, shared.id, aDeleted.id]);
     const changesA = await shareChanges(cookieA, folderId);
-    // A 看不到 B 的独占任务；自己负责的软删除任务仍在历史中。
-    expect(new Set(changesA.items.map((entry) => entry.taskId))).toEqual(
-      new Set([aOnly.id, shared.id, aDeleted.id]),
-    );
+    expect(new Set(changesA.items.map((entry) => entry.taskId))).toEqual(allTaskIds);
     expect(itemOf(changesA, aDeleted.id).currentlyDeleted).toBe(true);
     expect(itemOf(changesA, aDeleted.id).changeKind).toBe("deleted");
 
     const changesB = await shareChanges(cookieB, folderId);
-    expect(new Set(changesB.items.map((entry) => entry.taskId))).toEqual(
-      new Set([bOnly.id, shared.id]),
-    );
+    expect(new Set(changesB.items.map((entry) => entry.taskId))).toEqual(allTaskIds);
 
-    // B 出现在 A 可见任务（A+B 负责）的快照里，因此可选；结果只保留 after owner=B 的任务。
     const onlyB = await shareChanges(cookieA, folderId, { memberIds: [memberB] });
-    expect(onlyB.items.map((entry) => entry.taskId)).toEqual([shared.id]);
+    expect(new Set(onlyB.items.map((entry) => entry.taskId))).toEqual(new Set([bOnly.id, shared.id]));
     const onlyA = await shareChanges(cookieA, folderId, { memberIds: [memberA] });
-    // shared 的 after owner 同时含 A/B，因此选 A 时也保留。
     expect(new Set(onlyA.items.map((entry) => entry.taskId))).toEqual(
       new Set([aOnly.id, shared.id, aDeleted.id]),
     );
 
-    // 与 A 无任何共同任务的成员不可见：400，不泄露范围。
+    // 全员可见后，任意在册成员都可作为筛选条件；没有 owner 命中时是合法空集。
     const probe = await app.inject({
       method: "GET",
       url: changesPath("share", folderId, {
@@ -560,8 +556,8 @@ describe("分享域历史", () => {
       }),
       headers: { cookie: cookieA },
     });
-    expect(probe.statusCode).toBe(400);
-    expect((probe.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+    expect(probe.statusCode).toBe(200);
+    expect((probe.json() as DashboardChanges).items).toEqual([]);
   });
 
   it("无会话 401；响应 no-store", async () => {

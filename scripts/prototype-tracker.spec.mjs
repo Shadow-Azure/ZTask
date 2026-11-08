@@ -502,3 +502,59 @@ test('task toolbar places the assignee filter after importance and before search
   assert.ok(importance < assignee, 'assignee filter must follow importance');
   assert.ok(assignee < search, 'assignee filter must precede search');
 });
+
+test('member view groups every active task exactly once and includes other members tasks', () => {
+  const shareTaskGroups = loadFunction('shareTaskGroups');
+  const tasks = {
+    mine: { id: 'mine', owners: ['chen'], collabs: [], progress: 70 },
+    both: { id: 'both', owners: ['chen'], collabs: ['lin'], progress: 40 },
+    collab: { id: 'collab', owners: ['lin'], collabs: ['chen'], progress: 50 },
+    other: { id: 'other', owners: ['zhou'], collabs: [], progress: 20 },
+    deleted: { id: 'deleted', owners: ['lin'], collabs: [], progress: 0, deletedAt: '2026-10-29T10:00:00' },
+  };
+
+  const groups = shareTaskGroups('chen', tasks);
+
+  assert.deepEqual(groups.owned.map(t => t.id), ['mine', 'both']);
+  assert.deepEqual(groups.collab.map(t => t.id), ['collab']);
+  assert.deepEqual(groups.others.map(t => t.id), ['other']);
+  assert.deepEqual(
+    [...groups.owned, ...groups.collab, ...groups.others].map(t => t.id),
+    ['mine', 'both', 'collab', 'other'],
+  );
+});
+
+test('member view lets the owner edit and marks collaborators and other members read-only', () => {
+  const shareCardState = loadFunction('shareCardState');
+
+  assert.deepEqual(shareCardState({ owners: ['chen'], collabs: ['lin'] }, 'chen'), { editable: true, tag: '' });
+  assert.deepEqual(shareCardState({ owners: ['lin'], collabs: ['chen'] }, 'chen'), { editable: false, tag: '协作任务 · 只读' });
+  assert.deepEqual(shareCardState({ owners: ['zhou'], collabs: ['lin'] }, 'chen'), { editable: false, tag: '其他成员 · 只读' });
+});
+
+test('member view treats a task as owned even when the owner is also listed as collaborator', () => {
+  const shareCardState = loadFunction('shareCardState');
+  assert.deepEqual(shareCardState({ owners: ['chen'], collabs: ['chen'] }, 'chen'), { editable: true, tag: '' });
+});
+
+test('member group headers are accessible collapse toggles', () => {
+  const shareGroupToggleAttrs = loadFunction('shareGroupToggleAttrs');
+  const expanded = shareGroupToggleAttrs('owned', false);
+  const collapsed = shareGroupToggleAttrs('owned', true);
+
+  assert.match(expanded, /type="button"/);
+  assert.match(expanded, /data-share-group="owned"/);
+  assert.match(expanded, /aria-expanded="true"/);
+  assert.match(expanded, /aria-controls="share-group-owned"/);
+  assert.match(collapsed, /aria-expanded="false"/);
+  assert.doesNotMatch(expanded, /^.*>$/);
+});
+
+test('member view renders a collapse toggle for all three task groups', () => {
+  for (const id of ['owned', 'collab', 'others']) {
+    assert.match(html, new RegExp(`shareGroupToggleAttrs\\('${id}'`));
+    assert.match(html, new RegExp(`shareCollapsed\\.has\\('${id}'\\)`));
+  }
+  assert.match(html, /\.share-group\.collapsed \.group-body \{ display: none; \}/);
+  assert.match(html, /\.share-group\.collapsed \.group-toggle \.chevron \{ transform: rotate\(-90deg\); \}/);
+});

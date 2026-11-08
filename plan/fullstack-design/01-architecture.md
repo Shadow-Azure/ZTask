@@ -171,21 +171,21 @@ TaskBoard
 
 ```text
 MemberHomePage（原型“成员链接 · 某某”）
-  → GET /share/tasks，按 owner/collaborator 分为我负责的/我协作的
+  → GET /share/tasks，返回团队全部任务，按关系分为我负责的/我协作的/其他成员的任务
   → owner 主任务：PATCH progress/detail，或新建/编辑/删除其小任务，携带 version
   → ShareService 再检查 session.memberId 是该主任务 owner
   → 同一事务追加完整 revision 并更新当前状态，actor=member
   → collaborator 只读；主任务其他字段、主任务分配和删除不接受成员修改
 
 ReadOnlyTrackerPage
-  → GET folders/tree/tasks/dashboard，数据仍限 memberId 相关范围
+  → GET folders/tree/tasks/dashboard，数据为团队全部任务
   → 只读树、任务卡、详情、看板与历史 diff
   → 即使是自己的任务，也不能在事项跟踪中修改
 
 成员导航只有“成员个人页”和“事项跟踪”，没有成员管理、链接管理或网络配置。
 ```
 
-owner/collaborator 同时决定可见范围与个人页写权限；写权限只覆盖主任务 progress、完整 detailText 和其小任务的新建/编辑/删除，不覆盖主任务其他字段、任何任务的 owner/collaborator 分配或主任务删除；新建小任务默认当前成员为 owner。管理员仍可通过 admin API 修改全部任务。
+任务数据全员可见；owner 决定个人页分组与写权限，collaborator / 其他成员只读。写权限只覆盖主任务 progress、完整 detailText 和其小任务的新建/编辑/删除，不覆盖主任务其他字段、任何任务的 owner/collaborator 分配或主任务删除；新建小任务默认当前成员为 owner。管理员仍可通过 admin API 修改全部任务。
 
 ### 5.3 看板与历史比较
 

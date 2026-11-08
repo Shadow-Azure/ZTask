@@ -76,7 +76,7 @@ getDescendantIds(folderId: string): Promise<string[]>
 ```
 
 - 树由 `folders` 表一次查询后在服务层组装，不做文件系统目录嵌套；文件夹层级是 `parent_id`，不是物理路径。
-- create/rename 校验父夹、名称和同级重复提示，事务更新 `folders` 行；share getTree(scope) 只返回含可见任务的任务夹及祖先，并按可见任务计算计数。
+- create/rename 校验父夹、名称和同级重复提示，事务更新 `folders` 行；share getTree 返回完整团队树（含空夹），与管理端同构。
 - 首版不开放移动/删除；未来移动必须防止新父为自身后代。
 - 实体 ID 只接受服务端生成的 UUID，不能把用户 folder/task 名称用于查询或存储键，避免歧义和注入面扩大。
 
@@ -84,13 +84,13 @@ getDescendantIds(folderId: string): Promise<string[]>
 
 ### 5.1 读取
 
-`listTasks(scope,filters)` 用 SQL 查询得到主任务及小任务，批量组装 DTO，无 N+1。`filters` 包含 `q`、`importance` 和 `ownerIds`，三者取交集。搜索在当前可见任务集合上执行，再按 `createdAt ASC,id ASC` 稳定排序，以最后一项的 createdAt/id 生成 opaque cursor；新增任务不会导致页码跳号。
+`listTasks(scope,filters)` 用 SQL 查询得到主任务及小任务，批量组装 DTO，无 N+1。`filters` 包含 `q`、`importance` 和 `ownerIds`，三者取交集。搜索在团队全部任务集合上执行，再按 `createdAt ASC,id ASC` 稳定排序，以最后一项的 createdAt/id 生成 opaque cursor；新增任务不会导致页码跳号。
 
 ### 5.1.1 负责人筛选
 
 `ownerIds` 为空或缺省表示不筛选；非空时从 `assignments` 表判断，口径与旧 `activeOwnersByTask`/`activeSubtaskOwnersByTask` 一致：任一 ID 是主任务有效 owner，则保留整条任务及全部小任务；否则只把该 ID 负责的有效小任务组装进 DTO，父任务没有任何命中小任务时丢弃。主任务的 `owners/collaborators` 始终完整返回。过滤在分页前完成，分页计数按过滤后的主任务，而不是按小任务；未知或归档成员 ID 不命中也不报错，非法 UUID 在 query 校验阶段返回 400。该参数只由管理员任务列表使用，分享域不暴露。
 
-`getTaskForAdmin` 返回完整聚合；`getTaskForMember(id,memberId)` 先通过 `assignments` 和当前 member 状态确定范围。主任务 owner/collaborator 可看完整聚合；仅分配给小任务的成员只看父任务上下文和被分配的小任务，不看主任务 detail 或其他小任务。个人页分组按主任务分配，subtask-only 只出现在只读事项跟踪。不能把全量结果交给前端再过滤。`patchTaskForAdmin(id,input)` 分别校验主任务字段与小任务字段，主任务返回 Task，小任务返回 Subtask+parent。
+`getTaskForAdmin` 返回完整聚合；`getTaskForMember(id,memberId)` 返回团队全部任务的完整聚合（描述、detail、全部未删除小任务），用 `memberRole` 标注 owner / collaborator / viewer。个人页按主任务分配三组；subtask-only 归入 others。`patchTaskForAdmin(id,input)` 分别校验主任务字段与小任务字段，主任务返回 Task，小任务返回 Subtask+parent。
 
 ### 5.2 创建与层级
 
@@ -156,13 +156,13 @@ revision 始终保存完整 after-state。文本做空白规范化与长度限�
 
 ### 8.1 Summary
 
-`buildScope(folderId,memberIds,principal)` 用 SQL 递归查询任务夹后代，再按任务和分配过滤。member principal 先固定为 session.memberId 的相关任务集合，后续筛选只能缩小；admin principal 才是全范围。三桶互斥：done=100、gt50=51–99、lt50=0–50；小任务不重复计数，空 memberIds 表示全部。
+`buildScope(folderId,memberIds)` 用 SQL 递归查询任务夹后代，再按任务和 owner 筛选。管理员与成员都是全范围；`memberIds` 只是 owner 口径的合法缩小。三桶互斥：done=100、gt50=51–99、lt50=0–50；小任务不重复计数，空 memberIds 表示全部。
 
 时间分布在同一当前任务集合上按 `meta.time_zone` 的今天计算。dueDate 允许 null（未设置）；null 不进入预计完成分布。
 
 ### 8.2 Changes
 
-`resolveRange(input,clock)` 统一生成 `[start,end)`：default 为昨天 00:00 至 now，custom endDate 解析为次日 00:00。历史候选使用 historyTasksByFolder，包含软删除任务；成员权限按 after/delete 快照 assignment 与当前 active member 计算“当前相关任务的历史”。
+`resolveRange(input,clock)` 统一生成 `[start,end)`：default 为昨天 00:00 至 now，custom endDate 解析为次日 00:00。历史候选使用 historyTasksByFolder，包含软删除任务；管理员与成员都看团队全部历史，`memberIds` 按 after/delete 快照的主任务 owner 过滤。
 
 对每个候选任务查询 `task_revisions`：
 
@@ -201,10 +201,10 @@ revision 始终保存完整 after-state。文本做空白规范化与长度限�
 | 提交后查询失败 | 直接重试读库；没有独立索引重建阶段 |
 | WAL 尾部未完成 | 下次打开自动恢复，不丢已提交事务 |
 | 数据库页或 checksum 损坏 | integrity_check/业务校验报错，要求从备份恢复 |
-| A 请求 B task | 404，不读取/返回 B 的 DTO |
+| A 请求 B task | 200，返回完整 Task 且 memberRole=viewer |
 | owner 在个人页保存进度/完整详情或管理小任务 | 校验主任务 owner 与 version，写 current + 完整 revision，actor=member |
 | collaborator 写进度/详情/小任务，或 owner 创建第三层任务 | 403，数据库与 revision 均不变化 |
-| 成员请求团队目录/成员管理 | 无此页面或端点；相关任务只含脱敏成员摘要 |
+| 成员请求团队目录/成员管理 | 无此页面或端点；任务只含脱敏成员摘要 |
 | rotate 后旧 Cookie/session 行残留 | 401，linkId 校验拒绝 |
 | 同毫秒多个 revision | taskVersion 决定 as-of 顺序 |
 | 区间内创建 | before=null，不伪造旧状态 |
@@ -217,7 +217,7 @@ revision 始终保存完整 after-state。文本做空白规范化与长度限�
 
 1. 临时目录启动，默认仅 loopback；动态开启具体 LAN IP 后成员可访问，重启按配置恢复，IP 失效不影响管理端。
 2. 创建任务夹树、A/B、主任务和小任务，SQL 查询返回正确后代与分配。
-3. A/B 各交换链接，只见自己相关任务；管理员 API 对成员 Cookie 仍为 403。
+3. A/B 各交换链接，都能看到团队全部任务；写操作仍只允许 owner，管理员 API 对成员 Cookie 仍为 403。
 4. A 在个人页保存负责任务进度、编辑完整详情并管理小任务，B 的协作任务只读；双方事项跟踪均只读，管理员与成员历史查询只看到各自权限范围内的 before/after。
 5. rotate A 链接，旧 URL/Cookie 失效，即使旧 session 行被人为保留也不能用。
 6. 故障注入覆盖事务提交前中止、migration 失败与进程重启，重启后无半状态。

@@ -1,4 +1,4 @@
-import type { FolderTreeNode, Task } from "@ztask/shared";
+import type { Task } from "@ztask/shared";
 import type { MemberFile } from "../members/member-service.js";
 import { readAllTaskAggregates } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
@@ -17,23 +17,20 @@ export async function listTaskAggregates(dataDir: string): Promise<TaskAggregate
 }
 
 /**
- * 成员相关集合（07 §5.1）：主任务 owner/collaborator 或任一可见小任务的被分配者。
- * 软删除任务不进入成员范围。
+ * 全团队可见集合：成员链接展示与管理端相同的主任务范围，仅排除软删除。
  * @param aggregates 全部聚合。
- * @param memberId 成员 ID。
- * @returns 只含该成员相关且未软删除的主任务聚合。
+ * @returns 未软删除的主任务聚合。
  */
-export function memberVisibleAggregates(aggregates: TaskAggregate[], memberId: string): TaskAggregate[] {
-  return aggregates.filter((aggregate) => aggregate.task.deletedAt === null && isRelated(aggregate, memberId).related);
+export function activeAggregates(aggregates: TaskAggregate[]): TaskAggregate[] {
+  return aggregates.filter((aggregate) => aggregate.task.deletedAt === null);
 }
 
 /**
  * 主任务分配角色（07 §5.1「个人页分组按主任务分配」）。
  *
  * 这是「主任务维度」的唯一判定：只有主任务 owner/collaborator 返回角色，
- * 仅被分配小任务的成员返回 null（subtask-only）。个人页分组必须用它，
- * 不能把 isRelated 的「相关」当成「归组依据」——否则 subtask-only 会出现在
- * 个人页，与 07 §5.1「subtask-only 只出现在只读事项跟踪」相左。
+ * 仅被分配小任务的成员返回 null（subtask-only）。个人页分组用它：
+ * 这类任务归入「其他成员的任务」，不会误进 owned/collaborated。
  * @param aggregate 任务聚合。
  * @param memberId 成员 ID。
  * @returns 主任务角色；无主任务分配为 null。
@@ -45,33 +42,9 @@ export function mainAssignmentRole(aggregate: TaskAggregate, memberId: string): 
   return null;
 }
 
-/**
- * 判定聚合是否与成员相关（07 §5.1「读取范围」）：主任务 owner/collaborator
- * 或任一未删除小任务的被分配者。这里只回答「能不能看」；
- * 分组与 detail 裁剪用的是 mainAssignmentRole，两者不可混用。
- * @param aggregate 任务聚合。
- * @param memberId 成员 ID。
- * @returns related 与主任务角色（subtask-only 记为 collaborator）。
- */
-export function isRelated(aggregate: TaskAggregate, memberId: string): { related: boolean; role: "owner" | "collaborator" } {
-  const mainRole = mainAssignmentRole(aggregate, memberId);
-  if (mainRole !== null) return { related: true, role: mainRole };
-  const subtaskAssignment = aggregate.assignments.find(
-    (a) => a.memberId === memberId && a.taskId !== aggregate.taskId &&
-      aggregate.subtasks.some((sub) => sub.id === a.taskId && sub.deletedAt === null),
-  );
-  if (subtaskAssignment) return { related: true, role: "collaborator" };
-  return { related: false, role: "collaborator" };
-}
-
-/** 主任务 owner/collaborator 成员可见全部小任务；仅小任务被分配者只看自己的小任务。 */
-function visibleSubtasks(aggregate: TaskAggregate, memberId: string): TaskAggregate["subtasks"] {
-  if (mainAssignmentRole(aggregate, memberId) !== null) {
-    return aggregate.subtasks.filter((sub) => sub.deletedAt === null);
-  }
-  return aggregate.subtasks.filter(
-    (sub) => sub.deletedAt === null && aggregate.assignments.some((a) => a.taskId === sub.id && a.memberId === memberId),
-  );
+/** 全员可见范围下，每个任务展示全部未删除小任务。 */
+function visibleSubtasks(aggregate: TaskAggregate): TaskAggregate["subtasks"] {
+  return aggregate.subtasks.filter((sub) => sub.deletedAt === null);
 }
 
 function summary(members: Map<string, MemberFile>, id: string) {
@@ -92,17 +65,13 @@ function subtaskOwner(aggregate: TaskAggregate, subtaskId: string, members: Map<
 }
 
 /**
- * 成员视角的任务 DTO：小任务按可见性过滤，owner 摘要来自成员档案（待分配兜底）。
- *
- * detail 按 07 §5.1 裁剪：仅被分配小任务的成员「只看父任务上下文和被分配的小任务，
- * 不看主任务 detail」，因此 subtask-only 的 detail 一律空串；其余字段
- * （描述、负责人/协作、重要度、预计完成、进度、可见小任务）保留。
+ * 成员视角的任务 DTO：全员可见，因此保留完整描述、进展详情与全部未删除小任务；
+ * owner 摘要来自成员档案（待分配兜底）。
  * @param aggregate 任务聚合。
- * @param memberId 成员 ID。
  * @param members 成员档案映射。
  * @returns 任务 DTO。
  */
-export function toMemberTask(aggregate: TaskAggregate, memberId: string, members: Map<string, MemberFile>): Task {
+export function toMemberTask(aggregate: TaskAggregate, members: Map<string, MemberFile>): Task {
   return {
     id: aggregate.taskId,
     folderId: aggregate.task.folderId,
@@ -111,13 +80,13 @@ export function toMemberTask(aggregate: TaskAggregate, memberId: string, members
     owners: aggregate.assignments.filter((a) => a.taskId === aggregate.taskId && a.kind === "owner").map((a) => summary(members, a.memberId)),
     collaborators: aggregate.assignments.filter((a) => a.taskId === aggregate.taskId && a.kind === "collaborator").map((a) => summary(members, a.memberId)),
     progress: aggregate.task.progress,
-    detail: mainAssignmentRole(aggregate, memberId) === null ? "" : aggregate.task.detailText,
+    detail: aggregate.task.detailText,
     importance: aggregate.task.importance,
     dueDate: aggregate.task.dueDate,
     version: aggregate.taskVersion,
     createdAt: aggregate.task.createdAt,
     updatedAt: aggregate.updatedAt,
-    subtasks: visibleSubtasks(aggregate, memberId).map((sub) => ({
+    subtasks: visibleSubtasks(aggregate).map((sub) => ({
       id: sub.id,
       parentId: aggregate.taskId,
       description: sub.description,
@@ -128,20 +97,4 @@ export function toMemberTask(aggregate: TaskAggregate, memberId: string, members
       version: aggregate.taskVersion,
     })),
   };
-}
-
-/**
- * 裁剪成员树（05 §6.11）：folder-service 产出与管理端同构的 FolderTreeNode[]，
- * 但管理端会保留空任务夹；成员树只保留含相关任务的节点及其祖先。
- * @param nodes 同构任务夹树。
- * @returns 裁剪后的任务夹树。
- */
-export function pruneMemberTree(nodes: FolderTreeNode[]): FolderTreeNode[] {
-  const kept: FolderTreeNode[] = [];
-  for (const node of nodes) {
-    const children = pruneMemberTree(node.children);
-    if (node.tasks.length === 0 && children.length === 0) continue;
-    kept.push({ ...node, children });
-  }
-  return kept;
 }

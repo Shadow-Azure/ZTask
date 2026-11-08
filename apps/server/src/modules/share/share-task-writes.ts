@@ -5,7 +5,7 @@ import { VersionConflictError } from "../../storage/errors.js";
 import { createTaskStore, readTaskAggregate, type TaskStore } from "../../storage/task-store.js";
 import type { SubtaskRecord, TaskAggregate } from "../../storage/task-types.js";
 import { createMemberService, type MemberFile } from "../members/member-service.js";
-import { isRelated, toMemberTask } from "./share-scope.js";
+import { mainAssignmentRole, toMemberTask } from "./share-scope.js";
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const IMPORTANCES: readonly Importance[] = ["high", "mid", "low"];
@@ -189,11 +189,11 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
     if (current === null || current.task.deletedAt !== null) {
       throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
     }
-    // 05 §1/§8：成员不可见任务统一 404，不泄露资源存在性；可见但非 owner
-    // （collaborator / 仅小任务被分配者）才是 403 OWNER_REQUIRED（05 §6.6）。
-    const relation = isRelated(current, memberId);
-    if (!relation.related) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
-    if (relation.role !== "owner") throw new ApiError(403, "OWNER_REQUIRED", "只有任务负责人可以修改");
+    // 全员可见后，非 owner（collaborator / 仅小任务被分配者 / 其他成员）统一 403 OWNER_REQUIRED，
+    // 不再用 404 隐藏存在性（05 §6.6）。
+    if (mainAssignmentRole(current, memberId) !== "owner") {
+      throw new ApiError(403, "OWNER_REQUIRED", "只有任务负责人可以修改");
+    }
     return current;
   }
 
@@ -207,7 +207,7 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
    */
   async function conflictError(memberId: string, taskId: string, message: string): Promise<ApiError> {
     const latest = await readTaskAggregate(deps.dataDir, taskId).catch(() => null);
-    const current = latest === null ? null : toMemberTask(latest, memberId, await memberMap());
+    const current = latest === null ? null : toMemberTask(latest, await memberMap());
     return new ApiError(409, "TASK_VERSION_CONFLICT", message, { current });
   }
 
@@ -258,7 +258,7 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
     const { aggregate, memberId, name, expectedVersion, changeKind, apply } = options;
     const { draft, changed } = prepare(aggregate, apply);
     if (!changed) {
-      return { task: toMemberTask(aggregate, memberId, await memberMap()), revision: null };
+      return { task: toMemberTask(aggregate, await memberMap()), revision: null };
     }
 
     let result: TaskAggregate;
@@ -288,7 +288,7 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
     }
 
     return {
-      task: toMemberTask(result, memberId, await memberMap()),
+      task: toMemberTask(result, await memberMap()),
       revision: {
         taskVersion: result.revisionTip.taskVersion,
         recordedAt: result.revisionTip.recordedAt,
@@ -414,7 +414,7 @@ export function createShareTaskWriteService(deps: ShareTaskWriteServiceDeps): {
           const target = draft.subtasks.find((entry) => entry.id === subtask.id);
           if (!target) throw new ApiError(404, "TASK_NOT_FOUND", "小任务不存在");
           // 05 §6.10：软删除（保留历史快照）并移除该小任务的分配，
-          // 否则被删小任务的 owner 仍会被 isRelated 判为相关任务。
+          // 避免已删小任务仍出现在分配与 owner 摘要中。
           target.deletedAt = deletedAt;
           draft.assignments = draft.assignments.filter((assignment) => assignment.taskId !== subtask.id);
         },

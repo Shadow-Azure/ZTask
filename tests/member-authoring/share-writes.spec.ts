@@ -402,13 +402,13 @@ describe("权限矩阵（05 §6.6–6.10 / §8）", () => {
         code: "OWNER_REQUIRED",
       },
       {
-        label: "无关成员写不可见任务",
+        label: "无关成员写他人任务",
         method: "PATCH",
         url: `/api/v1/share/tasks/${foreignTask}/progress`,
         cookie: cookieA,
         payload: { progress: 10, version: 1 },
-        status: 404,
-        code: "TASK_NOT_FOUND",
+        status: 403,
+        code: "OWNER_REQUIRED",
       },
       {
         label: "匿名写进度",

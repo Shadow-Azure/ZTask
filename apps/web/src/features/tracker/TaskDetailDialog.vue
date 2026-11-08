@@ -15,6 +15,7 @@ import LoadingState from "../../components/ui/LoadingState.vue";
  * 字段布局与 TaskEditorDialog 同构，但不含任何输入、保存、删除或追加控件——成员在事项跟踪
  * 只能查看；即使任务属于当前成员，更新入口也只在其个人页（02 §5）。
  * 数据在打开时才请求：主任务形态 `Task + memberRole`，小任务形态 `{ task, parent, memberRole }`。
+ * 全员可见后 `viewer` 角色表示任务与当前成员无分配关系。
  */
 const props = defineProps<{
   open: boolean;
@@ -35,7 +36,7 @@ const detailQuery = useQuery({
   enabled: computed(() => props.open && props.taskId !== null),
 });
 
-/** 小任务详情形态（05 §6.5）：携带只含成员可见小任务的父任务。 */
+/** 小任务详情形态（05 §6.5）：携带完整的父任务。 */
 interface SubtaskDetail {
   task: Subtask;
   parent: Task;
@@ -79,7 +80,12 @@ const progress = computed(() => mainTask.value?.progress ?? subtaskDetail.value?
 const detailText = computed(() => mainTask.value?.detail ?? subtaskDetail.value?.parent.detail ?? "");
 const subtasks = computed(() => mainTask.value?.subtasks ?? subtaskDetail.value?.parent.subtasks ?? []);
 const doneCount = computed(() => subtasks.value.filter((subtask) => subtask.progress >= 100).length);
-const roleLabel = computed(() => (detail.value?.memberRole === "owner" ? "负责人" : "协作"));
+const roleLabel = computed(() => {
+  const role = detail.value?.memberRole;
+  if (role === "owner") return "负责人";
+  if (role === "collaborator") return "协作";
+  return "只读";
+});
 </script>
 
 <template>
@@ -92,7 +98,7 @@ const roleLabel = computed(() => (detail.value?.memberRole === "owner" ? "负责
       @retry="detailQuery.refetch()"
     />
     <template v-else-if="detail">
-      <p class="ro-note">成员视图为只读；仅展示你有权查看的任务信息。</p>
+      <p class="ro-note">成员视图为只读；展示团队全部任务信息。</p>
 
       <dl class="fields">
         <div class="field">

@@ -174,6 +174,7 @@ beforeEach(() => {
       }),
     ],
     collaborated: [makeTask({ id: "t-collab", description: "我协作的任务", owners: [OTHER], collaborators: [MEMBER] })],
+    others: [],
   };
   localStorage.clear();
   installServer();

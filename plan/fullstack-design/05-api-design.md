@@ -11,7 +11,7 @@
 - 列表默认只返回未删除实体；任务列表超过约定上限后使用 cursor 分页，`nextCursor=null` 表示没有下一页。列表稳定按 `createdAt ASC,id ASC` 排序，cursor 是服务端签发的 opaque 最后位置标记，不直接暴露 SQL 或数据库偏移；新增任务只影响其后页，不使用可能跳号的页码。
 - 请求 schema 默认拒绝未声明字段。params 中的 `{id}`、`{subtaskId}` 都是路径参数；query 参数在对应接口单独列出。
 - 更新任务必须携带 `version`。version 是主任务聚合的并发版本；小任务 DTO 返回所属主任务聚合的同一版本，任何小任务或分配变化都会递增它。
-- version 冲突返回 409 与最新可见实体；成员不可见任务统一 404；成员调用 Admin API 使用 403。
+- version 冲突返回 409 与最新可见实体；成员链接可读团队全部任务，非 owner 写返回 403；成员调用 Admin API 使用 403。
 - `204` 一律为空响应体。下文 response 均为成功响应，错误结构见 §7。
 
 ## 2. 核心 DTO
@@ -45,7 +45,7 @@ FolderTreeNode = {
 RevisionResult = { taskVersion, recordedAt, changeKind }
 ```
 
-`Task.version` 是主任务聚合版本。分享域任务可附加 `memberRole: "owner" | "collaborator"`，但不包含任何分享 secret 或无关成员目录。
+`Task.version` 是主任务聚合版本。分享域任务可附加 `memberRole: "owner" | "collaborator" | "viewer"`（viewer 表示与当前成员无分配关系），但不包含任何分享 secret 或无关成员目录。
 
 ### 2.2 看板结构
 
@@ -381,7 +381,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - Body：无。
 - Response 200：`{ start, end, timeZone, items: TaskChange[] }`。
 
-历史窗口统一为 `[start,end)`：before 取 `<start` 的最后快照，after 取 `<end` 的最后快照。default 由服务端按 `meta.time_zone` 计算昨天 00:00 至 now；custom 的 endDate 解析为次日 00:00 以包含结束日全天。响应中的 start/end 是实际解析后的 UTC 边界。历史候选包含 active 与软删除任务；成员权限采用“当前相关任务的历史”，按 after/delete 快照 assignment 与当前 active member 计算。
+历史窗口统一为 `[start,end)`：before 取 `<start` 的最后快照，after 取 `<end` 的最后快照。default 由服务端按 `meta.time_zone` 计算昨天 00:00 至 now；custom 的 endDate 解析为次日 00:00 以包含结束日全天。响应中的 start/end 是实际解析后的 UTC 边界。历史候选包含 active 与软删除任务；成员与管理员看同一批团队历史，`memberIds` 按 after/delete 快照的主任务 owner 过滤。
 
 ### 5.4 `POST /admin/maintenance/backup`
 
@@ -429,7 +429,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 `view=home`：
 
 ```text
-{ owned: Task[], collaborated: Task[] }
+{ owned: Task[], collaborated: Task[], others: Task[] }
 ```
 
 `view=tracker`：
@@ -438,16 +438,16 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 { items: Task[], nextCursor: string | null }
 ```
 
-服务端始终先按 session.memberId 过滤相关任务，再应用其他查询条件。首版不提供负责人筛选：成员范围已经限定为当前 session.memberId 的相关任务，且分享域没有成员目录；`ownerIds` 只在管理员任务列表提供。
+服务端返回团队全部未删除任务，再按 session.memberId 的主任务分配分成 owner / collaborator / others 三组（三组不重不漏），并应用其他查询条件。首版不提供负责人筛选：分享域没有成员目录；`ownerIds` 只在管理员任务列表提供。
 
 ### 6.5 `GET /share/tasks/{id}`
 
 - 解决问题：查看个人页或只读事项跟踪中的任务详情。
 - Params：`id` 为任务 UUID。
 - Body：无。
-- Response 200：主任务返回 `Task + { memberRole }`；小任务返回 `{ task: Subtask, parent: Task, memberRole }`，parent 中只包含当前成员可见的小任务。
+- Response 200：主任务返回 `Task + { memberRole }`；小任务返回 `{ task: Subtask, parent: Task, memberRole }`，parent 包含完整主任务与全部未删除小任务。`memberRole` 为 owner / collaborator / viewer。
 
-不相关任务返回 404。
+不存在或软删除任务返回 404；其他成员任务不再返回 404。
 
 ### 6.6 `PATCH /share/tasks/{id}/progress`
 
@@ -456,7 +456,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - Body：`{ progress: number, version: number }`，progress 为 0–100 整数。
 - Response 200：`{ task: Task, revision: RevisionResult | null }`。
 
-collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通过 subtasks 端点编辑。
+非 owner（collaborator、仅小任务被分配者、其他成员）返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通过 subtasks 端点编辑。
 
 ### 6.7 `PATCH /share/tasks/{id}/detail`
 
@@ -504,35 +504,35 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 
 ### 6.11 `GET /share/folders/tree`
 
-- 解决问题：提供只读左树，但只包含相关任务及祖先节点。
+- 解决问题：提供只读左树，展示团队全部任务夹与任务。
 - Params：无。
 - Body：无。
 - Response 200：`{ tree: FolderTreeNode[] }`。
 
-结构与管理端相同，但任务和计数都按当前 memberId 范围计算。
+结构与管理端相同（含空任务夹），任务和计数为团队全量。
 
 ### 6.12 `GET /share/dashboard/summary`
 
-- 解决问题：在相关任务范围内查看统计。
+- 解决问题：查看团队全部任务统计。
 - Params：与 `GET /admin/dashboard/summary` 相同。
 - Body：无。
 - Response 200：`DashboardSummary`。
 
-服务端先限定 memberId，再应用 folder/member 筛选，筛选不能扩大范围。
+服务端按 folder 与 `memberIds`（owner 口径）筛选，不再先限定 memberId；全员可见后不存在“可见范围”校验。
 
 ### 6.13 `GET /share/dashboard/due-distribution`
 
-- 解决问题：查看相关任务的预计完成时间分布。
+- 解决问题：查看团队全部任务的预计完成时间分布。
 - Params：与 `GET /admin/dashboard/due-distribution` 相同。
 - Body：无。
 - Response 200：`{ bucket, asOf, buckets: DueBucket[] }`。
 
 ### 6.14 `GET /share/dashboard/changes`
 
-- 解决问题：查看相关任务的进度与详情变化。
+- 解决问题：查看团队全部任务的进度与详情变化。
 - Params：与 `GET /admin/dashboard/changes` 相同。
 - Body：无。
-- Response 200：`{ start, end, timeZone, items: TaskChange[] }`，items 只含当前成员相关任务，并包含保留 revision 的软删除任务；currentlyDeleted=true 的项由前端标识并置底。
+- Response 200：`{ start, end, timeZone, items: TaskChange[] }`，items 覆盖团队全部任务，并包含保留 revision 的软删除任务；currentlyDeleted=true 的项由前端标识并置底。
 
 ## 7. 错误模型
 
@@ -552,7 +552,7 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 | 400 | `INVALID_REQUEST` | JSON、query 或参数格式错误 |
 | 401 | `SHARE_SESSION_REQUIRED` | 无成员会话或会话过期 |
 | 403 | `ADMIN_LOCAL_ONLY`、`OWNER_REQUIRED`、`TASK_READ_ONLY` | 已知身份但页面、角色或资源不允许操作 |
-| 404 | `TASK_NOT_FOUND`、`SHARE_LINK_INVALID` | 不存在或对成员不可见，不泄露他人资源 |
+| 404 | `TASK_NOT_FOUND`、`SHARE_LINK_INVALID` | 任务不存在/已软删除，或分享链接无效 |
 | 409 | `TASK_VERSION_CONFLICT`、`ACTIVE_SHARE_LINK_EXISTS`、`LAN_SHARE_DISABLED`、`BACKUP_IN_PROGRESS` | 并发、链接状态、分享未开启或备份进行中 |
 | 422 | `TASK_DEPTH_EXCEEDED`、`ASSIGNMENT_ROLE_CONFLICT`、`LAN_INTERFACE_INVALID` | 业务或网络配置校验失败 |
 | 429 | `SHARE_EXCHANGE_RATE_LIMITED` | 令牌交换过频 |
@@ -566,9 +566,9 @@ collaborator 返回 403 `OWNER_REQUIRED`；不能用于小任务，小任务通�
 
 - 每个 route 验证 method、URL、params、body、成功 response schema 和额外字段拒绝。
 - 管理员/成员/匿名对所有端点跑权限矩阵，而非只测 happy path。
-- 两个成员固定 fixture：A 的任务绝不出现在 B 的任一响应；B 的 ID 对 A 返回 404；A 不能访问成员管理路由或目录端点，相关任务中的成员摘要不含分享凭证。
-- 所有管理员 mutation 及成员进度/详情/小任务 mutation 验证 version 缺失/过期/最新；collaborator、第三层任务和主任务其他字段写请求不能产生数据库变化。
+- 两个成员固定 fixture：A/B 的 home 都能看到团队全部任务且三组不重不漏；A 读 B 的独占任务返回 200 + viewer；A 不能访问成员管理路由或目录端点，任务中的成员摘要不含分享凭证。
+- 所有管理员 mutation 及成员进度/详情/小任务 mutation 验证 version 缺失/过期/最新；collaborator、仅小任务被分配者、其他成员、第三层任务和主任务其他字段写请求不能产生数据库变化。
 - 删除主任务、小任务分别验证 version 冲突；小任务删除响应必须是更新后的父聚合。
-- `GET /share/tasks` 分别验证 home 的 owned/collaborated 与 tracker 的 items/nextCursor，两个视图都不能泄露无关任务。
+- `GET /share/tasks` 分别验证 home 的 owned/collaborated/others 与 tracker 的 items/nextCursor，两个视图都覆盖团队全部任务。
 - 网络端点验证非本机/wildcard IP、bind 失败回滚、network_config 状态和 shareBaseUrl 更新。
 - OpenAPI diff 进入 CI；不兼容变更必须升级 `/api/v2` 或明确迁移，不在 v1 中静默改字段含义。

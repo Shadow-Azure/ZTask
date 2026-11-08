@@ -39,7 +39,7 @@
 
 ### Q3 · 小任务的字段与可见范围（已确认）
 
-后端统一带 taskId 的 assignment 模型，唯一性为 `(taskId,memberId)`；主任务 owner 能在个人页更新主任务进度/完整详情并新建、编辑、删除小任务，父任务进度不自动汇总。主任务分配可看完整聚合；subtask-only 成员只看父任务上下文和被分配的小任务，不看主任务 detail 或其他小任务。
+后端统一带 taskId 的 assignment 模型，唯一性为 `(taskId,memberId)`；主任务 owner 能在个人页更新主任务进度/完整详情并新建、编辑、删除小任务，父任务进度不自动汇总。任务数据全员可见，subtask-only 成员也能看到完整父任务与全部小任务；写权限仍只给主任务 owner。
 
 原型差异：小任务编辑只有单 owner，未展示 collaborator/detail。首版管理员编辑 UI 可保持原型精简；小任务可编辑描述、进度、重要度和预计完成，新建默认当前成员为 owner；任何任务分配与主任务其他字段不随之开放。
 
@@ -97,7 +97,7 @@ dueDate 允许 null 表示未设置，非 null 时必须是合法的 `YYYY-MM-DD
 
 ## 4. 审查补齐记录与设计自检
 
-本轮已按 SQLite 可实施性审查补齐：带 taskId 的 assignments、nullable RevisionResult、主/小任务 DTO/version、缺失 service 方法、`[start,end)` 历史边界、删除候选集合、当前相关任务的历史权限、created-then-deleted 优先级、稳定 cursor、归档与查询时效、LAN 连接关闭语义，以及 currentlyDeleted 徽章和置底展示。
+本轮已按 SQLite 可实施性审查补齐：带 taskId 的 assignments、nullable RevisionResult、主/小任务 DTO/version、缺失 service 方法、`[start,end)` 历史边界、删除候选集合、团队全部任务的历史权限、created-then-deleted 优先级、稳定 cursor、归档与查询时效、LAN 连接关闭语义，以及 currentlyDeleted 徽章和置底展示。
 
 ## 5. 设计自检（builder check）
 
@@ -112,9 +112,9 @@ dueDate 允许 null 表示未设置，非 null 时必须是合法的 `YYYY-MM-DD
 ## 6. 设计验收场景
 
 1. 一条命令在新数据目录启动，默认仅 loopback，本机浏览器进入管理端；动态开启具体 LAN IP 后成员可访问，LAN 上 Admin API 仍拒绝。
-2. 局域网 A/B 使用不同链接，都有成员个人页和只读事项跟踪，各自只看到相关任务；无成员管理页，无法通过 API/深链获取对方或全量任务。
+2. 局域网 A/B 使用不同链接，都有成员个人页和只读事项跟踪，都能看到团队全部任务；无成员管理页，写权限只给主任务 owner。
 3. 管理员完成任务夹、成员、主任务和一层小任务维护，刷新/重启后保持；迁移后旧数据完整。
-4. 成员 owner 只能在个人页保存主任务进度、编辑完整详情和管理小任务，collaborator 只读；成员事项跟踪完全只读；并发冲突有可见处理。
+4. 成员 owner 只能在个人页保存主任务进度、编辑完整详情和管理小任务，collaborator 与其他成员只读；成员事项跟踪可看团队全部任务但完全只读；并发冲突有可见处理。
 5. 看板统计、成员过滤、预计完成时间分布与原型口径一致。
 6. 默认/自定义历史查询按 [start,end) 准确还原 before/after，start 恰好变更不漏算；空历史、区间内创建/删除不造假，当前已删除项显示徽章并置底。
 7. 链接生成、重置、吊销与旧会话失效一致；残留 session 行也不能绕过 link 校验。

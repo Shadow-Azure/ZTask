@@ -16,11 +16,9 @@ import {
   type MemberPrincipal,
 } from "./share-auth.js";
 import {
-  isRelated,
+  activeAggregates,
   listTaskAggregates,
   mainAssignmentRole,
-  memberVisibleAggregates,
-  pruneMemberTree,
   toMemberTask,
 } from "./share-scope.js";
 import {
@@ -167,7 +165,7 @@ function isAfterCursor(aggregate: TaskAggregate, cursor: CursorPosition): boolea
 }
 
 /**
- * 成员分享域路由（05 §6.1–6.11）：会话交换/恢复/注销、相关任务视图/详情、
+ * 成员分享域路由（05 §6.1–6.11）：会话交换/恢复/注销、团队任务视图/详情、
  * 只读任务夹树，以及 #19 的成员写端点（进度/详情/小任务，§6.6–6.10）。
  * #21 追加看板两路由（§6.12–6.13），#22 追加热时间段（§6.14）；复用注入的看板/历史服务。
  * @param app Fastify 实例。
@@ -206,7 +204,7 @@ export async function shareRoutes(
    * 定位任务聚合（05 §6.5）：主任务直读；小任务在成员可见聚合内查找。
    * 非法 UUID / 不存在 / 软删除 / 存储读取异常统一 null，由调用方映射 404，不泄露细节。
    * @param id 主任务或小任务 UUID。
-   * @returns 聚合与是否主任务；不可见为 null。
+   * @returns 聚合与是否主任务；不存在/软删除为 null。
    */
   async function resolveAggregate(id: string): Promise<{ aggregate: TaskAggregate; isMain: boolean } | null> {
     if (!UUID_PATTERN.test(id)) return null;
@@ -304,7 +302,7 @@ export async function shareRoutes(
     const view = parseView(query.view);
     const importance = parseImportance(query.importance);
     const members = await memberMap();
-    const aggregates = memberVisibleAggregates(await listTaskAggregates(options.dataDir), principal.memberId);
+    const aggregates = activeAggregates(await listTaskAggregates(options.dataDir));
 
     if (view === "home") {
       // 05 §6.4 + 07 §5.1：owned = 主任务 owner；collaborated = 主任务 collaborator。
@@ -312,19 +310,19 @@ export async function shareRoutes(
       // ——「subtask-only 只出现在只读事项跟踪」。
       const owned: TaskAggregate[] = [];
       const collaborated: TaskAggregate[] = [];
+      const others: TaskAggregate[] = [];
       for (const aggregate of aggregates) {
         const role = mainAssignmentRole(aggregate, principal.memberId);
         if (role === "owner") owned.push(aggregate);
         else if (role === "collaborator") collaborated.push(aggregate);
+        else others.push(aggregate);
       }
+      const toTask = (aggregate: TaskAggregate) => toMemberTask(aggregate, members);
       return {
         // 05 §1 的稳定顺序同样适用于个人页：createdAt, id 升序，避免 readdir 序造成卡片跳动。
-        owned: owned
-          .sort(compareAggregates)
-          .map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
-        collaborated: collaborated
-          .sort(compareAggregates)
-          .map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
+        owned: owned.sort(compareAggregates).map(toTask),
+        collaborated: collaborated.sort(compareAggregates).map(toTask),
+        others: others.sort(compareAggregates).map(toTask),
       } satisfies ShareHomeTasks;
     }
 
@@ -356,45 +354,39 @@ export async function shareRoutes(
       })
       : null;
     return {
-      items: page.map((aggregate) => toMemberTask(aggregate, principal.memberId, members)),
+      items: page.map((aggregate) => toMemberTask(aggregate, members)),
       nextCursor,
     } satisfies ShareTrackerTasks;
   });
 
   // ---- 看板（05 §6.12–6.13 / #21） ----
-  // 会话 preHandler 已覆盖本插件全部非 session 路径；这里只按会话成员取相关任务，
-  // 任何 memberIds 参数都拒绝，避免成员借此探测其他成员的范围。
+  // 全员可见后，成员看板统计团队全部任务；不再通过 shareMemberId 裁剪。
   app.get(`${SHARE_BASE_PATH}/dashboard/summary`, async (request) => {
-    const principal = requirePrincipal(request);
+    requirePrincipal(request);
     const query = request.query as Record<string, unknown>;
-    // 05 §6.12：成员筛选只能在「相关任务」范围内进一步缩小，服务层会校验可见 owner 集合。
     return await options.dashboardService.summary({
       folderId: parseFolderId(query),
       memberIds: parseMemberIds(query),
-      shareMemberId: principal.memberId,
     });
   });
 
   app.get(`${SHARE_BASE_PATH}/dashboard/due-distribution`, async (request) => {
-    const principal = requirePrincipal(request);
+    requirePrincipal(request);
     const query = request.query as Record<string, unknown>;
     return await options.dashboardService.dueDistribution({
       folderId: parseFolderId(query),
       bucket: parseBucket(query),
       memberIds: parseMemberIds(query),
-      shareMemberId: principal.memberId,
     });
   });
 
-  // 05 §6.14：成员只能看「当前相关任务」的历史；memberIds 只能在可见范围内缩小，
-  // 越界成员由历史服务返回 400。no-store 由本插件 onRequest 钩子统一覆盖。
+  // 05 §6.14：全员可见后，成员看团队全部任务的历史。no-store 由本插件 onRequest 钩子统一覆盖。
   app.get(`${SHARE_BASE_PATH}/dashboard/changes`, async (request) => {
-    const principal = requirePrincipal(request);
+    requirePrincipal(request);
     const query = request.query as Record<string, unknown>;
     return await options.historyService.changes({
       folderId: parseFolderId(query),
       memberIds: parseMemberIds(query),
-      shareMemberId: principal.memberId,
       ...parseChangesParams(query),
     });
   });
@@ -404,21 +396,15 @@ export async function shareRoutes(
     const { id } = request.params as { id: string };
     const resolved = await resolveAggregate(id);
     if (!resolved) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
-    const relation = isRelated(resolved.aggregate, principal.memberId);
-    // 不相关任务一律 404，不泄露他人资源（05 §6.5 / §8）。
-    if (!relation.related) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
 
     const members = await memberMap();
-    if (resolved.isMain) {
-      // 07 §5.1：subtask-only 读父任务上下文时 detail 由 toMemberTask 抹成空串。
-      return { ...toMemberTask(resolved.aggregate, principal.memberId, members), memberRole: relation.role };
-    }
-    // 小任务详情（05 §6.5）：parent 是同口径成员 DTO，因此同样不含主任务 detail，
-    // 且只含当前成员可见的小任务。
-    const parent = toMemberTask(resolved.aggregate, principal.memberId, members);
+    const role = mainAssignmentRole(resolved.aggregate, principal.memberId) ?? "viewer";
+    if (resolved.isMain) return { ...toMemberTask(resolved.aggregate, members), memberRole: role };
+    // 小任务详情（05 §6.5）：parent 使用同一全员可见 DTO。
+    const parent = toMemberTask(resolved.aggregate, members);
     const subtask = parent.subtasks.find((entry) => entry.id === id);
     if (!subtask) throw new ApiError(404, "TASK_NOT_FOUND", "任务不存在");
-    return { task: subtask, parent, memberRole: relation.role };
+    return { task: subtask, parent, memberRole: role };
   });
 
   // ---- 成员写端点（05 §6.6–6.10） ----
@@ -568,12 +554,10 @@ export async function shareRoutes(
   );
 
   app.get(`${SHARE_BASE_PATH}/folders/tree`, async (request) => {
-    const principal = requirePrincipal(request);
-    const aggregates = memberVisibleAggregates(await listTaskAggregates(options.dataDir), principal.memberId);
-    // 05 §6.11：复用管理端 folder-service.tree 产出同构 FolderTreeNode[]，再按成员范围裁剪空任务夹。
-    // FolderService.tree 的返回类型已是 FolderTreeNode[]（§6.8），此处不再需要双重转换。
+    requirePrincipal(request);
+    const aggregates = activeAggregates(await listTaskAggregates(options.dataDir));
+    // 05 §6.11：全员可见后复用管理端 folder-service.tree，保留空任务夹，与管理端同构。
     const { service: folderService } = createFolderService({ dataDir: options.dataDir });
-    const tree = await folderService.tree(aggregates);
-    return { tree: pruneMemberTree(tree) };
+    return { tree: await folderService.tree(aggregates) };
   });
 }

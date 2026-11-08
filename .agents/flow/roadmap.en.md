@@ -19,6 +19,7 @@ milestones:
   - m12
   - m13
   - m14
+  - m15
 ```
 
 ZTask provides task collaboration through a local CLI, web service, and SQLite. See [README](README.en.md) for rules; the baseline is `plan/fullstack-design/`.
