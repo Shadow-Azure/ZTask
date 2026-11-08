@@ -6,7 +6,7 @@
 kind: issue
 milestone: m16
 priority: P2
-status: in-progress
+status: done
 scope:
   - apps/web/**
   - tests/**

@@ -6,7 +6,7 @@ English | [中文](m16-member-autosave.md)
 kind: issue
 milestone: m16
 priority: P2
-status: in-progress
+status: done
 scope:
   - apps/web/**
   - tests/**
