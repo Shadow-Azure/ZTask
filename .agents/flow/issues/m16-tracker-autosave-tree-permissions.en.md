@@ -10,7 +10,7 @@ status: ready
 scope:
   - plan/m1-01-ui-prototype/**
   - scripts/prototype-tracker.spec.mjs
-  - .agents/flow/issues/m16-tracker-autosave-tree-permissions*
+  - .agents/flow/issues/m16-*
   - .agents/notes/proposed/feature/2026-11-08-tracker-autosave-context-menu*
 adr:
   - ../../notes/proposed/feature/2026-11-08-tracker-autosave-context-menu.md
