@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useMutation, useQueryClient } from "@tanstack/vue-query";
-import { ApiError, type Importance, type ShareTaskMutation, type Subtask, type Task } from "@ztask/shared";
+import { ApiError, type Importance, type ShareHomeTasks, type Subtask, type Task } from "@ztask/shared";
 import { isOverdue } from "../../components/task-card-model";
 import { shareApi } from "../../api/share";
 import { describeApiError } from "../../api/error-message";
@@ -13,9 +13,9 @@ import BaseDialog from "../../components/ui/BaseDialog.vue";
  * - 只读形态（协作任务 / 只读跟踪）：展示重要度、任务夹路径（原型为无样式内联文本，D17）、
  *   负责人与协作（头像组）、预计完成、小任务摘要、进度与完整进展详情，不渲染任何输入控件。
  * - 可编辑形态（我负责的，D13）：左 240px 灰底进度面板（含蓝色 mono % 值）+ 右侧进展详情，
- *   foot =「保存进度」+「✓ 已保存」瞬时反馈 + 生效时机提示；小任务可新建/编辑/删除（B-4 增强）。
- *   进度滑块只改本地草稿，点击「保存进度」才提交；详情独立保存；所有写操作携带聚合 version，
- *   409 时保留草稿并提示刷新。
+ *   foot =「保存」+ 内联保存状态 + 操作提示；小任务可新建/编辑/删除（B-4 增强）。
+ *   进度与详情共用「保存」一次提交；编辑停顿 2 秒自动保存；Ctrl+S 由成员首页统一保存整页。
+ *   所有写操作携带聚合 version，409 时保留草稿并提示刷新。
  * 分配、重要度、预计完成、所在任务夹与主任务描述永不提供编辑入口（02 §4.2）。
  */
 const props = withDefaults(defineProps<{
@@ -45,9 +45,9 @@ const dueLabel = computed(() => {
 });
 const detailText = computed(() => props.task.detail || "（暂无进展记录）");
 
-/** 进度草稿：只有点击「保存进度」才提交；父级数据在未编辑时同步（例如他人保存后轮询）。 */
+/** 进度草稿：编辑停顿 2 秒自动保存，或点「保存」/Ctrl+S 立即提交。 */
 const progressDraft = ref(props.task.progress);
-/** 完整详情草稿：独立保存，保存成功前不覆盖父级。 */
+/** 完整详情草稿：与进度共用一次保存，保存成功前不覆盖父级。 */
 const detailDraft = ref(props.task.detail);
 /** 409 冲突提示：保留草稿，等用户选择放弃草稿后刷新。 */
 const conflict = ref<string | null>(null);
@@ -57,8 +57,19 @@ const conflictEl = ref<HTMLElement | null>(null);
  * 草稿基线版本：第一次编辑时锁定当时的聚合 version。
  * 若提交时才读 props.task.version，「旧草稿 + 新版本号」会绕过 409 静默覆盖别人的新内容。
  */
-const progressBaseVersion = ref<number | null>(null);
-const detailBaseVersion = ref<number | null>(null);
+const draftBaseVersion = ref<number | null>(null);
+/** 自动保存延时：编辑停顿 2 秒后提交，避免每次按键都写服务器。 */
+const AUTO_SAVE_DELAY = 2000;
+/** 卡片保存状态：pending = 等待自动保存，error = 上一次保存失败。 */
+const savePhase = ref<"saved" | "pending" | "saving" | "error">("saved");
+/** 最近一次成功保存的时间与触发方式；底部状态据此显示「✓ 已自动保存 16:03」。 */
+const lastSavedAt = ref<Date | null>(null);
+const lastSaveMode = ref<"auto" | "manual" | null>(null);
+/** 保存请求在途：同一聚合版本不能被两次写入并发提交。 */
+const saving = ref(false);
+let autoSaveTimer: ReturnType<typeof setTimeout> | undefined;
+/** 保存触发方式：auto = 停顿自动保存；task = 本卡「保存」；page = Ctrl+S 整页保存。 */
+type SaveTrigger = "auto" | "task" | "page";
 /** 小任务行内编辑器；null 表示未打开。id 为 null 表示新建。 */
 const subtaskEditor = ref<{
   id: string | null;
@@ -91,18 +102,17 @@ watch(
 
 const progressDirty = computed(() => progressDraft.value !== props.task.progress);
 const detailDirty = computed(() => detailDraft.value !== props.task.detail);
+const dirty = computed(() => progressDirty.value || detailDirty.value);
 
-/** 「✓ 已保存」瞬时反馈（原型 .saved 的淡入淡出，1.8s）。 */
-const savedFlash = ref(false);
-let savedTimer: ReturnType<typeof setTimeout> | undefined;
-
-function flashSaved(): void {
-  savedFlash.value = true;
-  if (savedTimer !== undefined) clearTimeout(savedTimer);
-  savedTimer = setTimeout(() => {
-    savedFlash.value = false;
-  }, 1800);
-}
+/** 底部保存状态文案：有成功记录时显示「已保存/已自动保存 + 时间」。 */
+const saveStateText = computed(() => {
+  if (savePhase.value === "pending") return "等待自动保存…";
+  if (savePhase.value === "saving") return "正在保存…";
+  if (savePhase.value === "error") return "保存失败";
+  if (lastSavedAt.value === null) return "✓ 已保存";
+  const time = `${String(lastSavedAt.value.getHours()).padStart(2, "0")}:${String(lastSavedAt.value.getMinutes()).padStart(2, "0")}`;
+  return lastSaveMode.value === "manual" ? `✓ 已保存 ${time}` : `✓ 已自动保存 ${time}`;
+});
 
 watch(conflict, async (value) => {
   if (value === null) return;
@@ -110,14 +120,28 @@ watch(conflict, async (value) => {
   conflictEl.value?.focus();
 });
 
-/** 用户开始改进度：锁定当前聚合版本作为提交基线。 */
-function onProgressInput(): void {
-  if (progressBaseVersion.value === null) progressBaseVersion.value = props.task.version;
+function clearAutoSave(): void {
+  if (autoSaveTimer !== undefined) {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = undefined;
+  }
 }
 
-/** 用户开始改详情：锁定当前聚合版本作为提交基线。 */
-function onDetailInput(): void {
-  if (detailBaseVersion.value === null) detailBaseVersion.value = props.task.version;
+/** 输入后重新计时；冲突未处理时停住，避免自动保存反复撞 409。 */
+function scheduleAutoSave(): void {
+  clearAutoSave();
+  if (conflict.value !== null) return;
+  savePhase.value = "pending";
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = undefined;
+    void saveNow("auto");
+  }, AUTO_SAVE_DELAY);
+}
+
+/** 用户开始改进度或详情：锁定当前聚合版本，并安排 2 秒后的自动保存。 */
+function onDraftInput(): void {
+  if (draftBaseVersion.value === null) draftBaseVersion.value = props.task.version;
+  scheduleAutoSave();
 }
 
 /** 写后刷新：home 与 tracker 都从同一组 share 缓存派生。 */
@@ -126,17 +150,30 @@ function invalidateShareTasks(): void {
 }
 
 /**
- * 写操作统一错误面：409 保留草稿并提示刷新；其余错误直接 toast。
- * @param cause useMutation 抛出的错误。
+ * 把成功响应写回首页缓存，让本卡 props 立即前进到新版本（不必等 15 秒轮询）。
+ * 进度与详情串行提交时，第二次请求的基线就是第一次响应里的 version。
+ * @param task 响应里的成员可见主任务。
  */
-function handleWriteError(cause: unknown, operation: string): void {
+function applyTaskToCache(task: Task): void {
+  queryClient.setQueryData<ShareHomeTasks>(["share", "tasks", "home"], (current) => {
+    if (current === undefined) return current;
+    const replace = (tasks: Task[]): Task[] => tasks.map((entry) => (entry.id === task.id ? task : entry));
+    return { ...current, owned: replace(current.owned), collaborated: replace(current.collaborated) };
+  });
+}
+
+/**
+ * 写操作统一错误面：409 保留草稿并提示刷新；其余错误直接 toast。
+ * @param cause 保存请求抛出的错误。
+ */
+function handleWriteError(cause: unknown): void {
   if (cause instanceof ApiError && cause.code === "TASK_VERSION_CONFLICT") {
     const current = (cause.details as { current?: { version?: number; progress?: number } } | null)?.current;
     const serverFact =
       current?.version !== undefined
         ? `服务器当前是 v${current.version}${current.progress !== undefined ? ` · 进度 ${current.progress}%` : ""}`
         : "服务器已有新版本";
-    conflict.value = `${operation}保存冲突：${serverFact}；你的草稿已保留，可选择放弃草稿并刷新。`;
+    conflict.value = `保存冲突：${serverFact}；你的草稿已保留，可选择放弃草稿并刷新。`;
     return;
   }
   if (cause instanceof ApiError && cause.code === "TASK_NOT_FOUND" && subtaskEditor.value !== null) {
@@ -146,39 +183,68 @@ function handleWriteError(cause: unknown, operation: string): void {
   toast.show(describeApiError(cause, "保存失败"));
 }
 
-const progressMutation = useMutation({
-  mutationFn: () =>
-    shareApi.saveProgress(props.task.id, {
-      progress: progressDraft.value,
-      version: progressBaseVersion.value ?? props.task.version,
-    }),
-  onSuccess: (result: ShareTaskMutation) => {
-    conflict.value = null;
-    progressBaseVersion.value = null;
-    progressDraft.value = result.task.progress;
-    flashSaved();
-    toast.show("进度已保存");
-    invalidateShareTasks();
-  },
-  onError: (cause: unknown) => handleWriteError(cause, "进度"),
-});
+/**
+ * 保存本任务的全部修改：先提交进度（如有），再用返回的新 version 提交详情（如有）。
+ * 两个端点共用聚合 version，必须串行；否则第二次写入会被误判成 409。
+ * @param trigger auto = 停顿自动保存；task = 本卡「保存」；page = 页面 Ctrl+S。
+ * @returns 是否至少提交了一项修改。
+ */
+async function saveNow(trigger: SaveTrigger = "task"): Promise<boolean> {
+  clearAutoSave();
+  if (conflict.value !== null) {
+    if (trigger === "task") toast.show("请先处理保存冲突");
+    return false;
+  }
+  if (!dirty.value) {
+    if (trigger === "task") toast.show("没有需要保存的更改");
+    else if (trigger === "auto") savePhase.value = "saved";
+    return false;
+  }
+  if (saving.value) return false;
+  saving.value = true;
+  savePhase.value = "saving";
+  const version = draftBaseVersion.value ?? props.task.version;
+  const progress = progressDraft.value;
+  const detail = detailDraft.value;
+  const progressChanged = progress !== props.task.progress;
+  const detailChanged = detail !== props.task.detail;
+  let latestVersion = version;
+  let completed = false;
+  try {
+    if (progressChanged) {
+      const result = await shareApi.saveProgress(props.task.id, { progress, version: latestVersion });
+      latestVersion = result.task.version;
+      draftBaseVersion.value = null;
+      applyTaskToCache(result.task);
+      invalidateShareTasks();
+    }
+    if (detailChanged) {
+      const result = await shareApi.saveDetail(props.task.id, { detail, version: latestVersion });
+      draftBaseVersion.value = null;
+      applyTaskToCache(result.task);
+      invalidateShareTasks();
+    }
+    draftBaseVersion.value = null;
+    lastSavedAt.value = new Date();
+    lastSaveMode.value = trigger === "auto" ? "auto" : "manual";
+    savePhase.value = "saved";
+    if (trigger === "task") toast.show("已保存");
+    completed = true;
+    return progressChanged || detailChanged;
+  } catch (cause) {
+    handleWriteError(cause);
+    savePhase.value = "error";
+    return false;
+  } finally {
+    saving.value = false;
+    // 保存期间用户继续输入：只比较草稿与本次提交值，避免等待缓存回写 props 后再判断。
+    const changedDuringSave = progressDraft.value !== progress || detailDraft.value !== detail;
+    if (completed && changedDuringSave && conflict.value === null) scheduleAutoSave();
+  }
+}
 
-const detailMutation = useMutation({
-  mutationFn: () =>
-    shareApi.saveDetail(props.task.id, {
-      detail: detailDraft.value,
-      version: detailBaseVersion.value ?? props.task.version,
-    }),
-  onSuccess: (result: ShareTaskMutation) => {
-    conflict.value = null;
-    detailBaseVersion.value = null;
-    detailDraft.value = result.task.detail;
-    flashSaved();
-    toast.show("进展详情已保存");
-    invalidateShareTasks();
-  },
-  onError: (cause: unknown) => handleWriteError(cause, "详情"),
-});
+onBeforeUnmount(clearAutoSave);
+defineExpose({ saveNow });
 
 const saveSubtaskMutation = useMutation({
   mutationFn: async (draft: NonNullable<typeof subtaskEditor.value>) => {
@@ -199,7 +265,7 @@ const saveSubtaskMutation = useMutation({
     toast.show("小任务已保存");
     invalidateShareTasks();
   },
-  onError: (cause: unknown) => handleWriteError(cause, "小任务"),
+  onError: (cause: unknown) => handleWriteError(cause),
 });
 
 const deleteSubtaskMutation = useMutation({
@@ -212,7 +278,7 @@ const deleteSubtaskMutation = useMutation({
   },
   onError: (cause: unknown) => {
     deletingSubtask.value = null;
-    handleWriteError(cause, "小任务");
+    handleWriteError(cause);
   },
 });
 
@@ -271,11 +337,13 @@ function confirmDeleteSubtask(): void {
 /** 冲突后放弃草稿并刷新：清空所有草稿与基线，避免用旧草稿覆盖服务端新版本。 */
 function discardDraftsAndRefresh(): void {
   conflict.value = null;
+  clearAutoSave();
   progressDraft.value = props.task.progress;
   detailDraft.value = props.task.detail;
   subtaskEditor.value = null;
-  progressBaseVersion.value = null;
-  detailBaseVersion.value = null;
+  draftBaseVersion.value = null;
+  savePhase.value = "saved";
+  lastSavedAt.value = null;
   void queryClient.refetchQueries({ queryKey: ["share", "tasks"] });
 }
 </script>
@@ -341,7 +409,7 @@ function discardDraftsAndRefresh(): void {
             min="0"
             max="100"
             step="5"
-            @input="onProgressInput"
+            @input="onDraftInput"
           >
           <span class="pv">{{ progressDraft }}%</span>
         </div>
@@ -352,31 +420,16 @@ function discardDraftsAndRefresh(): void {
             class="detail-input"
             :aria-label="`进展详情：${task.description}`"
             placeholder="记录当前进展、阻塞点、下一步计划…（保存会追加一份新的完整快照）"
-            @input="onDetailInput"
+            @input="onDraftInput"
           />
         </div>
       </div>
 
-      <!-- D13（原型 1881–1885）：foot = 保存按钮 + 「✓ 已保存」瞬时反馈 + 生效时机提示。 -->
+      <!-- 保存交互：一个「保存」提交本任务全部修改；停顿 2 秒自动保存；Ctrl+S 由成员首页统一保存整页。 -->
       <div class="foot">
-        <button
-          class="btn primary"
-          type="button"
-          :disabled="!progressDirty || progressMutation.isPending.value"
-          @click="progressMutation.mutate()"
-        >
-          {{ progressMutation.isPending.value ? "保存中…" : "保存进度" }}
-        </button>
-        <button
-          class="btn ghost"
-          type="button"
-          :disabled="!detailDirty || detailMutation.isPending.value"
-          @click="detailMutation.mutate()"
-        >
-          {{ detailMutation.isPending.value ? "保存中…" : "保存详情" }}
-        </button>
-        <span class="saved" :class="{ show: savedFlash }">✓ 已保存</span>
-        <span class="foot-hint">进度调整需点击「保存进度」后生效；详情保存会追加一份完整快照</span>
+        <button class="btn primary" type="button" :disabled="saving" @click="saveNow('task')">保存</button>
+        <span class="save-state" :class="savePhase" role="status" aria-live="polite">{{ saveStateText }}</span>
+        <span class="foot-hint">停顿 2 秒自动保存 ·「保存」保存本任务 · <kbd>Ctrl</kbd>+<kbd>S</kbd> 保存整页</span>
       </div>
 
       <div class="sub-edit-area">
@@ -809,7 +862,7 @@ function discardDraftsAndRefresh(): void {
   background: var(--bg-card);
 }
 
-/* 原型 414–415：foot = 保存按钮 + 淡入淡出的「✓ 已保存」+ 提示行。 */
+/* 原型 414–415：foot = 保存按钮 + 内联保存状态 + 操作提示。 */
 .foot {
   display: flex;
   align-items: center;
@@ -818,20 +871,71 @@ function discardDraftsAndRefresh(): void {
   flex-wrap: wrap;
 }
 
-.saved {
-  font-size: 11px;
-  color: var(--green);
-  opacity: 0;
-  transition: opacity 0.2s;
+.foot .foot-hint {
+  margin-left: auto;
 }
 
-.saved.show {
-  opacity: 1;
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.save-state::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+.save-state.pending {
+  color: var(--text-dim);
+}
+
+.save-state.pending::before {
+  background: var(--orange);
+}
+
+.save-state.saving {
+  color: var(--blue);
+}
+
+.save-state.saving::before {
+  background: var(--blue);
+  animation: save-state-pulse 1s ease-in-out infinite;
+}
+
+.save-state.error {
+  color: var(--red);
+}
+
+.save-state.error::before {
+  background: var(--red);
+}
+
+@keyframes save-state-pulse {
+  50% {
+    opacity: 0.2;
+  }
 }
 
 .foot-hint {
   font-size: 11px;
   color: var(--text-faint);
+}
+
+.foot-hint kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  background: var(--bg-inset);
+  border: 1px solid var(--border-strong);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
 }
 
 .edit-hint {

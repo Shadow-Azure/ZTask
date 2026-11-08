@@ -5,8 +5,8 @@
 ```yaml flow
 kind: issue
 milestone: m16
-priority: P1
-status: ready
+priority: P2
+status: done
 scope:
   - plan/m1-01-ui-prototype/**
   - scripts/prototype-tracker.spec.mjs

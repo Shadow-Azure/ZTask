@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import type { FolderTreeNode, Task } from "@ztask/shared";
 import { shareApi } from "../api/share";
 import { isShareUnauthorized, useShareSession } from "../features/share/useShareSession";
 import MemberTaskCard from "../features/share/MemberTaskCard.vue";
+import { useToast } from "../components/ui/toast";
 import LoadingState from "../components/ui/LoadingState.vue";
 import ErrorState from "../components/ui/ErrorState.vue";
 
@@ -64,6 +65,34 @@ const memberColor = computed(() => member.value?.color ?? "var(--blue)");
 /** 401 已交由 handleAuthError 处理，此时页面正在跳转，不展示可重试的错误态。 */
 const unauthorized = computed(() => homeQuery.isError.value && isShareUnauthorized(homeQuery.error.value));
 
+const toast = useToast();
+/** 「我负责的」任务卡实例：Ctrl+S 时逐卡提交全部草稿。 */
+const cards = ref<Array<{ saveNow: (trigger: "auto" | "task" | "page") => Promise<boolean> } | null>>([]);
+
+/**
+ * Ctrl+S 保存整页：逐卡提交本任务的进度/详情草稿。
+ * 至少一张卡有改动时提示「已保存整页修改」，否则提示没有需要保存的更改。
+ */
+async function savePage(): Promise<void> {
+  const targets = cards.value.filter((card): card is NonNullable<typeof card> => card !== null);
+  if (targets.length === 0) {
+    toast.show("没有需要保存的更改");
+    return;
+  }
+  const results = await Promise.all(targets.map((card) => card.saveNow("page")));
+  toast.show(results.some(Boolean) ? "已保存整页修改" : "没有需要保存的更改");
+}
+
+/** 页面级 Ctrl/⌘+S：阻止浏览器保存网页，改存成员页所有任务草稿。 */
+function onSaveShortcut(event: KeyboardEvent): void {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "s") return;
+  event.preventDefault();
+  void savePage();
+}
+
+onMounted(() => document.addEventListener("keydown", onSaveShortcut));
+onBeforeUnmount(() => document.removeEventListener("keydown", onSaveShortcut));
+
 /** folderId → 「迭代 / 子夹」路径，仅含成员可见任务夹及祖先（05 §6.11）。 */
 const folderPathById = computed(() => {
   const map = new Map<string, string>();
@@ -120,10 +149,11 @@ function folderPathOf(task: Task): string | undefined {
               </button>
             </h3>
             <div v-show="!collapsed.owned" id="share-owned-body" class="group-body">
-              <p class="gdesc">可以更新进度（需保存）、编辑完整进展详情（保存会追加快照）并管理一层小任务。</p>
+              <p class="gdesc">可以更新进度与完整进展详情（保存会追加快照）；改动停顿 2 秒自动保存，Ctrl+S 保存整页。</p>
               <MemberTaskCard
                 v-for="task in owned"
                 :key="task.id"
+                ref="cards"
                 :task="task"
                 :folder-path="folderPathOf(task)"
                 editable

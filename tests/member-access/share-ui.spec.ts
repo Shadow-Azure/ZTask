@@ -298,8 +298,10 @@ describe("MemberHomePage（成员个人页只读）", () => {
     expect(ownedCard.text()).toContain("重要度 · 高");
     expect(ownedCard.find("input[type='range']").exists()).toBe(true);
     expect(ownedCard.find("textarea").exists()).toBe(true);
-    expect(ownedCard.text()).toContain("保存进度");
-    expect(ownedCard.text()).toContain("保存详情");
+    expect(ownedCard.find(".foot button").text()).toBe("保存");
+    expect(ownedCard.text()).not.toContain("保存进度");
+    expect(ownedCard.text()).not.toContain("保存详情");
+    expect(ownedCard.text()).toContain("停顿 2 秒自动保存");
     expect(ownedCard.text()).toContain("添加小任务");
     expect(ownedCard.text()).not.toContain("删除任务");
 

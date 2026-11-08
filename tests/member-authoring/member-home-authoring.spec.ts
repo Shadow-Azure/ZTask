@@ -7,7 +7,7 @@ import { createAppRouter } from "../../apps/web/src/router";
 import { createAppQueryClient } from "../../apps/web/src/api/queryClient";
 import App from "../../apps/web/src/App.vue";
 import MemberTaskCard from "../../apps/web/src/features/share/MemberTaskCard.vue";
-import { clearToasts } from "../../apps/web/src/components/ui/toast";
+import { clearToasts, toastState } from "../../apps/web/src/components/ui/toast";
 import type { FolderTreeNode, MemberSummary, ShareHomeTasks, Task } from "@ztask/shared";
 
 /**
@@ -75,16 +75,23 @@ function ownedTask(): Task {
 }
 
 /** 用请求体更新任务并递增版本，模拟服务端写入后的最新聚合。 */
-function applyMutation(body: Record<string, unknown>): Task {
-  const task = ownedTask();
+/** 用请求体更新指定任务并递增版本，模拟服务端写入后的最新聚合。 */
+function applyMutation(taskId: string, body: Record<string, unknown>): Task {
+  const task = home.owned.find((entry) => entry.id === taskId);
+  if (!task) throw new Error(`unknown owned task: ${taskId}`);
   const next: Task = {
     ...task,
     progress: typeof body.progress === "number" ? body.progress : task.progress,
     detail: typeof body.detail === "string" ? body.detail : task.detail,
     version: task.version + 1,
   };
-  home = { ...home, owned: [next, ...home.owned.slice(1)] };
+  home = { ...home, owned: home.owned.map((entry) => (entry.id === taskId ? next : entry)) };
   return next;
+}
+
+/** 当前 toast 文案列表；保存状态常驻页面，不能用 body.textContent 判断是否提示成功。 */
+function toastTexts(): string[] {
+  return toastState().items.map((item) => item.text);
 }
 
 function installServer(): void {
@@ -103,21 +110,19 @@ function installServer(): void {
     if (url.pathname === "/api/v1/share/folders/tree") {
       return jsonResponse(200, tree());
     }
-    if (url.pathname === "/api/v1/share/tasks/t-owner/progress" && method === "PATCH") {
+    const taskWrite = url.pathname.match(/^\/api\/v1\/share\/tasks\/([^/]+)\/(progress|detail)$/);
+    if (taskWrite && method === "PATCH") {
       if (forcedConflict) {
         return jsonResponse(409, {
           error: { code: "TASK_VERSION_CONFLICT", message: "任务已被其他人更新", requestId: "r-conflict" },
         });
       }
-      const task = applyMutation(body ?? {});
-      return jsonResponse(200, { task, revision: { taskVersion: task.version, recordedAt: "2026-11-02T00:00:00.000Z", changeKind: "progress" } });
-    }
-    if (url.pathname === "/api/v1/share/tasks/t-owner/detail" && method === "PATCH") {
-      const task = applyMutation(body ?? {});
-      return jsonResponse(200, { task, revision: { taskVersion: task.version, recordedAt: "2026-11-02T00:00:00.000Z", changeKind: "detail" } });
+      const kind = taskWrite[2] as "progress" | "detail";
+      const task = applyMutation(taskWrite[1]!, body ?? {});
+      return jsonResponse(200, { task, revision: { taskVersion: task.version, recordedAt: "2026-11-02T00:00:00.000Z", changeKind: kind } });
     }
     if (url.pathname === "/api/v1/share/tasks/t-owner/subtasks" && method === "POST") {
-      const task = applyMutation({
+      const task = applyMutation("t-owner", {
         ...body,
       });
       const subtask = {
@@ -130,20 +135,30 @@ function installServer(): void {
         dueDate: null,
         version: task.version,
       };
-      home = { ...home, owned: [{ ...task, subtasks: [...task.subtasks, subtask] }, ...home.owned.slice(1)] };
+      home = {
+        ...home,
+        owned: home.owned.map((entry) =>
+          entry.id === task.id ? { ...task, subtasks: [...task.subtasks, subtask] } : entry,
+        ),
+      };
       return jsonResponse(201, { task: ownedTask(), revision: { taskVersion: task.version, recordedAt: "2026-11-02T00:00:00.000Z", changeKind: "subtask" } });
     }
     if (url.pathname === "/api/v1/share/tasks/t-owner/subtasks/sub-1" && method === "PATCH") {
-      const task = applyMutation(body ?? {});
+      const task = applyMutation("t-owner", body ?? {});
       const subtasks = task.subtasks.map((sub) =>
         sub.id === "sub-1" ? { ...sub, description: String(body?.description ?? sub.description) } : sub,
       );
-      home = { ...home, owned: [{ ...task, subtasks }, ...home.owned.slice(1)] };
+      home = { ...home, owned: home.owned.map((entry) => (entry.id === task.id ? { ...task, subtasks } : entry)) };
       return jsonResponse(200, { task: ownedTask(), revision: { taskVersion: task.version, recordedAt: "2026-11-02T00:00:00.000Z", changeKind: "subtask" } });
     }
     if (url.pathname === "/api/v1/share/tasks/t-owner/subtasks/sub-1" && method === "DELETE") {
-      const task = applyMutation({});
-      home = { ...home, owned: [{ ...task, subtasks: task.subtasks.filter((sub) => sub.id !== "sub-1") }, ...home.owned.slice(1)] };
+      const task = applyMutation("t-owner", {});
+      home = {
+        ...home,
+        owned: home.owned.map((entry) =>
+          entry.id === task.id ? { ...task, subtasks: task.subtasks.filter((sub) => sub.id !== "sub-1") } : entry,
+        ),
+      };
       return jsonResponse(200, { task: ownedTask(), revision: { taskVersion: task.version, recordedAt: "2026-11-02T00:00:00.000Z", changeKind: "subtask" } });
     }
     return jsonResponse(404, { error: { code: "NOT_FOUND", message: "未知端点", requestId: "r-x" } });
@@ -204,13 +219,17 @@ function card(wrapper: Awaited<ReturnType<typeof mountHome>>["wrapper"], index: 
 }
 
 describe("成员个人页 owner 写入（08 §6.2）", () => {
-  it("owner 卡有进度/详情/小任务控件；collaborator 卡保持只读", async () => {
+  it("owner 卡只有一个「保存」、自动保存状态与小任务控件；collaborator 卡保持只读", async () => {
     const { wrapper } = await mountHome();
     await vi.waitFor(() => expect(wrapper.text()).toContain("我负责的任务"));
 
     const ownerCard = card(wrapper, 0);
-    expect(ownerCard.text()).toContain("保存进度");
-    expect(ownerCard.text()).toContain("保存详情");
+    expect(ownerCard.findAll(".foot button")).toHaveLength(1);
+    expect(ownerCard.find(".foot button").text()).toBe("保存");
+    expect(ownerCard.text()).not.toContain("保存进度");
+    expect(ownerCard.text()).not.toContain("保存详情");
+    expect(ownerCard.text()).toContain("停顿 2 秒自动保存");
+    expect(ownerCard.text()).toContain("保存整页");
     expect(ownerCard.text()).toContain("添加小任务");
     expect(ownerCard.find("input[type='range']").exists()).toBe(true);
     expect(ownerCard.find("textarea").exists()).toBe(true);
@@ -223,38 +242,99 @@ describe("成员个人页 owner 写入（08 §6.2）", () => {
     wrapper.unmount();
   });
 
-  it("保存进度：只提交草稿，请求携带 version，成功后刷新", async () => {
+  it("保存：只提交有改动的进度，请求携带 version", async () => {
     const { wrapper } = await mountHome();
     await vi.waitFor(() => expect(wrapper.text()).toContain("我负责的任务"));
 
     const ownerCard = card(wrapper, 0);
     await ownerCard.find("input[type='range']").setValue(65);
-    const saveButton = ownerCard.findAll("button").find((button) => button.text() === "保存进度")!;
-    expect(saveButton.attributes("disabled")).toBeUndefined();
-    await saveButton.trigger("click");
+    await ownerCard.find(".foot button").trigger("click");
 
     await vi.waitFor(() => {
       const patch = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/progress"));
       expect(patch?.body).toEqual({ progress: 65, version: 1 });
     });
-    await vi.waitFor(() => expect(document.body.textContent).toContain("进度已保存"));
+    expect(calls.find((call) => call.method === "PATCH" && call.path.endsWith("/detail"))).toBeUndefined();
+    await vi.waitFor(() => expect(toastTexts()).toContain("已保存"));
     wrapper.unmount();
   });
 
-  it("保存详情：全量替换并携带 version", async () => {
+  it("保存详情：进度不变时只提交详情并携带 version（只改详情不再被两个按钮卡住）", async () => {
     const { wrapper } = await mountHome();
     await vi.waitFor(() => expect(wrapper.text()).toContain("我负责的任务"));
 
     const ownerCard = card(wrapper, 0);
     await ownerCard.find("textarea").setValue("完整替换后的进展详情");
-    const saveButton = ownerCard.findAll("button").find((button) => button.text() === "保存详情")!;
-    await saveButton.trigger("click");
+    await ownerCard.find(".foot button").trigger("click");
 
     await vi.waitFor(() => {
       const patch = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/detail"));
       expect(patch?.body).toEqual({ detail: "完整替换后的进展详情", version: 1 });
     });
-    await vi.waitFor(() => expect(document.body.textContent).toContain("进展详情已保存"));
+    expect(calls.find((call) => call.method === "PATCH" && call.path.endsWith("/progress"))).toBeUndefined();
+    await vi.waitFor(() => expect(toastTexts()).toContain("已保存"));
+    wrapper.unmount();
+  });
+
+  it("保存：同一任务的进度与详情串行提交，详情使用进度响应后的新 version", async () => {
+    const { wrapper } = await mountHome();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("我负责的任务"));
+
+    const ownerCard = card(wrapper, 0);
+    await ownerCard.find("input[type='range']").setValue(85);
+    await ownerCard.find("textarea").setValue("进度和详情一起改");
+    await ownerCard.find(".foot button").trigger("click");
+
+    await vi.waitFor(() => {
+      const progress = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/progress"));
+      const detail = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/detail"));
+      expect(progress?.body).toEqual({ progress: 85, version: 1 });
+      expect(detail?.body).toEqual({ detail: "进度和详情一起改", version: 2 });
+    });
+    await vi.waitFor(() => expect(ownerCard.text()).toContain("✓ 已保存"));
+    wrapper.unmount();
+  });
+
+  it("自动保存：编辑停顿 2 秒后提交，状态显示自动保存时间", async () => {
+    const { wrapper } = await mountHome();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("我负责的任务"));
+
+    const ownerCard = card(wrapper, 0);
+    await ownerCard.find("textarea").setValue("自动保存的新详情");
+    await vi.waitFor(
+      () => {
+        const patch = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/detail"));
+        expect(patch?.body).toEqual({ detail: "自动保存的新详情", version: 1 });
+      },
+      { timeout: 4000, interval: 100 },
+    );
+    await vi.waitFor(() => expect(ownerCard.text()).toContain("✓ 已自动保存"), { timeout: 4000 });
+    wrapper.unmount();
+  });
+
+  it("Ctrl+S：保存整页所有任务卡的草稿", async () => {
+    home = {
+      ...home,
+      owned: [
+        ...home.owned,
+        makeTask({ id: "t-owner-2", description: "我负责的第二个任务", progress: 10, detail: "第二任务详情", subtasks: [] }),
+      ],
+    };
+    const { wrapper } = await mountHome();
+    await vi.waitFor(() => expect(wrapper.text()).toContain("我负责的第二个任务"));
+
+    const [firstCard, secondCard] = wrapper.findAll(".stask");
+    await firstCard!.find("textarea").setValue("第一张卡的新详情");
+    await secondCard!.find("input[type='range']").setValue(35);
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+
+    await vi.waitFor(() => {
+      const detail = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/detail"));
+      const progress = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/progress"));
+      expect(detail?.body).toEqual({ detail: "第一张卡的新详情", version: 1 });
+      expect(progress?.body).toEqual({ progress: 35, version: 1 });
+    });
+    await vi.waitFor(() => expect(toastTexts()).toContain("已保存整页修改"));
     wrapper.unmount();
   });
 
@@ -293,7 +373,7 @@ describe("成员个人页 owner 写入（08 §6.2）", () => {
     await ownerCard.findAll("button").find((button) => button.text() === "编辑")!.trigger("click");
     await nextTick();
     await ownerCard.find(".sub-desc").setValue("改名后的小任务");
-    await ownerCard.findAll("button").find((button) => button.text() === "保存")!.trigger("click");
+    await ownerCard.find(".sub-editor .btn.primary").trigger("click");
 
     await vi.waitFor(() => {
       const patch = calls.find((call) => call.method === "PATCH" && call.path.includes("/subtasks/sub-1"));
@@ -321,11 +401,11 @@ describe("成员个人页 owner 写入（08 §6.2）", () => {
 
     const ownerCard = card(wrapper, 0);
     await ownerCard.find("input[type='range']").setValue(80);
-    await ownerCard.findAll("button").find((button) => button.text() === "保存进度")!.trigger("click");
+    await ownerCard.find(".foot button").trigger("click");
 
     await vi.waitFor(() => expect(ownerCard.text()).toContain("服务器已有新版本"));
     expect((ownerCard.find("input[type='range']").element as HTMLInputElement).value).toBe("80");
-    expect(document.body.textContent).not.toContain("进度已保存");
+    expect(toastTexts()).not.toContain("已保存");
     wrapper.unmount();
   });
 });
@@ -345,9 +425,9 @@ describe("草稿与服务端更新（08 §6.2）", () => {
     expect((wrapper.find("input[type='range']").element as HTMLInputElement).value).toBe("90");
     expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("我的未保存草稿");
 
-    // 基线版本在第一次编辑时锁定为 1；即使 props 前进到 v2，提交仍带 v1 → 服务端能判出 409。
+    // 基线版本在第一次编辑时锁定为 1；即使 props 前进到 v2，首个提交仍带 v1 → 服务端能判出 409。
     calls = [];
-    await wrapper.findAll("button").find((button) => button.text() === "保存进度")!.trigger("click");
+    await wrapper.find(".foot button").trigger("click");
     await vi.waitFor(() => {
       const patch = calls.find((call) => call.method === "PATCH" && call.path.endsWith("/progress"));
       expect(patch?.body).toEqual({ progress: 90, version: 1 });
