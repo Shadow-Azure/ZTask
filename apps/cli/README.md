@@ -16,6 +16,10 @@ pnpm serve        # 等价于 node apps/cli/dist/cli.js serve，默认 http://12
 pnpm dev          # 并行起 server(tsc --watch) 与 web(vite)，/api 代理到 8123
 ```
 
+## `ztask init`
+
+把 npm 全局可执行目录加入 PATH。命令先检查目录是否已配置：已配置时只提醒；否则展示目录并询问 y/n，确认后写入当前 shell 的启动文件（Windows 写当前用户 PATH）。完成后提示重新打开终端或执行打印的 `source` 命令。非交互环境用 `--yes` 跳过确认；重复执行幂等。
+
 ## `ztask serve` 参数
 
 | 参数 | 默认值 | 说明 |

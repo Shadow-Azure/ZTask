@@ -18,7 +18,7 @@ export const DEFAULT_SERVER_URL = "http://127.0.0.1:8123";
 /** 全部子命令的解析结果（#23 追加 backup/restore/doctor，init 用于配置 PATH）。 */
 export type ParsedCliArgs =
   | { command: "serve"; serve: ParsedServeArgs }
-  | { command: "init" }
+  | { command: "init"; yes: boolean }
   | { command: "backup"; url: string }
   | { command: "restore"; backupDir: string; dataDir: string }
   | { command: "doctor"; dataDir?: string };
@@ -60,8 +60,9 @@ function buildProgram(onParse: (parsed: ParsedCliArgs) => void, version: string)
   program
     .command("init")
     .description("把 npm 全局可执行目录加入 PATH，使 ztask 命令可直接运行")
-    .action(() => {
-      onParse({ command: "init" });
+    .option("--yes", "跳过 y/n 确认，直接写入 PATH（适合非交互环境）")
+    .action((options: { yes?: boolean }) => {
+      onParse({ command: "init", yes: options.yes === true });
     });
 
   program

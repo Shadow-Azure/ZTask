@@ -24,7 +24,7 @@ async function main(argv: string[]): Promise<void> {
   const parsed = parseCliArgs(argv);
   switch (parsed.command) {
     case "init":
-      process.exitCode = await runInit();
+      process.exitCode = await runInit({ assumeYes: parsed.yes });
       return;
     case "backup":
       process.exitCode = await runBackup({ url: parsed.url });
