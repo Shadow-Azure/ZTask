@@ -15,15 +15,16 @@ export interface ParsedServeArgs {
 /** 默认管理端地址（与 serve 的默认 host/port 一致）；`ztask backup` 缺省连这里。 */
 export const DEFAULT_SERVER_URL = "http://127.0.0.1:8123";
 
-/** 全部子命令的解析结果（#23 追加 backup/restore/doctor）。 */
+/** 全部子命令的解析结果（#23 追加 backup/restore/doctor，init 用于配置 PATH）。 */
 export type ParsedCliArgs =
   | { command: "serve"; serve: ParsedServeArgs }
+  | { command: "init"; yes: boolean }
   | { command: "backup"; url: string }
   | { command: "restore"; backupDir: string; dataDir: string }
   | { command: "doctor"; dataDir?: string };
 
 /**
- * 构造 ztask 的 commander 程序：四个子命令共用一份帮助与参数校验。
+ * 构造 ztask 的 commander 程序：五个子命令共用一份帮助与参数校验。
  * 所有 action 只把结果写回回调，真正的执行由 cli.ts 分发，便于单测解析而不启动服务。
  * @param onParse 解析出一个子命令时回调。
  * @param version 传给 `--version` 的版本号。
@@ -54,6 +55,14 @@ function buildProgram(onParse: (parsed: ParsedCliArgs) => void, version: string)
           open: options.open,
         },
       });
+    });
+
+  program
+    .command("init")
+    .description("把 npm 全局可执行目录加入 PATH，使 ztask 命令可直接运行")
+    .option("--yes", "跳过 y/n 确认，直接写入 PATH（适合非交互环境）")
+    .action((options: { yes?: boolean }) => {
+      onParse({ command: "init", yes: options.yes === true });
     });
 
   program
@@ -90,7 +99,7 @@ function buildProgram(onParse: (parsed: ParsedCliArgs) => void, version: string)
 
 /**
  * 解析 ztask 命令行的子命令与参数。
- * `--help` 由 commander 输出全部四个子命令（serve/backup/restore/doctor）后退出。
+ * `--help` 由 commander 输出全部五个子命令（serve/init/backup/restore/doctor）后退出。
  * @param argv 命令行参数（不含 node 与脚本路径）。
  * @param version `--version` 输出；默认取包内 package.json，便于发布包与 monorepo 共用。
  * @returns 子命令解析结果。

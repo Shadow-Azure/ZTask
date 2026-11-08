@@ -8,6 +8,7 @@ import type { NetworkState } from "@ztask/shared";
 import { parseCliArgs, resolveOpenDecision, type ParsedServeArgs } from "./serve-args.js";
 import { formatLockHeldMessage } from "./lock-error.js";
 import { EXIT_USAGE, runBackup, runDoctor, runRestore } from "./maintenance.js";
+import { runInit } from "./init.js";
 import { resolveWebDist } from "./web-dist.js";
 
 const require = createRequire(import.meta.url);
@@ -15,13 +16,16 @@ const require = createRequire(import.meta.url);
 const VERSION: string = require("../package.json").version;
 
 /**
- * 命令分发：serve 启动服务；backup/restore/doctor 走维护路径（#23）。
+ * 命令分发：serve 启动服务；init 配置 PATH；backup/restore/doctor 走维护路径（#23）。
  * 维护命令不启动 HTTP、不可达/校验失败时以非零退出码结束（见 maintenance.ts）。
  * @param argv 命令行参数（不含 node 与脚本路径）。
  */
 async function main(argv: string[]): Promise<void> {
   const parsed = parseCliArgs(argv);
   switch (parsed.command) {
+    case "init":
+      process.exitCode = await runInit({ assumeYes: parsed.yes });
+      return;
     case "backup":
       process.exitCode = await runBackup({ url: parsed.url });
       return;

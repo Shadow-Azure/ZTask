@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/notes/implemented/feature/2026-11-07-ztask-init-path.md
+2026-11-07-ztask-init-path.md: dbfe9e4553f1a8f31e539c0cc444c77939bbe976
+2026-11-07-ztask-init-path.en.md: 99fbf565345b0b3b6a9862cc87722e83b08022b0
