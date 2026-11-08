@@ -27,7 +27,20 @@ const props = defineProps<{
   createParentId?: string | null;
 }>();
 
-const emit = defineEmits<{ "open-task": [taskId: string]; "close-create": [] }>();
+interface TreeContextMenuTarget {
+  kind: "folder" | "task";
+  id: string;
+  folderId: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
+const emit = defineEmits<{
+  "open-task": [taskId: string];
+  "close-create": [];
+  "context-menu": [target: TreeContextMenuTarget];
+}>();
 
 const route = useRoute();
 const router = useRouter();
@@ -76,6 +89,10 @@ function select(): void {
   void router.replace({ query: { ...route.query, folder: props.node.id } });
 }
 
+function emitContextMenu(event: MouseEvent, kind: "folder" | "task", id: string, folderId: string, name: string): void {
+  emit("context-menu", { kind, id, folderId, name, x: event.clientX, y: event.clientY });
+}
+
 function toggleCollapsed(): void {
   collapsed.value = !collapsed.value;
 }
@@ -109,7 +126,12 @@ function ringOffset(progress: number): string {
 
 <template>
   <li class="tree-node" role="treeitem" :aria-expanded="hasChildren ? String(!collapsed) : undefined">
-    <div class="row" :class="{ selected: isSelected }" @click="select">
+    <div
+      class="row"
+      :class="{ selected: isSelected }"
+      @click="select"
+      @contextmenu.prevent.stop="emitContextMenu($event, 'folder', node.id, node.id, node.name)"
+    >
       <span
         class="chev"
         :style="{ transform: `rotate(${collapsed ? -90 : 0}deg)` }"
@@ -154,6 +176,7 @@ function ringOffset(progress: number): string {
         :create-parent-id="createParentId"
         @open-task="(id: string) => emit('open-task', id)"
         @close-create="emit('close-create')"
+        @context-menu="(target) => emit('context-menu', target)"
       />
       <button
         v-for="task in node.tasks"
@@ -162,6 +185,7 @@ function ringOffset(progress: number): string {
         type="button"
         :title="`点击打开任务详情：${task.description}`"
         @click="emit('open-task', task.id)"
+        @contextmenu.prevent.stop="emitContextMenu($event, 'task', task.id, node.id, task.description)"
       >
         <span class="chev" aria-hidden="true" />
         <span class="imp-dot" :class="task.importance" aria-hidden="true" />

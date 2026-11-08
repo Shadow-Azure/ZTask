@@ -70,6 +70,55 @@
   .appbar .who { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--text-dim); font-size: 12px; }
   .lan-chip { font-family: var(--mono); font-size: 10.5px; color: var(--green); background: color-mix(in srgb, var(--green) 10%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); border-radius: 999px; padding: 1.5px 9px; }
 
+  /* 全局自动保存状态：所有页面共用；每 5 秒检测一次变更。 */
+  .autosave {
+    display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--bg-panel);
+    color: var(--text-dim); cursor: pointer; text-align: left; flex-shrink: 0;
+  }
+  .autosave:hover { border-color: var(--border-strong); background: var(--bg-card); }
+  .autosave-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 10%, transparent); flex-shrink: 0; }
+  .autosave-copy { display: flex; flex-direction: column; gap: 1px; line-height: 1.25; }
+  .autosave-title { font-size: 11.5px; font-weight: 650; color: var(--text); white-space: nowrap; }
+  .autosave-meta { font-size: 9.5px; color: var(--text-faint); font-family: var(--mono); white-space: nowrap; }
+  .autosave[data-state="dirty"] .autosave-dot { background: var(--orange); box-shadow: 0 0 0 3px color-mix(in srgb, var(--orange) 12%, transparent); }
+  .autosave[data-state="dirty"] .autosave-title { color: var(--orange); }
+  .autosave[data-state="saving"] .autosave-dot { background: var(--blue); animation: autosavePulse .9s ease-in-out infinite; }
+  .autosave[data-state="saving"] .autosave-title { color: var(--blue); }
+  .autosave[data-state="blocked"] .autosave-dot { background: var(--red); box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 10%, transparent); }
+  .autosave[data-state="blocked"] .autosave-title { color: var(--red); }
+  .autosave[data-state="draft"] .autosave-dot { background: var(--text-faint); box-shadow: none; }
+  .autosave[data-state="off"] .autosave-dot { background: var(--text-faint); box-shadow: none; }
+  .autosave[data-state="off"] .autosave-title { color: var(--text-dim); }
+  @keyframes autosavePulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+  .share-bar .autosave { margin-left: auto; }
+
+  /* 自动保存设置浮层：默认开启；配置来源与 CLI 关闭方式在此说明。 */
+  .autosave-panel {
+    position: fixed; z-index: 860; width: 330px; padding: 12px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: 0 18px 42px rgba(20,26,38,.2);
+  }
+  .autosave-panel[hidden] { display: none; }
+  .as-head { display: flex; align-items: center; gap: 8px; padding: 0 2px 9px; border-bottom: 1px solid #eef1f5; }
+  .as-head h3 { flex: 1; font-size: 12.5px; font-weight: 700; }
+  .as-head button { border: none; background: transparent; color: var(--text-faint); cursor: pointer; border-radius: 5px; padding: 1px 5px; }
+  .as-head button:hover { background: var(--bg-inset); color: var(--text); }
+  .as-row { display: flex; align-items: center; gap: 12px; padding: 11px 2px 10px; }
+  .as-row .as-copy { flex: 1; min-width: 0; }
+  .as-title { font-size: 12px; font-weight: 650; }
+  .as-desc { margin-top: 2px; color: var(--text-faint); font-size: 10.5px; line-height: 1.45; }
+  .as-switch { position: relative; width: 38px; height: 22px; flex-shrink: 0; border: none; border-radius: 11px; background: #cfd5de; cursor: pointer; transition: background .15s; }
+  .as-switch span { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(20,26,38,.25); transition: left .15s; }
+  .as-switch.on { background: var(--blue); }
+  .as-switch.on span { left: 18px; }
+  .as-label { margin: 2px 0 4px; color: var(--text-faint); font-size: 9.5px; font-weight: 650; letter-spacing: .3px; text-transform: uppercase; }
+  .as-code { padding: 8px 9px; background: var(--bg-inset); border: 1px solid #eef1f5; border-radius: 8px; }
+  .as-code code, .as-code pre { display: block; font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+  .as-code pre { margin: 0 0 7px; padding: 5px 6px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 5px; white-space: pre-wrap; }
+  .as-code code + code { margin-top: 2px; }
+  .as-note { margin: 8px 2px 0; color: var(--text-faint); font-size: 10px; line-height: 1.45; }
+
   /* ═══ 头像 / 标签 / 进度 通用件 ═══ */
   .ava {
     width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center;
@@ -145,6 +194,7 @@
   .tree-head h2 { font-size: 13px; font-weight: 700; }
   .tree-head button { font-size: 11.5px; color: var(--blue); background: transparent; border: none; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
   .tree-head button:hover { background: color-mix(in srgb, var(--blue) 10%, transparent); }
+  .tree-hint { display: flex; align-items: center; gap: 6px; padding: 0 14px 7px; font-size: 10.5px; color: var(--text-faint); }
   .tree-body { flex: 1; overflow-y: auto; padding: 2px 8px 14px; }
   .tnode { user-select: none; }
   .trow {
@@ -172,6 +222,26 @@
   .tree-input { display: flex; align-items: center; gap: 6px; padding: 3px 8px; }
   .tree-input input { flex: 1; font: inherit; font-size: 12.5px; border: 1px solid var(--blue); border-radius: 6px; padding: 3px 8px; outline: none; }
   .tchildren { margin-left: 15px; border-left: 1px dashed #dde1e8; padding-left: 4px; }
+
+  /* 左树右键菜单：成员可见，管理员专属项禁用并逐行标注。 */
+  .ctx-menu {
+    position: fixed; z-index: 800; min-width: 236px; padding: 5px;
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+    box-shadow: 0 14px 36px rgba(20,26,38,.18);
+  }
+  .ctx-menu[hidden] { display: none; }
+  .ctx-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px 6px; border-bottom: 1px solid #eef1f5; margin-bottom: 4px; }
+  .ctx-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; color: var(--text-faint); }
+  .ctx-item { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border: none; border-radius: 6px; background: transparent; color: var(--text); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+  .ctx-item:hover, .ctx-item:focus-visible { background: var(--bg-inset); outline: none; }
+  .ctx-item .ico { width: 14px; text-align: center; color: var(--text-faint); }
+  .ctx-item.danger { color: var(--red); }
+  .ctx-item.danger .ico { color: var(--red); }
+  .ctx-item.danger:hover, .ctx-item.danger:focus-visible { background: color-mix(in srgb, var(--red) 8%, transparent); }
+  .ctx-item.disabled, .ctx-item.danger.disabled { color: var(--text-faint); cursor: not-allowed; }
+  .ctx-item.disabled .ico, .ctx-item.danger.disabled .ico { color: var(--text-faint); }
+  .ctx-item.disabled:hover, .ctx-item.disabled:focus-visible, .ctx-item.danger.disabled:hover, .ctx-item.danger.disabled:focus-visible { background: transparent; }
+  .ctx-badge { margin-left: auto; flex-shrink: 0; color: var(--text-faint); border: 1px solid var(--border-strong); border-radius: 999px; padding: 0 6px; font-size: 9px; font-weight: 600; letter-spacing: .2px; }
 
   .board { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .board-head { padding: 12px 20px 0; background: var(--bg-card); border-bottom: 1px solid var(--border); }
@@ -466,7 +536,24 @@
   .share-id { display: flex; align-items: center; gap: 10px; padding: 14px 22px; background: linear-gradient(90deg, color-mix(in srgb, var(--blue) 9%, transparent), transparent); border-bottom: 1px solid var(--border); }
   .share-id .hello { font-size: 14.5px; font-weight: 700; }
   .share-id .scope { font-size: 11.5px; color: var(--text-dim); }
-  .share-body { height: calc(100% - 48px - 57px); overflow-y: auto; padding: 18px 22px 44px; }
+  .share-main { display: grid; grid-template-columns: 264px minmax(0, 1fr); height: calc(100% - 48px - 57px); min-height: 0; }
+  .share-tree-side { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg-panel); border-right: 1px solid var(--border); }
+  .share-tree-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; }
+  .share-tree-head h2 { font-size: 13px; font-weight: 700; }
+  .readonly-badge { margin-left: auto; color: var(--text-faint); background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; font-size: 9px; font-weight: 650; }
+  .share-tree-hint { padding: 0 14px 7px; color: var(--text-faint); font-size: 10.5px; }
+  .share-tree { flex: 1; overflow-y: auto; padding: 2px 8px 16px; }
+  .share-tree .trow { font-size: 12px; }
+  .share-tree .trow.task .tname { font-size: 11.5px; }
+  .share-body { height: 100%; overflow-y: auto; padding: 18px 22px 44px; }
+  .share-filter-note { display: flex; align-items: center; gap: 8px; margin: -4px 0 14px; padding: 7px 10px; color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; font-size: 11px; }
+  .share-filter-note b { color: var(--text); font-weight: 600; }
+  .share-filter-note button { margin-left: auto; font: inherit; font-size: 11px; color: var(--blue); background: transparent; border: none; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+  .share-filter-note button:hover { background: color-mix(in srgb, var(--blue) 9%, transparent); }
+  @media (max-width: 980px) {
+    .share-main { grid-template-columns: 1fr; }
+    .share-tree-side { display: none; }
+  }
   .share-group { margin-bottom: 22px; }
   .share-group > h3 { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
   .share-group > h3 .cnt { font-family: var(--mono); font-size: 11px; color: var(--text-faint); font-weight: 400; }
@@ -571,6 +658,17 @@
   .modal-foot .del { color: var(--red); background: transparent; border: 1px solid color-mix(in srgb, var(--red) 40%, transparent); border-radius: 8px; padding: 6px 14px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
   .modal-foot .del:hover { background: color-mix(in srgb, var(--red) 8%, transparent); }
   .modal-foot .sp { flex: 1; }
+  .autosave-note { display: inline-flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-faint); white-space: nowrap; }
+  .autosave-note::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .autosave-note[data-state="dirty"] { color: var(--orange); }
+  .autosave-note[data-state="dirty"]::before { background: var(--orange); }
+  .autosave-note[data-state="saving"] { color: var(--blue); }
+  .autosave-note[data-state="saving"]::before { background: var(--blue); }
+  .autosave-note[data-state="blocked"] { color: var(--red); }
+  .autosave-note[data-state="blocked"]::before { background: var(--red); }
+  .autosave-note[data-state="draft"]::before { background: var(--text-faint); }
+  .autosave-note[data-state="off"] { color: var(--text-faint); }
+  .autosave-note[data-state="off"]::before { background: var(--text-faint); }
 
   /* toast */
   .toast {
@@ -679,6 +777,13 @@
       <button data-goto="members">成员管理</button>
     </div>
     <div class="who">
+      <button class="autosave" data-autosave type="button" title="自动保存已开启：每 5 秒检测一次变更，检测到变更后自动保存。">
+        <span class="autosave-dot" aria-hidden="true"></span>
+        <span class="autosave-copy">
+          <span class="autosave-title">自动保存</span>
+          <span class="autosave-meta">每 5 秒检测</span>
+        </span>
+      </button>
       <span class="lan-chip">LAN · 192.168.1.5:8123</span>
       <span class="ava" style="background:#212832" title="管理员">管</span>
       <span>管理员</span>
@@ -690,6 +795,7 @@
         <h2>任务夹</h2>
         <button id="btn-new-folder">＋ 新建任务夹</button>
       </div>
+      <p class="tree-hint">右键任务夹可新建任务，右键任务可新建或删除</p>
       <div class="tree-body" id="tree-body"></div>
     </aside>
     <div class="tree-resizer" id="tree-resizer" role="separator" aria-label="调整任务树宽度" aria-orientation="vertical" aria-valuemin="220" aria-valuemax="480" aria-valuenow="340" tabindex="0" title="拖拽调整任务树宽度；也可使用左右方向键"><span></span></div>
@@ -765,6 +871,13 @@
       <button class="active" data-goto="members">成员管理</button>
     </div>
     <div class="who">
+      <button class="autosave" data-autosave type="button" title="自动保存已开启：每 5 秒检测一次变更，检测到变更后自动保存。">
+        <span class="autosave-dot" aria-hidden="true"></span>
+        <span class="autosave-copy">
+          <span class="autosave-title">自动保存</span>
+          <span class="autosave-meta">每 5 秒检测</span>
+        </span>
+      </button>
       <span class="lan-chip">LAN · 192.168.1.5:8123</span>
       <span class="ava" style="background:#212832" title="管理员">管</span>
       <span>管理员</span>
@@ -841,6 +954,7 @@
     <div class="modal-foot">
       <button class="del" id="m-delete">删除任务</button>
       <span class="sp"></span>
+      <span class="autosave-note" id="m-autosave-note" data-autosave-note>更改会自动保存</span>
       <button class="btn ghost" id="m-cancel">取消</button>
       <button class="btn primary" id="m-save">保存</button>
     </div>
@@ -863,6 +977,7 @@
     </div>
     <div class="modal-foot">
       <span class="sp"></span>
+      <span class="autosave-note" id="mm-autosave-note" data-autosave-note>更改会自动保存</span>
       <button class="btn ghost" id="mm-cancel">取消</button>
       <button class="btn primary" id="mm-save">保存</button>
     </div>
@@ -880,6 +995,29 @@
       <button class="btn" id="cf-ok" style="color:#fff;background:var(--red)">确认</button>
     </div>
   </div>
+</div>
+
+<div class="ctx-menu" id="ctx-menu" role="menu" aria-label="任务树操作" hidden></div>
+
+<!-- 自动保存设置浮层（原型模拟） -->
+<div class="autosave-panel" id="autosave-panel" role="dialog" aria-label="自动保存设置" hidden>
+  <div class="as-head"><h3>自动保存</h3><button type="button" id="as-close" title="关闭">✕</button></div>
+  <div class="as-row">
+    <div class="as-copy">
+      <div class="as-title">启用自动保存</div>
+      <div class="as-desc">默认开启。关闭后任务/成员浮窗恢复手动保存，成员视图进度需点击保存。</div>
+    </div>
+    <button class="as-switch" id="as-toggle" type="button" role="switch" aria-checked="true" title="切换自动保存"><span></span></button>
+  </div>
+  <div class="as-code">
+    <div class="as-label">配置文件</div>
+    <code>~/.ztask/settings.json</code>
+    <pre>{"autosave":{"enabled":false}}</pre>
+    <div class="as-label">命令行</div>
+    <code>ztask autosave off</code>
+    <code>ztask autosave on</code>
+  </div>
+  <p class="as-note">原型模拟：真实服务读取并写回该文件；配置缺失时默认开启。</p>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -1031,6 +1169,228 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
 }
 
+/* ════════════════ 全局自动保存 ════════════════ */
+const AUTOSAVE_INTERVAL_MS = 5000;
+const autosaveConfig = {
+  enabled: true,
+  settingsPath: '~/.ztask/settings.json',
+  commandOff: 'ztask autosave off',
+  commandOn: 'ztask autosave on',
+};
+let manualDirty = false;
+function formatClock(date) {
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`;
+}
+function autosaveChipHtml() {
+  return `<button class="autosave" data-autosave type="button" title="自动保存已开启：每 5 秒检测一次变更，检测到变更后自动保存。">
+    <span class="autosave-dot" aria-hidden="true"></span>
+    <span class="autosave-copy">
+      <span class="autosave-title">自动保存</span>
+      <span class="autosave-meta">每 5 秒检测</span>
+    </span>
+  </button>`;
+}
+function autosaveCopy(state, savedLabel) {
+  switch (state) {
+    case 'dirty': return { title: '检测到变更', meta: '将在 5 秒内自动保存' };
+    case 'saving': return { title: '正在自动保存…', meta: '正在写入' };
+    case 'saved': return { title: '已自动保存', meta: savedLabel };
+    case 'blocked': return { title: '有未保存更改', meta: '补全必填项后自动保存' };
+    case 'draft': return { title: '新建内容未保存', meta: '点击创建后保存' };
+    case 'off': return { title: '自动保存已关闭', meta: '点击设置开启' };
+    default: return { title: '自动保存', meta: savedLabel };
+  }
+}
+function canOpenTreeMenu(role) {
+  return role === 'admin' || role === 'member';
+}
+function canManageTaskTree(role) {
+  return role === 'admin';
+}
+function taskTreeMenu(kind, role) {
+  if (!canOpenTreeMenu(role)) return [];
+  const admin = canManageTaskTree(role);
+  const items = kind === 'task' ? [
+    { action: 'new-task', label: '新建任务', icon: '＋', requiresAdmin: true },
+    { action: 'delete-task', label: '删除任务', icon: '✕', danger: true, requiresAdmin: true },
+  ] : kind === 'folder' ? [
+    { action: 'new-task', label: '新建任务', icon: '＋', requiresAdmin: true },
+    { action: 'new-folder', label: '新建子任务夹', icon: '＋', requiresAdmin: true },
+  ] : [];
+  return items.map(item => ({ ...item, enabled: admin || !item.requiresAdmin }));
+}
+function clampMenuPosition(x, y, width, height, viewportWidth, viewportHeight) {
+  const gap = 8;
+  return {
+    left: Math.max(gap, Math.min(x, viewportWidth - width - gap)),
+    top: Math.max(gap, Math.min(y, viewportHeight - height - gap)),
+  };
+}
+
+const autosave = {
+  state: 'idle',
+  dirty: false,
+  handler: null,
+  context: null,
+  lastSavedAt: null,
+  resetTimer: null,
+  mark(context, handler) {
+    if (!autosaveConfig.enabled) {
+      this.dirty = false;
+      this.handler = null;
+      this.context = null;
+      this.state = 'off';
+      renderAutosave();
+      return;
+    }
+    this.context = context;
+    this.handler = handler;
+    if (context === 'new-task' || context === 'new-member') {
+      this.dirty = false;
+      this.state = 'draft';
+    } else {
+      this.dirty = true;
+      this.state = 'dirty';
+    }
+    renderAutosave();
+  },
+  flush() {
+    if (!autosaveConfig.enabled) return false;
+    if (!this.dirty || !this.handler) return false;
+    this.state = 'saving';
+    renderAutosave();
+    let ok = false;
+    try { ok = this.handler() !== false; }
+    catch (error) { console.error('autosave failed', error); ok = false; }
+    if (!ok) { this.state = 'blocked'; renderAutosave(); return false; }
+    this.dirty = false;
+    this.lastSavedAt = new Date();
+    this.state = 'saved';
+    renderAutosave();
+    clearTimeout(this.resetTimer);
+    this.resetTimer = setTimeout(() => {
+      if (!this.dirty && this.state === 'saved') { this.state = 'idle'; renderAutosave(); }
+    }, 4000);
+    return true;
+  },
+  noteSaved() {
+    if (!autosaveConfig.enabled) {
+      this.dirty = false;
+      this.state = 'off';
+      renderAutosave();
+      return;
+    }
+    this.dirty = false;
+    this.lastSavedAt = new Date();
+    this.state = 'saved';
+    renderAutosave();
+    clearTimeout(this.resetTimer);
+    this.resetTimer = setTimeout(() => {
+      if (!this.dirty && this.state === 'saved') { this.state = 'idle'; renderAutosave(); }
+    }, 4000);
+  },
+  endContext() {
+    this.dirty = false;
+    this.handler = null;
+    this.context = null;
+    if (!autosaveConfig.enabled) this.state = 'off';
+    else if (['dirty', 'blocked', 'draft', 'saving', 'off'].includes(this.state)) this.state = 'idle';
+    renderAutosave();
+  },
+  setEnabled(enabled) {
+    if (enabled === autosaveConfig.enabled) return;
+    if (!enabled && this.dirty) this.flush();
+    autosaveConfig.enabled = enabled;
+    this.dirty = false;
+    this.handler = null;
+    this.context = null;
+    clearTimeout(this.resetTimer);
+    this.state = enabled ? 'idle' : 'off';
+    renderAutosave();
+    syncAutosaveMode();
+    const toggle = $('#as-toggle');
+    if (toggle) {
+      toggle.classList.toggle('on', enabled);
+      toggle.setAttribute('aria-checked', String(enabled));
+    }
+  },
+};
+function renderAutosave() {
+  const savedLabel = autosave.lastSavedAt ? `${formatClock(autosave.lastSavedAt)} 已保存` : '每 5 秒检测一次';
+  const copy = autosaveCopy(autosave.state, savedLabel);
+  document.querySelectorAll('[data-autosave]').forEach(chip => {
+    chip.dataset.state = autosave.state;
+    chip.title = autosaveConfig.enabled
+      ? `自动保存：${copy.title}。${copy.meta}。每 5 秒检测一次变更。`
+      : '自动保存已关闭：点击设置开启。';
+    const title = chip.querySelector('.autosave-title');
+    const meta = chip.querySelector('.autosave-meta');
+    if (title) title.textContent = copy.title;
+    if (meta) meta.textContent = copy.meta;
+  });
+  document.querySelectorAll('[data-autosave-note]').forEach(note => {
+    note.dataset.state = autosave.state;
+    note.textContent = autosave.state === 'idle'
+      ? '更改会自动保存'
+      : autosave.state === 'saved'
+        ? `已自动保存 · ${autosave.lastSavedAt ? formatClock(autosave.lastSavedAt) : copy.meta}`
+        : autosave.state === 'off'
+          ? '自动保存已关闭 · 请手动保存'
+          : `${copy.title} · ${copy.meta}`;
+  });
+}
+function syncAutosaveMode() {
+  const taskOpen = $('#task-modal-overlay').classList.contains('open');
+  if (taskOpen) {
+    $('#m-save').textContent = autosaveConfig.enabled ? (editing ? '完成' : '创建任务') : (editing ? '保存' : '创建任务');
+    $('#m-cancel').style.display = autosaveConfig.enabled && editing ? 'none' : '';
+    if (autosaveConfig.enabled && manualDirty && editing) markTaskDraftDirty();
+  }
+  const memberOpen = $('#member-modal-overlay').classList.contains('open');
+  if (memberOpen) {
+    $('#mm-save').textContent = autosaveConfig.enabled ? (memberEditing ? '完成' : '添加') : (memberEditing ? '保存' : '添加');
+    $('#mm-cancel').style.display = autosaveConfig.enabled && memberEditing ? 'none' : '';
+    if (autosaveConfig.enabled && manualDirty && memberEditing) markMemberDraftDirty();
+  }
+  if (document.body.dataset.role === 'member' && shareMemberId && $('#share-cards')) renderShareCards(shareMemberId);
+}
+function openAutosavePanel(anchor) {
+  const panel = $('#autosave-panel');
+  const toggle = $('#as-toggle');
+  toggle.classList.toggle('on', autosaveConfig.enabled);
+  toggle.setAttribute('aria-checked', String(autosaveConfig.enabled));
+  panel.hidden = false;
+  const rect = anchor.getBoundingClientRect();
+  const panelRect = panel.getBoundingClientRect();
+  const pos = clampMenuPosition(rect.right - panelRect.width, rect.bottom + 6, panelRect.width, panelRect.height, innerWidth, innerHeight);
+  panel.style.left = pos.left + 'px';
+  panel.style.top = pos.top + 'px';
+  toggle.focus();
+}
+function closeAutosavePanel() {
+  const panel = $('#autosave-panel');
+  if (panel) panel.hidden = true;
+}
+document.addEventListener('click', e => {
+  const chip = e.target.closest('[data-autosave]');
+  if (chip) {
+    if (autosave.dirty) autosave.flush();
+    openAutosavePanel(chip);
+    return;
+  }
+  if (!e.target.closest('#autosave-panel')) closeAutosavePanel();
+});
+$('#as-toggle').addEventListener('click', e => {
+  e.stopPropagation();
+  autosave.setEnabled(!autosaveConfig.enabled);
+});
+$('#as-close').addEventListener('click', closeAutosavePanel);
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#autosave-panel').hidden) closeAutosavePanel();
+});
+window.addEventListener('resize', closeAutosavePanel);
+setInterval(() => { if (autosaveConfig.enabled && autosave.dirty) autosave.flush(); }, AUTOSAVE_INTERVAL_MS);
+
 /* 简易行级 diff（LCS） */
 function diffLines(a, b) {
   const A = String(a).split('\n'), B = String(b).split('\n');
@@ -1064,6 +1424,10 @@ $('#confirm-overlay').addEventListener('click', e => { if (e.target.id === 'conf
 
 /* ════════════════ 原型导航 ════════════════ */
 function showPage(name) {
+  if (autosave.dirty) autosave.flush();
+  autosave.endContext();
+  closeContextMenu();
+  document.body.dataset.role = name.startsWith('share') ? 'member' : 'admin';
   if (name !== 'tracker') assigneePanelOpen = false;
   document.querySelectorAll('.proto-nav button[data-page]').forEach(b =>
     b.classList.toggle('active', b.dataset.page === name));
@@ -1123,6 +1487,20 @@ function summarizeTaskCounts(ids, tasks) {
   let done = 0;
   ids.forEach(id => { if (tasks[id] && tasks[id].progress === 100) done++; });
   return { done, todo: ids.length - done };
+}
+function filterFolderTreeForTasks(nodes, visibleIds) {
+  const out = [];
+  for (const node of nodes) {
+    const tasks = (node.tasks || []).filter(id => visibleIds.has(id));
+    const children = filterFolderTreeForTasks(node.children || [], visibleIds);
+    if (tasks.length || children.length) out.push({ ...node, tasks, children });
+  }
+  return out;
+}
+function collectTreeTaskIds(node) {
+  const ids = [...(node.tasks || [])];
+  (node.children || []).forEach(child => { ids.push(...collectTreeTaskIds(child)); });
+  return ids;
 }
 function clampTreeWidth(width, viewportWidth) {
   const max = Math.min(480, viewportWidth - 480);
@@ -1189,7 +1567,7 @@ function treeNode(n, depth) {
   const counts = summarizeTaskCounts(taskIdsOf(n.id), TASKS);
   const isOpen = !collapsed.has(n.id);
   let html = `<div class="tnode">
-    <div class="trow folder${selFolder === n.id ? ' sel' : ''}" data-fid="${n.id}">
+    <div class="trow folder${selFolder === n.id ? ' sel' : ''}" data-fid="${n.id}" tabindex="-1" title="点击选择任务夹；右键可新建任务">
       <span class="chev" style="transform:rotate(${isOpen ? 0 : -90}deg)">▾</span>
       <span>${isOpen ? '📂' : '📁'}</span>
       <span class="fname">${esc(n.name)}</span>
@@ -1203,7 +1581,7 @@ function treeNode(n, depth) {
     kids.forEach(k => { html += treeNode(k, depth + 1); });
     (n.tasks || []).forEach(tid => {
       const t = TASKS[tid]; if (!t || t.deletedAt) return;
-      html += `<div class="trow task" data-tid="${tid}" title="点击打开任务详情">
+      html += `<div class="trow task" data-tid="${tid}" data-fid="${n.id}" tabindex="-1" title="点击打开任务详情；右键可新建或删除">
         <span class="chev"></span>
         <span class="imp-dot ${t.imp}"></span>
         <span class="tname">${esc(t.desc)}</span>
@@ -1222,6 +1600,116 @@ $('#btn-new-folder').addEventListener('click', () => {
   collapsed.delete(selFolder);
   renderTree();
 });
+
+/* 左树右键菜单：仅管理员；任务夹可新建，任务可新建/删除。 */
+let contextMenuTarget = null;
+
+function closeContextMenu({ restoreFocus = false } = {}) {
+  const menu = $('#ctx-menu');
+  if (!menu || menu.hidden) return;
+  const target = contextMenuTarget;
+  menu.hidden = true;
+  menu.innerHTML = '';
+  contextMenuTarget = null;
+  if (restoreFocus && target && target.row && target.row.isConnected) target.row.focus();
+}
+
+function openTreeContextMenu(event, kind, id, folderId, row) {
+  if (!canOpenTreeMenu(document.body.dataset.role)) return;
+  const items = taskTreeMenu(kind, document.body.dataset.role);
+  if (!items.length) return;
+  const folder = folderById(folderId);
+  const title = kind === 'task'
+    ? `任务 · ${TASKS[id] ? TASKS[id].desc : ''}`
+    : `任务夹 · ${folder ? folder.name : ''}`;
+  const menu = $('#ctx-menu');
+  contextMenuTarget = { kind, id, folderId, row };
+  menu.innerHTML = `<div class="ctx-head"><span class="ctx-title">${esc(title)}</span></div>` +
+    items.map(item => `<button class="ctx-item${item.danger ? ' danger' : ''}${item.enabled ? '' : ' disabled'}" type="button" role="menuitem" data-action="${item.action}" aria-disabled="${item.enabled ? 'false' : 'true'}"><span class="ico" aria-hidden="true">${item.icon}</span>${item.label}${item.requiresAdmin ? '<span class="ctx-badge">仅管理员</span>' : ''}</button>`).join('');
+  menu.hidden = false;
+  const rect = menu.getBoundingClientRect();
+  const pos = clampMenuPosition(event.clientX, event.clientY, rect.width, rect.height, window.innerWidth, window.innerHeight);
+  menu.style.left = pos.left + 'px';
+  menu.style.top = pos.top + 'px';
+  const first = menu.querySelector('.ctx-item');
+  if (first) first.focus();
+}
+
+function openNewTask(folderId) {
+  const fid = folderById(folderId) ? folderId : selFolder;
+  selFolder = fid;
+  collapsed.delete(fid);
+  renderTree();
+  renderTasks();
+  renderStats();
+  openModal(null);
+}
+
+$('#tree-body').addEventListener('contextmenu', e => {
+  if (!canOpenTreeMenu(document.body.dataset.role)) return;
+  const row = e.target.closest('.trow');
+  if (!row) return;
+  e.preventDefault();
+  if (row.classList.contains('task')) {
+    openTreeContextMenu(e, 'task', row.dataset.tid, row.dataset.fid, row);
+  } else if (row.classList.contains('folder')) {
+    openTreeContextMenu(e, 'folder', row.dataset.fid, row.dataset.fid, row);
+  }
+});
+$('#ctx-menu').addEventListener('click', e => {
+  const item = e.target.closest('[data-action]');
+  if (!item || !contextMenuTarget) return;
+  const target = { ...contextMenuTarget };
+  const action = item.dataset.action;
+  if (item.getAttribute('aria-disabled') === 'true') {
+    closeContextMenu({ restoreFocus: true });
+    toast('该操作仅管理员可用');
+    return;
+  }
+  closeContextMenu({ restoreFocus: true });
+  if (action === 'new-task') {
+    openNewTask(target.folderId);
+  } else if (action === 'new-folder') {
+    selFolder = target.folderId;
+    collapsed.delete(target.folderId);
+    folderInputParent = target.folderId;
+    renderTree();
+    renderTasks();
+  } else if (action === 'delete-task') {
+    delTask(target.id);
+  }
+});
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest('#ctx-menu')) closeContextMenu();
+});
+document.addEventListener('contextmenu', e => {
+  if (!e.target.closest('#tree-body, #share-tree')) closeContextMenu();
+});
+document.addEventListener('keydown', e => {
+  const menu = $('#ctx-menu');
+  if (!menu || menu.hidden) return;
+  const items = [...menu.querySelectorAll('.ctx-item')];
+  if (!items.length) return;
+  const current = items.indexOf(document.activeElement);
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    closeContextMenu({ restoreFocus: true });
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    items[(current + 1 + items.length) % items.length].focus();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    items[(current - 1 + items.length) % items.length].focus();
+  } else if (e.key === 'Home') {
+    e.preventDefault();
+    items[0].focus();
+  } else if (e.key === 'End') {
+    e.preventDefault();
+    items[items.length - 1].focus();
+  }
+});
+$('#tree-body').addEventListener('scroll', () => closeContextMenu(), { passive: true });
+window.addEventListener('resize', () => closeContextMenu());
 
 /* 左树右板分栏：指针拖拽 + 键盘方向键；保留足够任务板空间 */
 const trackerEl = document.querySelector('.tracker');
@@ -1836,6 +2324,9 @@ function allFolders() {
   return out;
 }
 function openModal(tid) {
+  if (autosave.dirty) autosave.flush();
+  autosave.endContext();
+  manualDirty = false;
   editing = tid;
   const t = tid ? TASKS[tid] : null;
   $('#modal-title').textContent = tid ? '任务详情' : '新建任务';
@@ -1859,9 +2350,58 @@ function openModal(tid) {
   $('#m-progress-v').textContent = (t ? t.progress : 0) + '%';
   $('#m-detail').value = t ? t.detail : '';
   $('#m-delete').style.display = tid ? '' : 'none';
+  $('#m-save').textContent = autosaveConfig.enabled ? (tid ? '完成' : '创建任务') : (tid ? '保存' : '创建任务');
+  $('#m-cancel').style.display = autosaveConfig.enabled && tid ? 'none' : '';
   closeMsels(); mselUI.owners.q = ''; mselUI.collabs.q = '';
   renderModalChips(); renderModalImp(); renderModalSubs();
+  if (tid) autosave.endContext();
+  else autosave.mark('new-task', null);
   $('#task-modal-overlay').classList.add('open');
+}
+
+function taskDraftError(desc, owners) {
+  if (!String(desc || '').trim()) return '请填写任务描述';
+  if (!owners || owners.size === 0) return '请至少选择一名负责人';
+  return null;
+}
+function saveTaskDraft(showError = false) {
+  if (!editing) return false;
+  const desc = $('#m-desc').value.trim();
+  const error = taskDraftError(desc, mOwners);
+  if (error) {
+    if (showError) toast(error);
+    return false;
+  }
+  Object.assign(TASKS[editing], {
+    desc,
+    owners: [...mOwners],
+    collabs: [...mCollabs],
+    imp: mImp,
+    due: $('#m-due').value,
+    progress: +$('#m-progress').value,
+    detail: $('#m-detail').value,
+    subs: mSubs,
+  });
+  renderTree();
+  renderTasks();
+  renderStats();
+  manualDirty = false;
+  return true;
+}
+function markTaskDraftDirty() {
+  if (!autosaveConfig.enabled) {
+    manualDirty = true;
+    return;
+  }
+  if (!editing) {
+    autosave.mark('new-task', null);
+    return;
+  }
+  autosave.mark('task', () => saveTaskDraft(false));
+  if (taskDraftError($('#m-desc').value, mOwners)) {
+    autosave.state = 'blocked';
+    renderAutosave();
+  }
 }
 function folderPathOfTask(tid) {
   let res = [];
@@ -1914,6 +2454,7 @@ function renderMsel(key, el, selSet, ph, disabledReason) {
     if (unsel) {                       /* 点 tag 的 ×：移除，不开面板 */
       selSet.delete(unsel.dataset.unsel);
       renderModalChips();
+      markTaskDraftDirty();
       return;
     }
     const wasOpen = st.open;
@@ -1939,6 +2480,7 @@ function renderMsel(key, el, selSet, ph, disabledReason) {
     selSet.has(id) ? selSet.delete(id) : selSet.add(id);
     if (key === 'owners') mCollabs.delete(id);   /* 负责人不再重复列为协作 */
     renderModalChips();
+    markTaskDraftDirty();
     const s = el.querySelector('.msel-search');
     if (s) s.focus();
   }));
@@ -1962,9 +2504,12 @@ function renderModalImp() {
   });
 }
 $('#m-imp').querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
-  mImp = b.dataset.v; renderModalImp();
+  mImp = b.dataset.v; renderModalImp(); markTaskDraftDirty();
 }));
-$('#m-progress').addEventListener('input', e => { $('#m-progress-v').textContent = e.target.value + '%'; });
+$('#m-progress').addEventListener('input', e => {
+  $('#m-progress-v').textContent = e.target.value + '%';
+  markTaskDraftDirty();
+});
 
 function renderModalSubs() {
   const list = $('#m-subs');
@@ -1979,12 +2524,13 @@ function renderModalSubs() {
     <button class="icon-btn danger" data-del="${i}" title="移除">✕</button>
   </div>`).join('');
   list.querySelectorAll('[data-del]').forEach(b => b.addEventListener('click', () => {
-    mSubs.splice(+b.dataset.del, 1); renderModalSubs();
+    mSubs.splice(+b.dataset.del, 1); renderModalSubs(); markTaskDraftDirty();
   }));
   list.querySelectorAll('[data-f]').forEach(el => el.addEventListener(el.tagName === 'INPUT' && el.type === 'range' ? 'input' : 'change', () => {
     const s = mSubs[+el.dataset.i];
     s[el.dataset.f] = el.dataset.f === 'progress' ? +el.value : el.value;
     if (el.dataset.f === 'progress') $('#mspv-' + el.dataset.i).textContent = el.value + '%';
+    markTaskDraftDirty();
   }));
 }
 function addSubFromInput() {
@@ -1993,23 +2539,52 @@ function addSubFromInput() {
   mSubs.push({id:'st' + Date.now(), desc:v, owner:[...mOwners][0] || MEMBERS[0].id, progress:0, imp:mImp, due:$('#m-due').value || '2026-11-14'});
   $('#m-sub-input').value = '';
   renderModalSubs();
+  markTaskDraftDirty();
 }
 $('#m-sub-add').addEventListener('click', addSubFromInput);
 $('#m-sub-input').addEventListener('keydown', e => { if (e.key === 'Enter') addSubFromInput(); });
 
-function closeModal() { $('#task-modal-overlay').classList.remove('open'); }
-$('#modal-close').addEventListener('click', closeModal);
-$('#m-cancel').addEventListener('click', closeModal);
+function closeModal(force = false) {
+  if (!force) {
+    if (autosaveConfig.enabled) {
+      if (autosave.dirty && autosave.context === 'task') autosave.flush();
+    } else if (manualDirty) {
+      askConfirm('放弃未保存的更改？', '自动保存已关闭，关闭浮窗前是否放弃本次修改？', '放弃', () => closeModal(true));
+      return;
+    }
+  }
+  $('#task-modal-overlay').classList.remove('open');
+  closeMsels();
+  manualDirty = false;
+  autosave.endContext();
+}
+$('#modal-close').addEventListener('click', () => closeModal());
+$('#m-cancel').addEventListener('click', () => closeModal());
 $('#task-modal-overlay').addEventListener('click', e => { if (e.target.id === 'task-modal-overlay') closeModal(); });
+$('#task-modal-overlay').addEventListener('input', e => {
+  if (e.target.closest('#m-sub-input')) return;
+  markTaskDraftDirty();
+});
+$('#task-modal-overlay').addEventListener('change', e => {
+  if (e.target.closest('#m-sub-input')) return;
+  markTaskDraftDirty();
+});
 
 $('#m-save').addEventListener('click', () => {
   const desc = $('#m-desc').value.trim();
-  if (!desc) { toast('请填写任务描述'); return; }
-  if (!mOwners.size) { toast('请至少选择一名负责人'); return; }
+  const error = taskDraftError(desc, mOwners);
+  if (error) { toast(error); return; }
   if (editing) {
-    const t = TASKS[editing];
-    Object.assign(t, {desc, owners:[...mOwners], collabs:[...mCollabs], imp:mImp,
-      due:$('#m-due').value, progress:+$('#m-progress').value, detail:$('#m-detail').value, subs:mSubs});
+    if (autosaveConfig.enabled) {
+      if (autosave.dirty) {
+        if (!autosave.flush()) return;
+      } else if (!saveTaskDraft(true)) {
+        return;
+      }
+    } else if (!saveTaskDraft(true)) {
+      return;
+    }
+    closeModal(true);
     toast('已保存任务（原型模拟）');
   } else {
     const id = 't' + (taskSeq++);
@@ -2018,11 +2593,17 @@ $('#m-save').addEventListener('click', () => {
     const f = folderById($('#m-folder').style.display === 'none' ? selFolder : $('#m-folder').value);
     if (!f.tasks) f.tasks = [];
     f.tasks.push(id);
+    closeModal(true);
+    renderTree(); renderTasks(); renderStats();
+    autosave.noteSaved();
     toast('已创建任务（原型模拟）');
   }
-  closeModal(); renderTree(); renderTasks(); renderStats();
 });
-$('#m-delete').addEventListener('click', () => { closeModal(); delTask(editing); });
+$('#m-delete').addEventListener('click', () => {
+  const tid = editing;
+  closeModal(true);
+  delTask(tid);
+});
 
 /* ════════════════ 成员管理 ════════════════ */
 const PALETTE = ['#2f6fe0','#1f9d6b','#d97b1c','#8a55c9','#158a8a','#c2498f'];
@@ -2068,7 +2649,7 @@ function renderMembers() {
     if (act === 'revoke') askConfirm('吊销分享链接', '吊销后 ' + m.name + ' 将无法再访问成员视图，可随时重新生成。', '吊销', () => {
       m.token = null; toast('已吊销 ' + m.name + ' 的链接'); renderMembers();
     });
-    if (act === 'edit') { memberEditing = m.id; $('#member-modal-title').textContent = '编辑成员'; $('#mm-name').value = m.name; $('#mm-role').value = m.role; $('#member-modal-overlay').classList.add('open'); }
+    if (act === 'edit') openMemberModal(m.id);
     if (act === 'remove') askConfirm('移除成员', '移除成员「' + m.name + '」？其分享链接将失效，任务中的负责人/协作人标记也会被清除。', '移除', () => {
       MEMBERS.splice(MEMBERS.indexOf(m), 1);
       Object.values(TASKS).forEach(t => {
@@ -2079,29 +2660,92 @@ function renderMembers() {
     });
   }));
 }
-$('#btn-add-member').addEventListener('click', () => {
-  memberEditing = null;
-  $('#member-modal-title').textContent = '添加成员';
-  $('#mm-name').value = ''; $('#mm-role').value = '';
+function openMemberModal(id) {
+  if (autosave.dirty) autosave.flush();
+  autosave.endContext();
+  manualDirty = false;
+  memberEditing = id;
+  const m = id ? member(id) : null;
+  $('#member-modal-title').textContent = id ? '编辑成员' : '添加成员';
+  $('#mm-name').value = m ? m.name : '';
+  $('#mm-role').value = m ? m.role : '';
+  $('#mm-save').textContent = autosaveConfig.enabled ? (id ? '完成' : '添加') : (id ? '保存' : '添加');
+  $('#mm-cancel').style.display = autosaveConfig.enabled && id ? 'none' : '';
+  if (id) autosave.endContext();
+  else autosave.mark('new-member', null);
   $('#member-modal-overlay').classList.add('open');
-});
-$('#mm-save').addEventListener('click', () => {
+}
+function saveMemberDraft(showError = false) {
+  if (!memberEditing) return false;
   const name = $('#mm-name').value.trim();
-  if (!name) { toast('请填写成员姓名'); return; }
+  if (!name) {
+    if (showError) toast('请填写成员姓名');
+    return false;
+  }
   const role = $('#mm-role').value.trim() || '成员';
-  if (memberEditing) {
-    Object.assign(member(memberEditing), {name, role});
-    toast('已保存成员信息（原型模拟）');
-  } else {
-    MEMBERS.push({id:'m' + Date.now(), name, alias:'', role, color:PALETTE[MEMBERS.length % PALETTE.length], token:null});
-    toast('已添加成员，可在列表中为其生成分享链接');
+  Object.assign(member(memberEditing), {name, role});
+  renderMembers();
+  manualDirty = false;
+  return true;
+}
+function markMemberDraftDirty() {
+  if (!autosaveConfig.enabled) {
+    manualDirty = true;
+    return;
+  }
+  if (!memberEditing) {
+    autosave.mark('new-member', null);
+    return;
+  }
+  autosave.mark('member', () => saveMemberDraft(false));
+  if (!$('#mm-name').value.trim()) {
+    autosave.state = 'blocked';
+    renderAutosave();
+  }
+}
+function closeMemberModal(force = false) {
+  if (!force) {
+    if (autosaveConfig.enabled) {
+      if (autosave.dirty && autosave.context === 'member') autosave.flush();
+    } else if (manualDirty) {
+      askConfirm('放弃未保存的更改？', '自动保存已关闭，关闭浮窗前是否放弃本次修改？', '放弃', () => closeMemberModal(true));
+      return;
+    }
   }
   $('#member-modal-overlay').classList.remove('open');
-  renderMembers();
+  manualDirty = false;
+  autosave.endContext();
+}
+$('#btn-add-member').addEventListener('click', () => openMemberModal(null));
+$('#mm-save').addEventListener('click', () => {
+  if (memberEditing) {
+    if (autosaveConfig.enabled) {
+      if (autosave.dirty) {
+        if (!autosave.flush()) return;
+      } else if (!saveMemberDraft(true)) {
+        return;
+      }
+    } else if (!saveMemberDraft(true)) {
+      return;
+    }
+    closeMemberModal(true);
+    toast('已保存成员信息（原型模拟）');
+  } else {
+    const name = $('#mm-name').value.trim();
+    if (!name) { toast('请填写成员姓名'); return; }
+    const role = $('#mm-role').value.trim() || '成员';
+    MEMBERS.push({id:'m' + Date.now(), name, alias:'', role, color:PALETTE[MEMBERS.length % PALETTE.length], token:null});
+    closeMemberModal(true);
+    renderMembers();
+    autosave.noteSaved();
+    toast('已添加成员，可在列表中为其生成分享链接');
+  }
 });
-$('#mm-cancel').addEventListener('click', () => $('#member-modal-overlay').classList.remove('open'));
-$('#member-modal-close').addEventListener('click', () => $('#member-modal-overlay').classList.remove('open'));
-$('#member-modal-overlay').addEventListener('click', e => { if (e.target.id === 'member-modal-overlay') e.target.classList.remove('open'); });
+$('#mm-cancel').addEventListener('click', () => closeMemberModal());
+$('#member-modal-close').addEventListener('click', () => closeMemberModal());
+$('#member-modal-overlay').addEventListener('click', e => { if (e.target.id === 'member-modal-overlay') closeMemberModal(); });
+$('#member-modal-overlay').addEventListener('input', markMemberDraftDirty);
+$('#member-modal-overlay').addEventListener('change', markMemberDraftDirty);
 
 /* ════════════════ 成员视图（分享链接落地页） ════════════════ */
 /* 成员可见范围：团队全部事项；按关系分组，写权限只给负责人。 */
@@ -2126,13 +2770,79 @@ function shareCardState(task, mid) {
   const isCollab = (task.collabs || []).includes(mid);
   return {editable: false, tag: isCollab ? '协作任务 · 只读' : '其他成员 · 只读'};
 }
-function renderShare(mid) {
-  const m = member(mid);
-  const {owned, collab, others} = shareTaskGroups(mid);
-  const card = (t, mid) => {
-    const state = shareCardState(t, mid);
-    const ro = !state.editable;
-    return `<div class="stask${ro ? ' readonly' : ''}">
+
+let shareMemberId = null;
+let shareSelFolder = null;
+const shareTreeCollapsed = new Set();
+
+function shareTreeNode(n, mid, depth, parentId) {
+  const counts = summarizeTaskCounts(collectTreeTaskIds(n), TASKS);
+  const isOpen = !shareTreeCollapsed.has(n.id);
+  let html = `<div class="tnode">
+    <div class="trow folder${shareSelFolder === n.id ? ' sel' : ''}" data-share-fid="${n.id}" tabindex="-1" title="点击筛选任务夹；右键查看操作">
+      <span class="chev" style="transform:rotate(${isOpen ? 0 : -90}deg)">▾</span>
+      <span>${isOpen ? '📂' : '📁'}</span>
+      <span class="fname">${esc(n.name)}</span>
+      <span class="folder-counts" title="已完成 ${counts.done} 个，未完成 ${counts.todo} 个">
+        <span class="done"><span class="status-ic">✓</span>${counts.done}</span>
+        <span class="todo"><span class="status-ic">○</span>${counts.todo}</span>
+      </span>
+    </div>`;
+  if (isOpen) {
+    html += '<div class="tchildren">';
+    (n.children || []).forEach(child => { html += shareTreeNode(child, mid, depth + 1, n.id); });
+    (n.tasks || []).forEach(tid => {
+      const t = TASKS[tid]; if (!t || t.deletedAt) return;
+      html += `<div class="trow task" data-share-tid="${tid}" data-share-fid="${n.id}" tabindex="-1" title="点击筛选任务夹；右键查看操作">
+        <span class="chev"></span>
+        <span class="imp-dot ${t.imp}"></span>
+        <span class="tname">${esc(t.desc)}</span>
+        ${treeProgressHtml(t.progress, esc(t.desc))}
+      </div>`;
+    });
+    html += '</div>';
+  }
+  return html + '</div>';
+}
+function renderShareTree(mid) {
+  const visible = new Set(Object.values(TASKS).filter(t => !t.deletedAt).map(t => t.id));
+  const tree = filterFolderTreeForTasks(TREE, visible);
+  const el = $('#share-tree');
+  if (!tree.length) {
+    el.innerHTML = '<div class="empty-tip" style="padding:24px 10px">当前没有可见任务。</div>';
+    return;
+  }
+  el.innerHTML = tree.map(n => shareTreeNode(n, mid, 0, null)).join('');
+  el.querySelectorAll('.trow.folder').forEach(row => row.addEventListener('click', e => {
+    if (autosave.dirty) autosave.flush();
+    const fid = row.dataset.shareFid;
+    if (e.target.classList.contains('chev')) {
+      shareTreeCollapsed.has(fid) ? shareTreeCollapsed.delete(fid) : shareTreeCollapsed.add(fid);
+    } else {
+      shareSelFolder = shareSelFolder === fid ? null : fid;
+      shareTreeCollapsed.delete(fid);
+    }
+    renderShareTree(mid);
+    renderShareCards(mid);
+  }));
+  el.querySelectorAll('.trow.task').forEach(row => row.addEventListener('click', () => {
+    if (autosave.dirty) autosave.flush();
+    shareSelFolder = row.dataset.shareFid;
+    renderShareTree(mid);
+    renderShareCards(mid);
+  }));
+}
+function shareScopedTasks(mid) {
+  const active = Object.values(TASKS).filter(t => !t.deletedAt);
+  if (!shareSelFolder) return active;
+  const ids = new Set(taskIdsOf(shareSelFolder));
+  return active.filter(t => ids.has(t.id));
+}
+function shareCard(t, mid) {
+  const state = shareCardState(t, mid);
+  const ro = !state.editable;
+  const autosaveOn = autosaveConfig.enabled;
+  return `<div class="stask${ro ? ' readonly' : ''}">
     <div class="r1">
       <span class="imp-dot ${t.imp}"></span>
       <span class="desc">${esc(t.desc)}</span>
@@ -2163,53 +2873,26 @@ function renderShare(mid) {
       </div>
     </div>
     ${ro ? '' : `<div class="foot">
-      <button class="btn primary" data-save="${t.id}">保存进度</button>
-      <span class="saved" id="saved-${t.id}">✓ 已保存</span>
-      <span style="font-size:11px;color:var(--text-faint)">追加的进展立即生效；进度调整需点击「保存进度」后生效</span>
+      <button class="btn primary" data-save="${t.id}">${autosaveOn ? '立即保存' : '保存进度'}</button>
+      <span class="saved" id="saved-${t.id}">${autosaveOn ? '✓ 已自动保存' : '✓ 已保存'}</span>
+      <span style="font-size:11px;color:var(--text-faint)">${autosaveOn ? '调整后 5 秒自动保存；追加的进展立即生效' : '自动保存已关闭；请点击保存；追加的进展立即生效'}</span>
     </div>`}
   </div>`;
-  };
-  $('#page-share').innerHTML = `
-    <div class="share-bar">
-      <div class="logo"><span class="mark">Z</span>ZTask<span class="sub">成员视图</span></div>
-      <span class="url">${LAN_BASE}${m.token || '……'}</span>
-    </div>
-    <div class="share-id">
-      <span class="ava" style="background:${m.color};width:34px;height:34px;font-size:15px">${esc(m.name[0])}</span>
-      <div>
-        <div class="hello">你好，${esc(m.name)}</div>
-        <div class="scope">此链接展示与管理员相同的团队全部事项（共 ${owned.length + collab.length + others.length} 项）：你负责的 ${owned.length} 项可更新，其余 ${collab.length + others.length} 项只读。</div>
-      </div>
-    </div>
-    <div class="share-body"><div class="share-body-inner">
-      <div class="share-group${shareCollapsed.has('owned') ? ' collapsed' : ''}">
-        <h3><button class="group-toggle" ${shareGroupToggleAttrs('owned', shareCollapsed.has('owned'))}>
-          <span class="chevron" aria-hidden="true">▾</span>我负责的任务 <span class="cnt">${owned.length}</span>
-        </button></h3>
-        <div class="group-body" id="share-group-owned">
-          <p class="gdesc">可以更新进度（需保存）、追加进展详情（立即生效，历史保留供管理员侧对比）。</p>
-          ${owned.length ? owned.map(t => card(t, mid)).join('') : '<div class="empty-tip">暂无你负责的任务</div>'}
-        </div>
-      </div>
-      <div class="share-group${shareCollapsed.has('collab') ? ' collapsed' : ''}">
-        <h3><button class="group-toggle" ${shareGroupToggleAttrs('collab', shareCollapsed.has('collab'))}>
-          <span class="chevron" aria-hidden="true">▾</span>我协作的任务 <span class="cnt">${collab.length}</span>
-        </button></h3>
-        <div class="group-body" id="share-group-collab">
-          <p class="gdesc">协作任务由负责人维护进度，此处只读。</p>
-          ${collab.length ? collab.map(t => card(t, mid)).join('') : '<div class="empty-tip">暂无你协作的任务</div>'}
-        </div>
-      </div>
-      <div class="share-group${shareCollapsed.has('others') ? ' collapsed' : ''}">
-        <h3><button class="group-toggle" ${shareGroupToggleAttrs('others', shareCollapsed.has('others'))}>
-          <span class="chevron" aria-hidden="true">▾</span>其他成员的任务 <span class="cnt">${others.length}</span>
-        </button></h3>
-        <div class="group-body" id="share-group-others">
-          <p class="gdesc">由其他成员负责的任务；你可以查看全部进展，但不能编辑。</p>
-          ${others.length ? others.map(t => card(t, mid)).join('') : '<div class="empty-tip">暂无其他成员的任务</div>'}
-        </div>
-      </div>
-    </div></div>`;
+}
+function saveShareProgress(tid) {
+  const page = $('#page-share');
+  const input = page.querySelector(`input[type="range"][data-tid="${tid}"]`);
+  const t = TASKS[tid];
+  if (!input || !t) return false;
+  t.progress = +input.value;
+  const saved = $('#saved-' + tid);
+  if (saved) {
+    saved.style.opacity = 1;
+    setTimeout(() => { saved.style.opacity = 0; }, 1800);
+  }
+  return true;
+}
+function bindShareCards(mid) {
   const page = $('#page-share');
   page.querySelectorAll('[data-share-group]').forEach(btn => btn.addEventListener('click', () => {
     const id = btn.dataset.shareGroup;
@@ -2220,7 +2903,9 @@ function renderShare(mid) {
     if (collapsed) shareCollapsed.add(id); else shareCollapsed.delete(id);
   }));
   page.querySelectorAll('input[type="range"]').forEach(r => r.addEventListener('input', () => {
-    $('#pv-' + r.dataset.tid).textContent = r.value + '%';
+    const pv = $('#pv-' + r.dataset.tid);
+    if (pv) pv.textContent = r.value + '%';
+    if (autosaveConfig.enabled) autosave.mark('share', () => saveShareProgress(r.dataset.tid));
   }));
   page.querySelectorAll('[data-appendbtn]').forEach(b => b.addEventListener('click', () => {
     const tid = b.dataset.appendbtn;
@@ -2231,6 +2916,7 @@ function renderShare(mid) {
     t.detail = (t.detail ? t.detail + '\n' : '') + v;
     inp.value = '';
     inp.closest('div').previousElementSibling.textContent = t.detail;
+    if (autosaveConfig.enabled) autosave.noteSaved();
     toast('已追加一条进展（原型模拟）');
   }));
   page.querySelectorAll('input[data-append]').forEach(inp => inp.addEventListener('keydown', e => {
@@ -2239,12 +2925,93 @@ function renderShare(mid) {
   page.querySelectorAll('[data-save]').forEach(b => b.addEventListener('click', () => {
     const tid = b.dataset.save;
     const t = TASKS[tid];
-    t.progress = +page.querySelector(`input[type="range"][data-tid="${tid}"]`).value;
-    const s = $('#saved-' + tid);
-    s.style.opacity = 1;
-    setTimeout(() => s.style.opacity = 0, 1800);
-    toast('已保存「' + t.desc + '」的进度（原型模拟）');
+    if (!t) return;
+    const ok = autosaveConfig.enabled && autosave.dirty && autosave.context === 'share'
+      ? autosave.flush()
+      : saveShareProgress(tid);
+    if (ok) toast('已保存「' + t.desc + '」的进度（原型模拟）');
   }));
+}
+function shareGroupHtml(id, title, count, desc, empty, tasks, mid) {
+  const collapsed = shareCollapsed.has(id);
+  return `<div class="share-group${collapsed ? ' collapsed' : ''}">
+    <h3><button class="group-toggle" ${shareGroupToggleAttrs(id, collapsed)}>
+      <span class="chevron" aria-hidden="true">▾</span>${title} <span class="cnt">${count}</span>
+    </button></h3>
+    <div class="group-body" id="share-group-${id}">
+      <p class="gdesc">${desc}</p>
+      ${tasks.length ? tasks.map(t => shareCard(t, mid)).join('') : `<div class="empty-tip">${empty}</div>`}
+    </div>
+  </div>`;
+}
+function renderShareCards(mid) {
+  const active = Object.values(TASKS).filter(t => !t.deletedAt);
+  const scoped = shareScopedTasks(mid);
+  const isOwner = t => (t.owners || []).includes(mid);
+  const isCollab = t => (t.collabs || []).includes(mid);
+  const owned = scoped.filter(isOwner);
+  const collab = scoped.filter(t => !isOwner(t) && isCollab(t));
+  const others = scoped.filter(t => !isOwner(t) && !isCollab(t));
+  const total = active.length;
+  const scope = shareSelFolder
+    ? `<div class="share-filter-note">当前范围：<b>${esc(folderPath(shareSelFolder).join(' / '))}</b><button type="button" id="share-clear-filter">查看全部</button></div>`
+    : '';
+  const ownedDesc = autosaveConfig.enabled
+    ? '可以更新进度（调整后自动保存）、追加进展详情（立即生效，历史保留供管理员侧对比）。'
+    : '自动保存已关闭；更新进度后请点击「保存进度」，追加的进展立即生效。';
+  $('#share-cards').innerHTML = `<div class="share-body-inner">
+    ${scope}
+    ${shareGroupHtml('owned', '我负责的任务', owned.length, ownedDesc, '当前范围内暂无你负责的任务', owned, mid)}
+    ${shareGroupHtml('collab', '我协作的任务', collab.length, '协作任务由负责人维护进度，此处只读。', '当前范围内暂无你协作的任务', collab, mid)}
+    ${shareGroupHtml('others', '其他成员的任务', others.length, '由其他成员负责的任务；你可以查看全部进展，但不能编辑。', '当前范围内暂无其他成员的任务', others, mid)}
+    <p class="hint-line">团队共 ${total} 项任务；左侧任务夹只包含可见任务及其上级目录。</p>
+  </div>`;
+  const clear = $('#share-clear-filter');
+  if (clear) clear.addEventListener('click', () => {
+    shareSelFolder = null;
+    renderShareTree(mid);
+    renderShareCards(mid);
+  });
+  bindShareCards(mid);
+}
+function renderShare(mid) {
+  shareMemberId = mid;
+  shareSelFolder = null;
+  shareTreeCollapsed.clear();
+  const m = member(mid);
+  const { owned, collab, others } = shareTaskGroups(mid);
+  const total = owned.length + collab.length + others.length;
+  $('#page-share').innerHTML = `
+    <div class="share-bar">
+      <div class="logo"><span class="mark">Z</span>ZTask<span class="sub">成员视图</span></div>
+      <span class="url">${LAN_BASE}${m.token || '……'}</span>
+      ${autosaveChipHtml()}
+    </div>
+    <div class="share-id">
+      <span class="ava" style="background:${m.color};width:34px;height:34px;font-size:15px">${esc(m.name[0])}</span>
+      <div>
+        <div class="hello">你好，${esc(m.name)}</div>
+        <div class="scope">此链接展示与管理员相同的团队全部事项（共 ${total} 项）：你负责的 ${owned.length} 项可更新，其余 ${collab.length + others.length} 项只读。</div>
+      </div>
+    </div>
+    <div class="share-main">
+      <aside class="share-tree-side" aria-label="我的任务夹">
+        <div class="share-tree-head"><h2>任务夹</h2><span class="readonly-badge">只读</span></div>
+        <p class="share-tree-hint">右键查看操作；管理员专属项已置灰</p>
+        <div class="share-tree" id="share-tree"></div>
+      </aside>
+      <div class="share-body" id="share-cards"></div>
+    </div>`;
+  renderShareTree(mid);
+  renderShareCards(mid);
+  renderAutosave();
+  $('#share-tree').addEventListener('contextmenu', e => {
+    const row = e.target.closest('.trow');
+    if (!row) return;
+    e.preventDefault();
+    if (row.dataset.shareTid) openTreeContextMenu(e, 'task', row.dataset.shareTid, row.dataset.shareFid, row);
+    else if (row.dataset.shareFid) openTreeContextMenu(e, 'folder', row.dataset.shareFid, row.dataset.shareFid, row);
+  });
 }
 
 /* 失效/被吊销链接的落地页 */
@@ -2264,6 +3031,8 @@ function renderShareDead() {
 }
 
 /* ════════════════ 初始化 ════════════════ */
+document.body.dataset.role = 'admin';
+renderAutosave();
 renderTree();
 renderAssigneeFilter();
 renderTasks();

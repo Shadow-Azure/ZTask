@@ -179,4 +179,40 @@ describe("TrackerView（事项跟踪体验）", () => {
     expect(selected.text()).toContain("迭代");
     wrapper.unmount();
   });
+
+  it("管理员右键任务树显示可用操作和逐项管理员标签", async () => {
+    mockFetch();
+    const { wrapper } = await mountView({ folder: "f-1" });
+    await wrapper.find(".folder-tree .row").trigger("contextmenu", { clientX: 120, clientY: 80 });
+    await nextTick();
+    const menu = wrapper.find(".tree-context-menu");
+    expect(menu.exists()).toBe(true);
+    const items = menu.findAll(".tree-context-item");
+    expect(items.length).toBe(2);
+    expect(items.every((item) => item.attributes("aria-disabled") === "false")).toBe(true);
+    expect(items.every((item) => item.text().includes("仅管理员"))).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("成员事项跟踪右键任务树保留菜单但置灰管理员操作", async () => {
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/share/folders/tree")) {
+        return new Response(JSON.stringify(TREE), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response(JSON.stringify(TASKS), { status: 200, headers: { "content-type": "application/json" } });
+    }) as typeof fetch;
+    const { wrapper } = await mountView({ folder: "f-1" }, { access: "readonly", scope: "share" });
+    await wrapper.find(".folder-tree .row").trigger("contextmenu", { clientX: 120, clientY: 80 });
+    await nextTick();
+    const menu = wrapper.find(".tree-context-menu");
+    expect(menu.exists()).toBe(true);
+    const items = menu.findAll(".tree-context-item");
+    expect(items.length).toBe(2);
+    expect(items.every((item) => item.attributes("aria-disabled") === "true")).toBe(true);
+    expect(items.every((item) => item.text().includes("仅管理员"))).toBe(true);
+    await items[0]!.trigger("click");
+    expect(wrapper.find(".tree-context-menu").exists()).toBe(true);
+    wrapper.unmount();
+  });
 });

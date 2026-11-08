@@ -26,9 +26,19 @@ const props = defineProps<{
   createParentId?: string | null;
 }>();
 
+interface TreeContextMenuTarget {
+  kind: "folder" | "task";
+  id: string;
+  folderId: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
 const emit = defineEmits<{
   "open-task": [taskId: string];
   "close-create": [];
+  "context-menu": [target: TreeContextMenuTarget];
 }>();
 
 const isShareScope = computed(() => props.scope === "share");
@@ -71,6 +81,7 @@ defineExpose({ treeQuery });
         :create-parent-id="createParentId"
         @open-task="(taskId: string) => emit('open-task', taskId)"
         @close-create="emit('close-create')"
+        @context-menu="(target) => emit('context-menu', target)"
       />
     </ul>
     <!-- web 独有态：无选中夹（树为空或加载中）时新建行退化为树根行，避免失去建首个夹的能力。 -->
