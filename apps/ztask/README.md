@@ -20,7 +20,7 @@ npm install -g ztask
 ztask serve
 ```
 
-如果全局安装后运行 `ztask serve` 提示找不到命令，执行 `npx ztask init`：它会显示 npm 全局可执行目录，并在确认后写入 PATH；重新打开终端或执行提示里的 `source` 命令后即可直接运行。非交互环境可加 `--yes` 跳过确认。不改 PATH 时也可以直接用 `npx ztask serve` 启动。
+如果全局安装后运行 `ztask serve` 提示找不到命令，执行 `npx ztask init`：它会显示 npm 全局可执行目录与将要写入的启动文件，确认后写入 PATH；重新打开终端或执行提示里的 `source` 命令后即可直接运行。非交互环境可加 `--yes` 跳过确认。不改 PATH 时也可以直接用 `npx ztask serve` 启动。
 
 默认管理端为 `http://127.0.0.1:8123/`，数据目录为 `~/.ztask`（可用 `ZTASK_HOME` 或 `--data-dir` 覆盖）。`serve` 之外的 `init`、`backup`、`restore`、`doctor` 子命令与仓库内的 CLI 一致。
 

@@ -107,16 +107,36 @@ describe("runInit（POSIX）", () => {
     expect(await readFile(path.join(home, ".zshrc"), "utf8")).toContain(`export PATH='/opt/npm/bin'`);
   });
 
-  it("启动文件已有配置时只提醒，不询问也不重复写入", async () => {
+  it("启动文件已有配置时只提醒，不询问也不重复写入，并给出 source 提示", async () => {
     const home = await makeHome();
     const file = path.join(home, ".zshrc");
     const existing = "export PATH='/opt/npm/bin':\"$PATH\"\n";
     await writeFile(file, existing, "utf8");
     const confirm = vi.fn(async () => true);
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
 
     expect(await runInit(posixOptions(home, { confirm }))).toBe(EXIT_OK);
     expect(confirm).not.toHaveBeenCalled();
     expect(await readFile(file, "utf8")).toBe(existing);
+    expect(logs.join("\n")).toContain(`source '${file}'`);
+  });
+
+  it("确认前显示目标启动文件，写入后给出 source 与当前会话命令", async () => {
+    const home = await makeHome();
+    const file = path.join(home, ".zshrc");
+    const logs: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+      logs.push(args.map(String).join(" "));
+    });
+
+    expect(await runInit(posixOptions(home))).toBe(EXIT_OK);
+    const text = logs.join("\n");
+    expect(text).toContain(`将把该目录加入 PATH，并写入 ${file}。`);
+    expect(text).toContain(`source '${file}'`);
+    expect(text).toContain(`export PATH='/opt/npm/bin':"$PATH"`);
   });
 
   it("npm 前缀变化（如切换 nvm）时询问并追加新目录", async () => {

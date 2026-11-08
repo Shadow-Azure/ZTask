@@ -43,8 +43,10 @@ interface StartupFile {
   file: string;
   /** 追加到文件中的 PATH 配置行。 */
   line: string;
-  /** 让当前终端立即生效的命令。 */
+  /** 让当前终端立即生效的命令（只改本会话）。 */
   applyHint: string;
+  /** 重载启动文件、让新配置在当前终端生效的命令。 */
+  reloadHint: string;
 }
 
 /**
@@ -203,16 +205,21 @@ function shellStartupFile(shell: string | undefined, homeDir: string, binDir: st
   const name = path.basename((shell ?? "").trim());
   const quoted = shellQuote(binDir);
   if (name === "fish") {
-    return {
-      file: path.join(homeDir, ".config", "fish", "config.fish"),
-      line: `fish_add_path ${quoted}`,
-      applyHint: `fish_add_path ${quoted}`,
-    };
+    const file = path.join(homeDir, ".config", "fish", "config.fish");
+    const line = `fish_add_path ${quoted}`;
+    return { file, line, applyHint: line, reloadHint: `source ${shellQuote(file)}` };
   }
+  const file =
+    name === "zsh"
+      ? path.join(homeDir, ".zshrc")
+      : name === "bash"
+        ? path.join(homeDir, ".bashrc")
+        : path.join(homeDir, ".profile");
   const line = `export PATH=${quoted}:"$PATH"`;
-  if (name === "zsh") return { file: path.join(homeDir, ".zshrc"), line, applyHint: line };
-  if (name === "bash") return { file: path.join(homeDir, ".bashrc"), line, applyHint: line };
-  return { file: path.join(homeDir, ".profile"), line, applyHint: line };
+  // zsh/bash/fish 支持 source；其它 POSIX shell 用等价的 `.`。
+  const reloadHint =
+    name === "zsh" || name === "bash" ? `source ${shellQuote(file)}` : `. ${shellQuote(file)}`;
+  return { file, line, applyHint: line, reloadHint };
 }
 
 /** 构造追加块；在已有内容后留一个空行，空文件或新文件不产生前导空行。 */
@@ -222,11 +229,18 @@ function markerBlock(line: string, existing: string | null): string {
   return `${separator}${MARKER}\n${line}\n`;
 }
 
-/** 打印让配置在当前终端立即生效的命令。 */
+/** 打印重载启动文件与只改当前会话两种生效方式。 */
+function printReloadHint(startup: StartupFile): void {
+  console.log("重新打开终端后生效；也可以在当前终端重载启动文件：");
+  console.log(`  ${startup.reloadHint}`);
+  console.log("只让当前终端立即生效（不重载配置）：");
+  console.log(`  ${startup.applyHint}`);
+}
+
+/** 写入成功后打印目标文件与生效命令。 */
 function printApplyHint(startup: StartupFile): void {
   console.log(`已把该目录写入 ${startup.file}。`);
-  console.log("重新打开终端后生效；也可以在当前终端执行：");
-  console.log(`  ${startup.applyHint}`);
+  printReloadHint(startup);
 }
 
 /** npm 全局目录中是否已有 ztask 可执行 shim（Windows 同时接受 .cmd 与无扩展名）。 */
@@ -310,13 +324,18 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
       console.log("当前终端尚未加载；重新打开终端后生效。");
     } else if (startup !== null) {
       console.log(`配置位于 ${startup.file}，当前终端尚未加载。`);
-      console.log(`重新打开终端，或在当前终端执行：${startup.applyHint}`);
+      printReloadHint(startup);
     }
     if (!shimInstalled(binDir, platform)) printMissingShimHint(binDir);
     return EXIT_OK;
   }
 
   console.log("该目录不在 PATH 中。");
+  if (platform === "win32") {
+    console.log("将把该目录加入当前用户的 PATH（不会修改系统 PATH）。");
+  } else if (startup !== null) {
+    console.log(`将把该目录加入 PATH，并写入 ${startup.file}。`);
+  }
   if (!assumeYes) {
     let confirmed: boolean;
     try {
@@ -340,7 +359,7 @@ export async function runInit(options: InitOptions = {}): Promise<number> {
       return EXIT_FAILURE;
     }
     console.log("已把该目录加入当前用户的 PATH。");
-    console.log("重新打开终端后生效，然后直接运行 ztask serve。");
+    console.log("重新打开终端后生效（Windows 没有 source 命令），然后直接运行 ztask serve。");
   } else if (startup !== null) {
     try {
       await appendText(startup.file, markerBlock(startup.line, existing));

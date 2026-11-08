@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-新增引导式 `ztask init`：用 `npm prefix --global` 解析全局前缀并计算可执行目录；先检查目录是否已在 PATH、shell 启动文件或 Windows 用户 PATH 中，已配置时只提醒。未配置时展示目录并请求 y/n 确认，确认后才写入：POSIX 下按 `$SHELL` 选择启动文件（zsh → `~/.zshrc`，bash → `~/.bashrc`，fish → `~/.config/fish/config.fish`，其它 → `~/.profile`），追加带 `# ztask init` 标记的 PATH 配置块，并打印当前终端可用的 `source`/`fish_add_path` 命令；Windows 下用 PowerShell 更新当前用户 PATH；`--yes` 用于非交互环境跳过确认。写完后提示重新打开终端或执行打印的 `source` 命令。npx/npm run 会把自身 bin 目录前置到子进程 PATH，这类调用不据此判断，改为检查持久配置。若全局目录里找不到 ztask shim，提示先 `npm install -g ztask`。
+新增引导式 `ztask init`：用 `npm prefix --global` 解析全局前缀并计算可执行目录；先检查目录是否已在 PATH、shell 启动文件或 Windows 用户 PATH 中，已配置时只提醒。未配置时展示目录与将写入的目标启动文件并请求 y/n 确认，确认后才写入：POSIX 下按 `$SHELL` 选择启动文件（zsh → `~/.zshrc`，bash → `~/.bashrc`，fish → `~/.config/fish/config.fish`，其它 → `~/.profile`），追加带 `# ztask init` 标记的 PATH 配置块，并打印当前终端可用的 `source`/`fish_add_path` 命令；Windows 下用 PowerShell 更新当前用户 PATH；`--yes` 用于非交互环境跳过确认。写完后给出重载启动文件的 `source` 命令（其它 POSIX shell 用 `.`）与只改当前会话的命令；Windows 没有 `source`，提示重开终端。npx/npm run 会把自身 bin 目录前置到子进程 PATH，这类调用不据此判断，改为检查持久配置。若全局目录里找不到 ztask shim，提示先 `npm install -g ztask`。
 
 ## Alternatives considered
 

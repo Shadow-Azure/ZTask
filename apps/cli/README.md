@@ -18,7 +18,7 @@ pnpm dev          # 并行起 server(tsc --watch) 与 web(vite)，/api 代理到
 
 ## `ztask init`
 
-把 npm 全局可执行目录加入 PATH。命令先检查目录是否已配置：已配置时只提醒；否则展示目录并询问 y/n，确认后写入当前 shell 的启动文件（Windows 写当前用户 PATH）。完成后提示重新打开终端或执行打印的 `source` 命令。非交互环境用 `--yes` 跳过确认；重复执行幂等。
+把 npm 全局可执行目录加入 PATH。命令先检查目录是否已配置：已配置时只提醒；否则展示目录与将写入的启动文件并询问 y/n，确认后写入当前 shell 的启动文件（Windows 写当前用户 PATH）。完成后提示重新打开终端或执行打印的 `source` 命令。非交互环境用 `--yes` 跳过确认；重复执行幂等。
 
 ## `ztask serve` 参数
 
