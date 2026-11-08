@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useQuery, useQueryClient } from "@tanstack/vue-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/vue-query";
 import type { AdminMember, FolderTreeNode, Task } from "@ztask/shared";
 import type { TaskCardModel } from "../../components/task-card-model";
 import { adminApi, adminTaskApi } from "../../api/admin";
@@ -12,6 +12,7 @@ import TaskDetailDialog from "./TaskDetailDialog.vue";
 import AssigneeFilter from "./AssigneeFilter.vue";
 import FolderTree from "../folders/FolderTree.vue";
 import DashboardPanel from "../dashboard/DashboardPanel.vue";
+import BaseDialog from "../../components/ui/BaseDialog.vue";
 import PaneResizer from "../../components/ui/PaneResizer.vue";
 import ErrorState from "../../components/ui/ErrorState.vue";
 import LoadingState from "../../components/ui/LoadingState.vue";
@@ -285,6 +286,8 @@ function retryLoadMore(): void {
 
 const editorOpen = ref(false);
 const editorTask = ref<Task | null>(null);
+/** 右键「新建任务」时的目标夹；工具栏新建沿用当前选中夹。 */
+const editorFolderId = ref<string | null>(null);
 const detailOpen = ref(false);
 const detailTaskId = ref<string | null>(null);
 const toast = useToast();
@@ -295,6 +298,7 @@ function needsFullAggregate(task: Task): boolean {
 }
 
 async function openEditor(task: Task): Promise<void> {
+  editorFolderId.value = null;
   if (!needsFullAggregate(task)) {
     editorTask.value = task;
     editorOpen.value = true;
@@ -381,14 +385,24 @@ function closeTaskDetail(): void {
   }
 }
 
-function openCreate(): void {
+function openCreateInFolder(folderId: string | null = selectedFolderId.value): void {
   if (!isAdmin.value) return;
+  editorFolderId.value = folderId;
   editorTask.value = null;
   editorOpen.value = true;
 }
 
+function openCreate(): void {
+  openCreateInFolder(selectedFolderId.value);
+}
+
 /** 保存后失效键按数据域区分；成员域没有写路径，不会触发（08 §6.3）。 */
 function onSaved(): void {
+  // 从右键「新建任务」进入且目标夹不是当前选中夹时，保存后切到目标夹展示新任务。
+  if (editorTask.value === null && editorFolderId.value !== null && editorFolderId.value !== selectedFolderId.value) {
+    void router.replace({ query: { ...route.query, folder: editorFolderId.value } });
+  }
+  editorFolderId.value = null;
   void queryClient.invalidateQueries({ queryKey: [scopePrefix.value, "tasks"] });
   void queryClient.invalidateQueries({ queryKey: [scopePrefix.value, "folders"] });
 }
@@ -408,10 +422,9 @@ function onTreeDrag(clientX: number): void {
 const creatingFolder = ref(false);
 const creatingFolderParent = ref<string | null>(null);
 
-function startCreateFolder(): void {
+function startCreateFolder(parentId: string | null = selectedFolderId.value): void {
   if (!isAdmin.value) return;
-  const folderId = selectedFolderId.value;
-  creatingFolderParent.value = folderId !== null && folderNameById.value.has(folderId) ? folderId : null;
+  creatingFolderParent.value = parentId !== null && folderNameById.value.has(parentId) ? parentId : null;
   creatingFolder.value = true;
 }
 
@@ -419,6 +432,124 @@ function closeCreateFolder(): void {
   creatingFolder.value = false;
   creatingFolderParent.value = null;
 }
+
+interface TreeContextMenuTarget {
+  kind: "folder" | "task";
+  id: string;
+  folderId: string;
+  name: string;
+  x: number;
+  y: number;
+}
+
+interface TreeMenuItem {
+  action: "new-task" | "new-folder" | "delete-task";
+  label: string;
+  icon: string;
+  danger?: boolean;
+  requiresAdmin: boolean;
+  enabled: boolean;
+}
+
+const treeMenu = ref<TreeContextMenuTarget | null>(null);
+const treeMenuEl = ref<HTMLElement | null>(null);
+/** 菜单项按 kind 生成；当前所有树操作都要求管理员，成员端只置灰不隐藏。 */
+const treeMenuItems = computed<TreeMenuItem[]>(() => {
+  if (!treeMenu.value) return [];
+  const items: Array<Omit<TreeMenuItem, "enabled">> = treeMenu.value.kind === "task"
+    ? [
+        { action: "new-task", label: "新建任务", icon: "＋", requiresAdmin: true },
+        { action: "delete-task", label: "删除任务", icon: "✕", danger: true, requiresAdmin: true },
+      ]
+    : [
+        { action: "new-task", label: "新建任务", icon: "＋", requiresAdmin: true },
+        { action: "new-folder", label: "新建子任务夹", icon: "＋", requiresAdmin: true },
+      ];
+  return items.map((item) => ({ ...item, enabled: isAdmin.value }));
+});
+
+async function openTreeMenu(target: TreeContextMenuTarget): Promise<void> {
+  treeMenu.value = target;
+  await nextTick();
+  const element = treeMenuEl.value;
+  if (!element) return;
+  const rect = element.getBoundingClientRect();
+  treeMenu.value = {
+    ...target,
+    x: Math.max(8, Math.min(target.x, window.innerWidth - rect.width - 8)),
+    y: Math.max(8, Math.min(target.y, window.innerHeight - rect.height - 8)),
+  };
+  await nextTick();
+  element.querySelector<HTMLButtonElement>(".tree-context-item")?.focus();
+}
+
+function closeTreeMenu(): void {
+  treeMenu.value = null;
+}
+
+function onTreeMenuAction(action: TreeMenuItem["action"]): void {
+  const item = treeMenuItems.value.find((candidate) => candidate.action === action);
+  const target = treeMenu.value;
+  if (!item || !item.enabled || !target) return;
+  closeTreeMenu();
+  if (action === "new-task") {
+    openCreateInFolder(target.folderId);
+  } else if (action === "new-folder") {
+    startCreateFolder(target.folderId);
+  } else if (action === "delete-task") {
+    void requestDeleteTask(target.id);
+  }
+}
+
+const deleteTarget = ref<Task | null>(null);
+const deleteMutation = useMutation({
+  mutationFn: (task: Task) => adminTaskApi.remove(task.id, task.version),
+  onSuccess: (_result, task) => {
+    deleteTarget.value = null;
+    void queryClient.invalidateQueries({ queryKey: [scopePrefix.value, "tasks"] });
+    void queryClient.invalidateQueries({ queryKey: [scopePrefix.value, "folders"] });
+    toast.show(`已删除任务「${task.description}」`);
+  },
+  onError: (cause: unknown) => {
+    toast.show(describeApiError(cause, "删除任务失败"));
+  },
+});
+
+async function requestDeleteTask(taskId: string): Promise<void> {
+  if (!isAdmin.value) return;
+  try {
+    const detail = await adminTaskApi.get(taskId);
+    deleteTarget.value = "task" in detail ? detail.parent : detail;
+  } catch (cause) {
+    toast.show(describeApiError(cause, "任务加载失败"));
+  }
+}
+
+function confirmDeleteTask(): void {
+  const target = deleteTarget.value;
+  if (target !== null) deleteMutation.mutate(target);
+}
+
+function onTreeMenuPointerDown(event: PointerEvent): void {
+  const target = event.target as Element | null;
+  if (treeMenu.value && !target?.closest(".tree-context-menu")) closeTreeMenu();
+}
+
+function onTreeMenuKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") closeTreeMenu();
+}
+
+onMounted(() => {
+  document.addEventListener("pointerdown", onTreeMenuPointerDown);
+  document.addEventListener("keydown", onTreeMenuKeydown);
+  window.addEventListener("scroll", closeTreeMenu, true);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", onTreeMenuPointerDown);
+  document.removeEventListener("keydown", onTreeMenuKeydown);
+  window.removeEventListener("scroll", closeTreeMenu, true);
+});
 </script>
 
 <template>
@@ -432,9 +563,11 @@ function closeCreateFolder(): void {
       <div class="tree-body">
         <FolderTree
           :scope="scopePrefix"
+          :can-edit="isAdmin"
           :creating="creatingFolder"
           :create-parent-id="creatingFolderParent"
           @open-task="openTaskById"
+          @context-menu="openTreeMenu"
           @close-create="closeCreateFolder"
         />
       </div>
@@ -523,10 +656,37 @@ function closeCreateFolder(): void {
       </div>
     </main>
 
+    <div
+      v-if="treeMenu"
+      ref="treeMenuEl"
+      class="tree-context-menu"
+      role="menu"
+      :style="{ left: `${treeMenu.x}px`, top: `${treeMenu.y}px` }"
+      @contextmenu.prevent
+    >
+      <div class="tree-context-head">
+        {{ treeMenu.kind === "task" ? "任务" : "任务夹" }} · {{ treeMenu.name }}
+      </div>
+      <button
+        v-for="item in treeMenuItems"
+        :key="item.action"
+        class="tree-context-item"
+        :class="{ danger: item.danger, disabled: !item.enabled }"
+        type="button"
+        role="menuitem"
+        :aria-disabled="!item.enabled"
+        @click="onTreeMenuAction(item.action)"
+      >
+        <span class="tree-context-icon" aria-hidden="true">{{ item.icon }}</span>
+        {{ item.label }}
+        <span v-if="item.requiresAdmin" class="tree-context-badge">仅管理员</span>
+      </button>
+    </div>
+
     <TaskEditorDialog
       v-if="isAdmin"
       :open="editorOpen"
-      :folder-id="selectedFolderId"
+      :folder-id="editorFolderId ?? selectedFolderId"
       :task="editorTask"
       :members="activeMembers"
       :folders="folderTree"
@@ -541,6 +701,19 @@ function closeCreateFolder(): void {
       :task-id="detailTaskId"
       @close="closeTaskDetail"
     />
+
+    <BaseDialog :open="deleteTarget !== null" title="删除任务" :width="400" @close="deleteTarget = null">
+      <p class="confirm-text">
+        删除任务将同时软删除其全部小任务；历史记录保留，此操作可在数据目录中追溯。
+      </p>
+      <template #foot>
+        <span class="delete-foot-sp" />
+        <button class="btn ghost" type="button" @click="deleteTarget = null">取消</button>
+        <button class="btn danger-btn" type="button" :disabled="deleteMutation.isPending.value" @click="confirmDeleteTask">
+          {{ deleteMutation.isPending.value ? "删除中…" : "确认删除" }}
+        </button>
+      </template>
+    </BaseDialog>
   </div>
 </template>
 
@@ -811,6 +984,118 @@ function closeCreateFolder(): void {
  * 即继承正文 13px/--text；web 早前的 12px 灰字属弱化，回归普通正文行（R3-D1，仅保留内距）。 */
 .empty-tip {
   padding: 16px 4px;
+}
+
+/* 左树右键菜单（原型 ctx-menu）：成员端保留同一组操作，管理员专属项置灰并逐行标注。 */
+.tree-context-menu {
+  position: fixed;
+  z-index: 500;
+  min-width: 236px;
+  padding: 5px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 14px 36px rgba(20, 26, 38, 0.18);
+}
+
+.tree-context-head {
+  padding: 4px 8px 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #eef1f5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: 10.5px;
+}
+
+.tree-context-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tree-context-item:hover,
+.tree-context-item:focus-visible {
+  background: var(--bg-inset);
+  outline: none;
+}
+
+.tree-context-item.danger {
+  color: var(--red);
+}
+
+.tree-context-item.danger .tree-context-icon {
+  color: var(--red);
+}
+
+.tree-context-item.danger:hover,
+.tree-context-item.danger:focus-visible {
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+}
+
+.tree-context-item.disabled,
+.tree-context-item.danger.disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.tree-context-item.disabled .tree-context-icon,
+.tree-context-item.danger.disabled .tree-context-icon {
+  color: var(--text-faint);
+}
+
+.tree-context-item.disabled:hover,
+.tree-context-item.disabled:focus-visible {
+  background: transparent;
+}
+
+.tree-context-icon {
+  width: 14px;
+  color: var(--text-faint);
+  text-align: center;
+}
+
+.tree-context-badge {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 0 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.confirm-text {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.delete-foot-sp {
+  flex: 1;
+}
+
+.btn.danger-btn {
+  color: var(--red);
+  background: var(--bg-card);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+}
+
+.btn.danger-btn:hover {
+  background: color-mix(in srgb, var(--red) 8%, transparent);
 }
 
 @media (max-width: 900px) {

@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/notes/proposed/feature/2026-11-08-tracker-autosave-context-menu.md
-2026-11-08-tracker-autosave-context-menu.md: 22da48646491089bb47b96130dea4fa103e5ea9e
-2026-11-08-tracker-autosave-context-menu.en.md: 23fb0bb905b1cc193d0bcbd9754749c9541cc5d5
+2026-11-08-tracker-autosave-context-menu.md: ee0662c3572eceed8955560b5199b8dd72d1b7df
+2026-11-08-tracker-autosave-context-menu.en.md: ad919fc4fbaac3565d5980b25e5a5cba55d72f86

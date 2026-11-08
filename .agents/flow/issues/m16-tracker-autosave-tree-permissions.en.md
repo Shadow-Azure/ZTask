@@ -12,6 +12,10 @@ scope:
   - scripts/prototype-tracker.spec.mjs
   - .agents/flow/issues/m16-*
   - .agents/notes/proposed/feature/2026-11-08-tracker-autosave-context-menu*
+  - apps/web/src/features/folders/**
+  - apps/web/src/features/tracker/**
+  - tests/admin-members/**
+  - tests/tracker/**
 adr:
   - ../../notes/proposed/feature/2026-11-08-tracker-autosave-context-menu.md
 github:
@@ -34,6 +38,8 @@ The prototype currently saves only on explicit actions, and the left task tree h
 ## Implementation
 
 - `plan/m1-01-ui-prototype/ztask-prototype.html`: top-bar autosave status and settings popover, autosave/manual modes in task and member dialogs, member-view progress autosave, context menus on the admin tree and member-page tree, and the three collapsible member groups.
+- `apps/web` `FolderTree` / `FolderTreeNode` / `TrackerView`: both admin and member tracker trees support right-click; admin actions are enabled, while member-side admin-only items are grayed with per-row "Admins only" labels; new task, new subtask folder, and delete reuse the existing editor and confirmation dialog.
+- `tests/admin-members` and `tests/tracker`: tree-node context-menu events, enabled admin menu, and disabled member menu.
 - `scripts/prototype-tracker.spec.mjs`: autosave copy and off state, task draft validation, member tree filtering, option-level permissions, and menu positioning.
 - `plan/m1-01-ui-prototype/review/`: before/after screenshots for permission labels, the member tree, and autosave configuration.
 - This delivery changes only the static prototype; real frontend, `~/.ztask/settings.json` read/write, and the `ztask` command wait for prototype confirmation.

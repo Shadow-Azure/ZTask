@@ -90,4 +90,19 @@ describe("FolderTree（features/folders）", () => {
     expect(JSON.parse(String(post?.init?.body))).toEqual({ name: "新夹", parentId: null });
     wrapper.unmount();
   });
+
+  it("右键任务夹和任务行向上发出菜单目标", async () => {
+    mockFetch();
+    const wrapper = await mountTree(true);
+    await wrapper.find(".row").trigger("contextmenu", { clientX: 120, clientY: 80 });
+    await nextTick();
+    const folderEvent = wrapper.emitted("context-menu")?.[0]?.[0] as Record<string, unknown>;
+    expect(folderEvent).toMatchObject({ kind: "folder", id: "f1", folderId: "f1", name: "客户增量构", x: 120, y: 80 });
+
+    await wrapper.find(".row.task").trigger("contextmenu", { clientX: 140, clientY: 100 });
+    await nextTick();
+    const taskEvent = wrapper.emitted("context-menu")?.[1]?.[0] as Record<string, unknown>;
+    expect(taskEvent).toMatchObject({ kind: "task", id: "t-1", folderId: "f1", name: "任务树组件重构", x: 140, y: 100 });
+    wrapper.unmount();
+  });
 });

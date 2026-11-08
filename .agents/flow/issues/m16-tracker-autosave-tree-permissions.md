@@ -12,6 +12,10 @@ scope:
   - scripts/prototype-tracker.spec.mjs
   - .agents/flow/issues/m16-*
   - .agents/notes/proposed/feature/2026-11-08-tracker-autosave-context-menu*
+  - apps/web/src/features/folders/**
+  - apps/web/src/features/tracker/**
+  - tests/admin-members/**
+  - tests/tracker/**
 adr:
   - ../../notes/proposed/feature/2026-11-08-tracker-autosave-context-menu.md
 github:
@@ -34,6 +38,8 @@ github:
 ## 实现内容
 
 - `plan/m1-01-ui-prototype/ztask-prototype.html`：顶部自动保存状态与设置浮层、任务/成员浮窗自动保存和手动模式、成员视图进度自动保存、管理员左树和成员个人页左树右键菜单，以及成员三组卡片与折叠。
+- `apps/web` 的 `FolderTree` / `FolderTreeNode` / `TrackerView`：管理员和成员事项跟踪树都支持右键；管理员操作可用，成员端管理员专属项置灰并逐行标注「仅管理员」；新建任务、新建子任务夹、删除任务沿用现有编辑器与确认弹窗。
+- `tests/admin-members`、`tests/tracker`：覆盖树节点右键事件、管理员可用菜单和成员置灰菜单。
 - `scripts/prototype-tracker.spec.mjs`：覆盖自动保存状态文案与关闭态、任务草稿校验、成员树过滤、选项级权限和菜单定位。
 - `plan/m1-01-ui-prototype/review/`：保存权限标签、成员树、自动保存配置的修改前后截图。
 - 本次只调整静态原型；真实前端、`~/.ztask/settings.json` 读写和 `ztask` 命令待原型确认后另行安排。

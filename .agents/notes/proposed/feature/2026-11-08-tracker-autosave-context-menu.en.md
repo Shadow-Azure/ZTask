@@ -18,6 +18,10 @@ Support right-click on both the admin tree and the member personal page tree. Me
 
 This delivery updates only the static prototype, specification tests, review screenshots, and flow/decision records; it does not change the real `apps/web`, server save protocol, or CLI implementation.
 
+## Implementation status
+
+The tree context menu now ships in the real `apps/web`: `FolderTreeNode` emits the menu target, and `TrackerView` renders the shared menu and performs new task, new subtask folder, and delete task. Admin actions are enabled; the member tracker tree keeps the same actions but grays out admin-only items and shows "Admins only" on each row. Creation and deletion reuse the existing task editor, API, and confirmation dialog. Autosave settings, `~/.ztask/settings.json` read/write, and the `ztask autosave` command remain prototype-only and are the next implementation contract.
+
 ## Alternatives considered
 
 We rejected the previous "hide the context menu from members" approach because the user wants members to see the menu and understand which actions are temporarily unavailable, and it makes incremental openings easier. We rejected a single "Admins only" badge in the menu header because it cannot distinguish individual options and would mislead when one option is later opened to members. We rejected keeping in-memory autosave after disabling it because the setting would be meaningless. We rejected creating new tasks or members on a timer because incomplete required fields would produce half-finished records. We rejected showing only the member's related tasks in the tree because the main branch now lets members see all team tasks, so the tree must match the card scope. We also rejected resetting group collapse on every folder filter because a group the user just collapsed should not reopen when they select a folder. We rejected putting folder deletion in the folder menu because deleting a folder cascades to tasks, exceeds the requested create/delete-task scope, and has different confirmation semantics.
