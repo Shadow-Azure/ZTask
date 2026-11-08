@@ -537,6 +537,91 @@ test('task toolbar places the assignee filter after importance and before search
   assert.ok(assignee < search, 'assignee filter must precede search');
 });
 
+test('task tree management stays admin-only while the menu opens for members', () => {
+  const canManageTaskTree = loadFunction('canManageTaskTree');
+  const canOpenTreeMenu = loadFunction('canOpenTreeMenu');
+  assert.equal(canManageTaskTree('admin'), true);
+  assert.equal(canManageTaskTree('member'), false);
+  assert.equal(canManageTaskTree(undefined), false);
+  assert.equal(canOpenTreeMenu('admin'), true);
+  assert.equal(canOpenTreeMenu('member'), true);
+  assert.equal(canOpenTreeMenu(undefined), false);
+});
+
+test('member tree menu keeps actions visible but disables admin-only items', () => {
+  const taskTreeMenu = loadFunction('taskTreeMenu', {
+    canOpenTreeMenu: loadFunction('canOpenTreeMenu'),
+    canManageTaskTree: loadFunction('canManageTaskTree'),
+  });
+
+  const memberTask = taskTreeMenu('task', 'member');
+  assert.deepEqual(memberTask.map(item => item.action), ['new-task', 'delete-task']);
+  assert.ok(memberTask.every(item => item.enabled === false && item.requiresAdmin === true));
+  const memberFolder = taskTreeMenu('folder', 'member');
+  assert.deepEqual(memberFolder.map(item => item.action), ['new-task', 'new-folder']);
+  assert.ok(memberFolder.every(item => item.enabled === false && item.requiresAdmin === true));
+
+  const adminTask = taskTreeMenu('task', 'admin');
+  assert.deepEqual(adminTask.map(item => item.action), ['new-task', 'delete-task']);
+  assert.ok(adminTask.every(item => item.enabled === true && item.requiresAdmin === true));
+  assert.equal(adminTask[1].danger, true);
+  assert.deepEqual(taskTreeMenu('folder', 'admin').map(item => item.action), ['new-task', 'new-folder']);
+});
+
+test('context menu position stays inside the viewport with an edge gap', () => {
+  const clampMenuPosition = loadFunction('clampMenuPosition');
+  assert.deepEqual(clampMenuPosition(40, 50, 200, 120, 1440, 900), { left: 40, top: 50 });
+  assert.deepEqual(clampMenuPosition(1400, 880, 200, 120, 1440, 900), { left: 1232, top: 772 });
+  assert.deepEqual(clampMenuPosition(-10, -20, 200, 120, 1440, 900), { left: 8, top: 8 });
+});
+
+test('autosave status copy covers detecting, saving, blocked, and draft states', () => {
+  const autosaveCopy = loadFunction('autosaveCopy');
+  const savedLabel = '16:32:05 已保存';
+
+  assert.deepEqual(autosaveCopy('idle', '每 5 秒检测一次'), { title: '自动保存', meta: '每 5 秒检测一次' });
+  assert.deepEqual(autosaveCopy('dirty', savedLabel), { title: '检测到变更', meta: '将在 5 秒内自动保存' });
+  assert.deepEqual(autosaveCopy('saving', savedLabel), { title: '正在自动保存…', meta: '正在写入' });
+  assert.deepEqual(autosaveCopy('saved', savedLabel), { title: '已自动保存', meta: savedLabel });
+  assert.deepEqual(autosaveCopy('blocked', savedLabel), { title: '有未保存更改', meta: '补全必填项后自动保存' });
+  assert.deepEqual(autosaveCopy('draft', savedLabel), { title: '新建内容未保存', meta: '点击创建后保存' });
+  assert.deepEqual(autosaveCopy('off', savedLabel), { title: '自动保存已关闭', meta: '点击设置开启' });
+});
+
+test('task draft validation requires a description and at least one owner', () => {
+  const taskDraftError = loadFunction('taskDraftError');
+
+  assert.equal(taskDraftError('任务树组件重构', new Set(['chen'])), null);
+  assert.equal(taskDraftError('   ', new Set(['chen'])), '请填写任务描述');
+  assert.equal(taskDraftError('任务树组件重构', new Set()), '请至少选择一名负责人');
+});
+
+test('member folder tree keeps visible ancestors and drops empty branches', () => {
+  const filterFolderTreeForTasks = loadFunction('filterFolderTreeForTasks');
+  const tree = [
+    { id: 'f1', name: '进行中', tasks: ['a', 'hidden'], children: [
+      { id: 'f1-1', name: '子夹', tasks: ['b'], children: [] },
+      { id: 'f1-2', name: '空夹', tasks: ['hidden-2'], children: [] },
+    ] },
+    { id: 'f2', name: '空根', tasks: [], children: [] },
+  ];
+
+  const filtered = filterFolderTreeForTasks(tree, new Set(['a', 'b']));
+  assert.deepEqual(filtered.map(node => node.id), ['f1']);
+  assert.deepEqual(filtered[0].tasks, ['a']);
+  assert.deepEqual(filtered[0].children.map(node => node.id), ['f1-1']);
+  assert.deepEqual(filtered[0].children[0].tasks, ['b']);
+});
+
+test('tree task collection recurses through every child folder', () => {
+  const collectTreeTaskIds = loadFunction('collectTreeTaskIds');
+  const node = { tasks: ['a'], children: [
+    { tasks: ['b'], children: [] },
+    { tasks: ['c'], children: [{ tasks: ['d'], children: [] }] },
+  ] };
+
+  assert.deepEqual(collectTreeTaskIds(node), ['a', 'b', 'c', 'd']);
+});
 test('member view groups every active task exactly once and includes other members tasks', () => {
   const shareTaskGroups = loadFunction('shareTaskGroups');
   const tasks = {
@@ -586,9 +671,12 @@ test('member group headers are accessible collapse toggles', () => {
 
 test('member view renders a collapse toggle for all three task groups', () => {
   for (const id of ['owned', 'collab', 'others']) {
-    assert.match(html, new RegExp(`shareGroupToggleAttrs\\('${id}'`));
-    assert.match(html, new RegExp(`shareCollapsed\\.has\\('${id}'\\)`));
+    assert.match(html, new RegExp(`shareGroupHtml\\('${id}'`));
   }
+  assert.match(html, /function shareGroupToggleAttrs/);
+  assert.match(html, /data-share-group="\$\{id\}"/);
+  assert.match(html, /shareCollapsed\.has\(id\)/);
   assert.match(html, /\.share-group\.collapsed \.group-body \{ display: none; \}/);
   assert.match(html, /\.share-group\.collapsed \.group-toggle \.chevron \{ transform: rotate\(-90deg\); \}/);
 });
+
