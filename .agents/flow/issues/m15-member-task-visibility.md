@@ -5,8 +5,8 @@
 ```yaml flow
 kind: issue
 milestone: m15
-priority: P0
-status: ready
+priority: P2
+status: done
 scope:
   - apps/server/src/modules/share/**
   - scripts/doc-budgets.manifest.json
