@@ -5,7 +5,7 @@ import { mount } from "@vue/test-utils";
 import { VueQueryPlugin } from "@tanstack/vue-query";
 import { createAppQueryClient } from "../../apps/web/src/api/queryClient";
 import DashboardPanel from "../../apps/web/src/features/dashboard/DashboardPanel.vue";
-import type { DashboardSummary, DueBucket } from "@ztask/shared";
+import type { DashboardSummary, DashboardTaskListItem, DashboardTasks, DueBucket } from "@ztask/shared";
 
 /**
  * 情况看板组件（05 §5.1–5.2、§6.12–6.13，原型 1352–1445）：
@@ -23,6 +23,8 @@ const originalFetch = globalThis.fetch;
 let calls: Call[];
 let summary: DashboardSummary;
 let due: { bucket: string; asOf: string; buckets: DueBucket[] };
+let dashboardTasks: DashboardTasks;
+let secondPage: DashboardTaskListItem[];
 
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -51,6 +53,17 @@ beforeEach(() => {
     },
   };
   due = { bucket: "gt50", asOf: "2026-11-02T00:00:00.000Z", buckets: makeDue({ overdue: 1, week: 2 }) };
+  dashboardTasks = {
+    bucket: "gt50",
+    total: 2,
+    pageSize: 5,
+    items: [
+      { id: "t-1", description: "任务树组件重构", importance: "high", owners: [MEMBER_A], progress: 70, dueDate: "2026-11-06" },
+      { id: "t-2", description: "看板渲染性能优化", importance: "mid", owners: [MEMBER_B], progress: 80, dueDate: null },
+    ],
+    nextCursor: null,
+  };
+  secondPage = [];
 
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const url = new URL(String(input));
@@ -97,6 +110,18 @@ beforeEach(() => {
     }
     if (url.pathname.endsWith("/dashboard/summary")) return jsonResponse(200, summary);
     if (url.pathname.endsWith("/dashboard/due-distribution")) return jsonResponse(200, due);
+    if (url.pathname.endsWith("/dashboard/tasks")) {
+      const cursor = url.searchParams.get("cursor");
+      if (cursor !== null) {
+        return jsonResponse(200, {
+          ...dashboardTasks,
+          total: dashboardTasks.total,
+          items: secondPage,
+          nextCursor: null,
+        });
+      }
+      return jsonResponse(200, dashboardTasks);
+    }
     return jsonResponse(404, { error: { code: "NOT_FOUND", message: "未知", requestId: "r" } });
   }) as typeof fetch;
 });
@@ -160,6 +185,92 @@ describe("情况看板（05 §5.1–5.2）", () => {
     await wrapper.findAll(".stat-card")[1]!.trigger("click");
     await nextTick();
     expect(wrapper.find(".chart").exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("点击卡片同时加载任务明细，行点击 emit openTask", async () => {
+    const wrapper = await mountPanel({ access: "admin", folderId: "f-root" });
+    await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
+
+    await wrapper.findAll(".stat-card")[1]!.trigger("click");
+    await vi.waitFor(() => expect(wrapper.findAll(".dash-task-row")).toHaveLength(2));
+
+    const tasksCall = calls.find((call) => call.path.endsWith("/dashboard/tasks"));
+    expect(tasksCall?.query).toContain("bucket=gt50");
+    expect(tasksCall?.query).toContain("folderId=f-root");
+    expect(wrapper.find(".dash-tasklist").text()).toContain("任务树组件重构");
+    expect(wrapper.find(".dash-tasklist").text()).toContain("共 2 项");
+    expect(wrapper.find(".dash-tasklist").text()).toContain("70%");
+    expect(wrapper.find(".dash-tasklist").text()).toContain("11-06");
+
+    await wrapper.findAll(".dash-task-row")[0]!.trigger("click");
+    expect(wrapper.emitted("openTask")?.[0]).toEqual(["t-1"]);
+    wrapper.unmount();
+  });
+
+  it("任务列表使用服务端游标翻页，并保留第一页缓存", async () => {
+    const makeTask = (index: number): DashboardTaskListItem => ({
+      id: `t-${index}`,
+      description: `任务 ${index}`,
+      importance: "mid",
+      owners: [MEMBER_A],
+      progress: 60,
+      dueDate: null,
+    });
+    dashboardTasks = {
+      bucket: "gt50",
+      total: 6,
+      pageSize: 5,
+      items: [1, 2, 3, 4, 5].map(makeTask),
+      nextCursor: "cursor-1",
+    };
+    secondPage = [makeTask(6)];
+
+    const wrapper = await mountPanel({ access: "admin", folderId: "f-root" });
+    await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
+    await wrapper.findAll(".stat-card")[1]!.trigger("click");
+    await vi.waitFor(() => expect(wrapper.findAll(".dash-task-row")).toHaveLength(5));
+    expect(wrapper.find(".dash-pageno").text()).toBe("1 / 2");
+
+    await wrapper.get('button[aria-label="下一页"]').trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".dash-tasklist").text()).toContain("任务 6"));
+    expect(wrapper.find(".dash-pageno").text()).toBe("2 / 2");
+    expect(calls.filter((call) => call.path.endsWith("/dashboard/tasks")).at(-1)?.query).toContain(
+      "cursor=cursor-1",
+    );
+
+    await wrapper.get('button[aria-label="上一页"]').trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".dash-tasklist").text()).toContain("任务 1"));
+    expect(wrapper.find(".dash-pageno").text()).toBe("1 / 2");
+
+    // 成员筛选变化必须回到第一页，不能把上一页的 cursor 带进新筛选。
+    await wrapper.get('button[aria-label="下一页"]').trigger("click");
+    await vi.waitFor(() => expect(wrapper.find(".dash-pageno").text()).toBe("2 / 2"));
+    await wrapper.findAll(".mchip")[0]!.trigger("click");
+    await vi.waitFor(() => {
+      const call = calls
+        .filter((item) => item.path.endsWith("/dashboard/tasks") && item.query.includes("memberIds=m-a"))
+        .at(-1);
+      expect(call?.query).not.toContain("cursor=");
+    });
+    await vi.waitFor(() => expect(wrapper.find(".dash-pageno").text()).toBe("1 / 2"));
+    wrapper.unmount();
+  });
+
+  it("分享域任务明细走 share 端点，不请求管理员端点", async () => {
+    dashboardTasks = {
+      ...dashboardTasks,
+      total: 1,
+      items: [{ id: "t-1", description: "相关任务", importance: "mid", owners: [MEMBER_A], progress: 60, dueDate: null }],
+      nextCursor: null,
+    };
+    const wrapper = await mountPanel({ access: "share", folderId: "f-root" });
+    await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
+
+    await wrapper.findAll(".stat-card")[1]!.trigger("click");
+    await vi.waitFor(() => expect(wrapper.findAll(".dash-task-row")).toHaveLength(1));
+    expect(calls.some((call) => call.path === "/api/v1/share/dashboard/tasks")).toBe(true);
+    expect(calls.some((call) => call.path === "/api/v1/admin/dashboard/tasks")).toBe(false);
     wrapper.unmount();
   });
 
@@ -233,6 +344,7 @@ describe("情况看板（05 §5.1–5.2）", () => {
 
   it("空集合：分布图显示原型空态文案", async () => {
     due = { bucket: "done", asOf: "2026-11-02T00:00:00.000Z", buckets: makeDue() };
+    dashboardTasks = { bucket: "done", total: 0, pageSize: 5, items: [], nextCursor: null };
     const wrapper = await mountPanel({ access: "admin", folderId: "f-root" });
     await vi.waitFor(() => expect(wrapper.findAll(".stat-card")).toHaveLength(3));
 

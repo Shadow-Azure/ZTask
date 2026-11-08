@@ -317,10 +317,10 @@ function openEditorById(taskId: string): void {
 }
 
 /**
- * 树内任务行点击（原型 1074–1076）：打开编辑浮窗；树 DTO 只有轻量字段，
+ * 树内任务行 / 看板任务行点击（原型 1074–1076）：打开编辑浮窗；树和看板 DTO 只有轻量字段，
  * 不在当前列表（如未选其所在夹）时按 id 拉取完整聚合再开（D2）。
  */
-async function openTreeTask(taskId: string): Promise<void> {
+async function openTaskById(taskId: string): Promise<void> {
   if (!isAdmin.value) {
     openTaskDetail(taskId);
     return;
@@ -332,7 +332,7 @@ async function openTreeTask(taskId: string): Promise<void> {
   }
   try {
     const detail = await adminTaskApi.get(taskId);
-    // 树只列主任务；若 id 命中小任务（数据竞争），退回其父任务。
+    // 树/看板只列主任务；若 id 命中小任务（数据竞争），退回其父任务。
     const task = "task" in detail ? detail.parent : detail;
     await openEditor(task);
   } catch {
@@ -434,7 +434,7 @@ function closeCreateFolder(): void {
           :scope="scopePrefix"
           :creating="creatingFolder"
           :create-parent-id="creatingFolderParent"
-          @open-task="openTreeTask"
+          @open-task="openTaskById"
           @close-create="closeCreateFolder"
         />
       </div>
@@ -515,7 +515,11 @@ function closeCreateFolder(): void {
       </div>
 
       <div v-else class="board-body">
-        <DashboardPanel :access="isShareScope ? 'share' : 'admin'" :folder-id="selectedFolderId" />
+        <DashboardPanel
+          :access="isShareScope ? 'share' : 'admin'"
+          :folder-id="selectedFolderId"
+          @open-task="openTaskById"
+        />
       </div>
     </main>
 

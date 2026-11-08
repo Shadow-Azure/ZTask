@@ -32,7 +32,7 @@ import { createMemberService, type MemberFile } from "../members/member-service.
 import { createFolderService } from "../folders/folder-service.js";
 import type { DashboardService } from "../dashboard/dashboard-service.js";
 import type { HistoryService } from "../revisions/history-service.js";
-import { parseBucket, parseChangesParams, parseFolderId, parseMemberIds } from "../dashboard/dashboard-query.js";
+import { parseBucket, parseChangesParams, parseCursor, parseFolderId, parseMemberIds } from "../dashboard/dashboard-query.js";
 import { readTaskAggregate } from "../../storage/task-store.js";
 import type { TaskAggregate } from "../../storage/task-types.js";
 import type { TaskStore } from "../../storage/task-store.js";
@@ -377,6 +377,18 @@ export async function shareRoutes(
       folderId: parseFolderId(query),
       bucket: parseBucket(query),
       memberIds: parseMemberIds(query),
+    });
+  });
+
+  // 看板卡片明细：全员可见后与管理端同口径，按 folder/member 范围返回统计桶任务。
+  app.get(`${SHARE_BASE_PATH}/dashboard/tasks`, async (request) => {
+    requirePrincipal(request);
+    const query = request.query as Record<string, unknown>;
+    return await options.dashboardService.tasks({
+      folderId: parseFolderId(query),
+      bucket: parseBucket(query),
+      memberIds: parseMemberIds(query),
+      cursor: parseCursor(query),
     });
   });
 

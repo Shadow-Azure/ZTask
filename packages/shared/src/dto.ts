@@ -109,6 +109,30 @@ export interface DashboardDueDistribution {
   buckets: DueBucket[];
 }
 
+/** 看板任务列表行：只带列表展示所需字段，不返回详情文本或小任务。 */
+export interface DashboardTaskListItem {
+  id: string;
+  description: string;
+  importance: Importance;
+  owners: MemberSummary[];
+  /** 0–100 整数。 */
+  progress: number;
+  /** YYYY-MM-DD 或 null 表示未设置。 */
+  dueDate: string | null;
+}
+
+/**
+ * `GET /admin/dashboard/tasks` 与 `GET /share/dashboard/tasks` 的响应（05 §5.1/§5.2 的明细补充）。
+ * 排序与任务列表一致：`createdAt ASC, id ASC`；`nextCursor` 为服务端签发的 opaque 游标。
+ */
+export interface DashboardTasks {
+  bucket: "done" | "gt50" | "lt50";
+  total: number;
+  pageSize: number;
+  items: DashboardTaskListItem[];
+  nextCursor: string | null;
+}
+
 /**
  * 历史窗口单侧的完整快照（05 §2.2/§5.3）：只含 diff 所需的进度与完整详情文本，
  * 行级差异由前端用 jsdiff 计算，服务端不返回 diff 结果。

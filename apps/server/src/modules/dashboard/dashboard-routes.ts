@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { DashboardService } from "./dashboard-service.js";
 import type { HistoryService } from "../revisions/history-service.js";
-import { parseBucket, parseChangesParams, parseFolderId, parseMemberIds } from "./dashboard-query.js";
+import { parseBucket, parseChangesParams, parseCursor, parseFolderId, parseMemberIds } from "./dashboard-query.js";
 
 const ADMIN_DASHBOARD_PATH = "/api/v1/admin/dashboard";
 
@@ -29,6 +29,17 @@ export async function dashboardRoutes(
       folderId: parseFolderId(query),
       memberIds: parseMemberIds(query),
       bucket: parseBucket(query),
+    });
+  });
+
+  // 看板卡片明细：与 summary 同一范围/桶口径，按 createdAt,id 稳定游标分页。
+  app.get(`${ADMIN_DASHBOARD_PATH}/tasks`, async (request) => {
+    const query = request.query as Record<string, unknown>;
+    return await options.service.tasks({
+      folderId: parseFolderId(query),
+      memberIds: parseMemberIds(query),
+      bucket: parseBucket(query),
+      cursor: parseCursor(query),
     });
   });
 

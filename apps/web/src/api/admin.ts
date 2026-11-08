@@ -4,6 +4,7 @@ import {
   type DashboardChanges,
   type DashboardDueDistribution,
   type DashboardSummary,
+  type DashboardTasks,
   type Folder,
   type FolderTreeNode,
   type Subtask,
@@ -73,6 +74,17 @@ export const adminApi = {
         folderId: params.folderId,
         bucket: params.bucket,
         memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+      },
+    }),
+
+  /** 指定统计桶的任务明细（分页）。 */
+  dashboardTasks: (params: { folderId: string; bucket: string; memberIds?: string[]; cursor?: string }) =>
+    requestJson<DashboardTasks>(`${API_PREFIX}/admin/dashboard/tasks`, {
+      query: {
+        folderId: params.folderId,
+        bucket: params.bucket,
+        memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+        cursor: params.cursor,
       },
     }),
 };
