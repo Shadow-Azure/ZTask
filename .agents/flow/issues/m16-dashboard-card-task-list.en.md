@@ -5,8 +5,8 @@ English | [中文](m16-dashboard-card-task-list.md)
 ```yaml flow
 kind: issue
 milestone: m16
-priority: P1
-status: ready
+priority: P2
+status: done
 scope:
   - plan/m1-01-ui-prototype/**
   - plan/fullstack-design/**
