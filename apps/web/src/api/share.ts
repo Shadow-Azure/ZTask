@@ -7,6 +7,7 @@ import {
   type DashboardChanges,
   type DashboardDueDistribution,
   type DashboardSummary,
+  type DashboardTasks,
   type ShareTaskMutation,
   type ShareTrackerTasks,
 } from "@ztask/shared";
@@ -116,6 +117,17 @@ export const shareApi = {
         folderId: params.folderId,
         bucket: params.bucket,
         memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+      },
+    }),
+
+  /** 成员看板任务明细（分页）：只返回当前成员相关任务。 */
+  dashboardTasks: (params: { folderId: string; bucket: string; memberIds?: string[]; cursor?: string }) =>
+    requestJson<DashboardTasks>(`${API_PREFIX}/share/dashboard/tasks`, {
+      query: {
+        folderId: params.folderId,
+        bucket: params.bucket,
+        memberIds: params.memberIds?.length ? params.memberIds.join(",") : undefined,
+        cursor: params.cursor,
       },
     }),
 

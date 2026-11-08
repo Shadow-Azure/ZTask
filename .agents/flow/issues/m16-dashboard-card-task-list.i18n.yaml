@@ -1,0 +1,5 @@
+# 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
+# git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
+#   pnpm run record:i18n -- .agents/flow/issues/m16-dashboard-card-task-list.md
+m16-dashboard-card-task-list.md: b3ee26deea4f2a6b7586f04fe948371caf899be3
+m16-dashboard-card-task-list.en.md: a0405d698fa1fbfeccb6f9468ddd6322cc5f8ea0

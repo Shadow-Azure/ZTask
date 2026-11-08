@@ -1,11 +1,15 @@
 import type {
   DashboardDueDistribution,
   DashboardSummary,
+  DashboardTaskListItem,
+  DashboardTasks,
   DueBucket,
   DueBucketKey,
   ImportanceCount,
+  MemberSummary,
   ProgressBucket,
 } from "@ztask/shared";
+import { ApiError } from "@ztask/shared";
 import { createFolderService } from "../folders/folder-service.js";
 import { createMemberService } from "../members/member-service.js";
 import { listTaskAggregates } from "../share/share-scope.js";
@@ -28,6 +32,7 @@ export interface DashboardScopeInput {
 export interface DashboardService {
   summary(input: DashboardScopeInput): Promise<DashboardSummary>;
   dueDistribution(input: DashboardScopeInput & { bucket: DashboardBucketKey }): Promise<DashboardDueDistribution>;
+  tasks(input: DashboardScopeInput & { bucket: DashboardBucketKey; cursor?: string }): Promise<DashboardTasks>;
 }
 
 /** 看板服务装配项：数据目录、manifest 时区与可注入时钟。 */
@@ -43,7 +48,64 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 /** 固定分布顺序（05 §5.2）：空桶也必须出现在响应里。 */
 export const DUE_BUCKET_KEYS: readonly DueBucketKey[] = ["overdue", "week", "month", "later", "unscheduled"];
 
+/** 看板任务列表每页条数：与确认的原型一致（简洁紧凑，5 行）。 */
+export const DASHBOARD_TASK_PAGE_SIZE = 5;
+
 const DUE_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** 任务列表游标位置：最后一项的 (createdAt, taskId)，与任务列表排序一致。 */
+interface DashboardTaskCursor {
+  createdAt: string;
+  taskId: string;
+}
+
+/**
+ * 编码看板任务列表位置游标（05 §1）：base64url(JSON)，对前端保持 opaque。
+ * @param position 本页最后一项的排序位置。
+ * @returns 不透明游标字符串。
+ */
+function encodeDashboardTaskCursor(position: DashboardTaskCursor): string {
+  return Buffer.from(JSON.stringify({ createdAt: position.createdAt, taskId: position.taskId }), "utf8").toString("base64url");
+}
+
+/**
+ * 解码看板任务列表游标：必须是 base64url 的 JSON 对象，含可解析的 createdAt 与 UUID 形态的 taskId。
+ * @param cursor 查询参数原值。
+ * @returns 校验后的位置。
+ */
+function decodeDashboardTaskCursor(cursor: string): DashboardTaskCursor {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+  } catch {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  const { createdAt, taskId } = parsed as { createdAt?: unknown; taskId?: unknown };
+  if (typeof createdAt !== "string" || typeof taskId !== "string") {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  if (!UUID_PATTERN.test(taskId) || !Number.isFinite(Date.parse(createdAt))) {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  return { createdAt, taskId };
+}
+
+/** 稳定排序：createdAt 升序，相同时按 taskId 升序（与任务列表一致）。 */
+function compareAggregates(a: TaskAggregate, b: TaskAggregate): number {
+  if (a.task.createdAt !== b.task.createdAt) return a.task.createdAt < b.task.createdAt ? -1 : 1;
+  if (a.taskId === b.taskId) return 0;
+  return a.taskId < b.taskId ? -1 : 1;
+}
+
+/** 聚合是否严格排在游标位置之后（createdAt, taskId 升序）。 */
+function isAfterDashboardTaskCursor(aggregate: TaskAggregate, cursor: DashboardTaskCursor): boolean {
+  if (aggregate.task.createdAt !== cursor.createdAt) return aggregate.task.createdAt > cursor.createdAt;
+  return aggregate.taskId > cursor.taskId;
+}
 
 /** 统计桶固定顺序（05 §5.1），同时供 query 校验复用。 */
 export const DASHBOARD_BUCKET_KEYS: readonly DashboardBucketKey[] = ["done", "gt50", "lt50"];
@@ -197,6 +259,48 @@ export function createDashboardService(deps: DashboardServiceDeps): DashboardSer
     return items;
   }
 
+  /** 成员摘要表：归档成员仍保留姓名/颜色，任务列表不因归档把 owner 变成空白。 */
+  async function memberSummaries(): Promise<Map<string, MemberSummary>> {
+    const out = new Map<string, MemberSummary>();
+    for (const entry of await memberStore.list()) {
+      out.set(entry.id, {
+        id: entry.id,
+        name: entry.value.name,
+        role: entry.value.role,
+        color: entry.value.color,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * 把聚合映射为看板任务列表行：只带列表展示字段，不返回详情文本或小任务。
+   * @param aggregate 主任务聚合。
+   * @param members 成员摘要表。
+   * @returns 列表行 DTO。
+   */
+  function toDashboardTaskItem(
+    aggregate: TaskAggregate,
+    members: Map<string, MemberSummary>,
+  ): DashboardTaskListItem {
+    const owners = aggregate.assignments
+      .filter((assignment) => assignment.taskId === aggregate.taskId && assignment.kind === "owner")
+      .map((assignment) => members.get(assignment.memberId) ?? {
+        id: assignment.memberId,
+        name: "待分配",
+        role: "",
+        color: "#9aa2ae",
+      });
+    return {
+      id: aggregate.taskId,
+      description: aggregate.task.description,
+      importance: aggregate.task.importance,
+      owners,
+      progress: aggregate.task.progress,
+      dueDate: aggregate.task.dueDate,
+    };
+  }
+
   return {
     async summary(input): Promise<DashboardSummary> {
       const now = clock();
@@ -251,6 +355,36 @@ export function createDashboardService(deps: DashboardServiceDeps): DashboardSer
         asOf: now.toISOString(),
         // 固定四桶顺序（05 §5.2）：空桶 total=0，不因没有任务而省略。
         buckets: DUE_BUCKET_KEYS.map((key) => byKey.get(key)!),
+      };
+    },
+
+    async tasks(input): Promise<DashboardTasks> {
+      const items = (await scopedAggregates(input))
+        .filter((aggregate) => progressBucketOf(aggregate.task.progress) === input.bucket)
+        .sort(compareAggregates);
+      const total = items.length;
+
+      let start = 0;
+      if (input.cursor !== undefined) {
+        const cursor = decodeDashboardTaskCursor(input.cursor);
+        const index = items.findIndex((aggregate) => isAfterDashboardTaskCursor(aggregate, cursor));
+        start = index < 0 ? items.length : index;
+      }
+
+      const page = items.slice(start, start + DASHBOARD_TASK_PAGE_SIZE);
+      const hasMore = start + page.length < items.length;
+      const last = page[page.length - 1];
+      const nextCursor = hasMore && last !== undefined
+        ? encodeDashboardTaskCursor({ createdAt: last.task.createdAt, taskId: last.taskId })
+        : null;
+      const members = await memberSummaries();
+
+      return {
+        bucket: input.bucket,
+        total,
+        pageSize: DASHBOARD_TASK_PAGE_SIZE,
+        items: page.map((aggregate) => toDashboardTaskItem(aggregate, members)),
+        nextCursor,
       };
     },
   };

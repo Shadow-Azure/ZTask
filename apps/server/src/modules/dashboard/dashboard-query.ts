@@ -76,6 +76,20 @@ export function parseMemberIds(query: Query): string[] {
 }
 
 /**
+ * cursor 可选：存在时必须是单个非空字符串；具体 base64url 结构由服务层校验。
+ * @param query 请求 query。
+ * @returns 原始游标或 undefined。
+ */
+export function parseCursor(query: Query): string | undefined {
+  const value = query.cursor;
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new ApiError(400, "INVALID_REQUEST", "cursor 非法");
+  }
+  return value.trim();
+}
+
+/**
  * 严格校验 `YYYY-MM-DD`：形状合法且日历上真实存在（拒绝 2026-02-31 / 2026-13-01）。
  * @param value 日期字符串。
  * @returns 是否为合法日期。

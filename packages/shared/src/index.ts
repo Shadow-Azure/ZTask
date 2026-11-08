@@ -11,6 +11,8 @@ export type {
   DashboardChanges,
   DashboardDueDistribution,
   DashboardSummary,
+  DashboardTaskListItem,
+  DashboardTasks,
   DueBucket,
   DueBucketKey,
   Folder,

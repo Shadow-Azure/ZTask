@@ -341,6 +341,45 @@
   .chart-x span { text-align: center; font-size: 11.5px; color: var(--text-dim); }
   .chart-x b { display: block; font-size: 10px; color: var(--text-faint); font-weight: 400; font-family: var(--mono); }
 
+  /* 柱状图下的紧凑分页任务列表 */
+  .chart-tasklist { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+  .ctl-head { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+  .ctl-title { font-size: 12px; font-weight: 650; color: var(--text); }
+  .ctl-count { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .ctl-tip { margin-left: auto; font-size: 10.5px; color: var(--text-faint); }
+  .ctl-list { border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--bg-card); }
+  .ctl-row {
+    display: grid; grid-template-columns: 8px minmax(0, 1fr) auto auto 92px 46px 8px;
+    align-items: center; gap: 9px; width: 100%; padding: 5px 9px;
+    font: inherit; color: inherit; text-align: left; cursor: pointer;
+    background: transparent; border: 0; border-bottom: 1px solid #f0f2f5;
+  }
+  .ctl-row:last-child { border-bottom: 0; }
+  .ctl-row:hover { background: #f7f9fc; }
+  .ctl-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+  .ctl-desc { font-size: 12px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ctl-row .imp { font-size: 10px; padding: 0 6px; line-height: 16px; }
+  .ctl-row .prog .pct { width: 30px; font-size: 10.5px; }
+  .ctl-row .prog .track { height: 5px; }
+  .ctl-due { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); text-align: right; white-space: nowrap; }
+  .ctl-due.overdue { color: var(--red); font-weight: 600; }
+  .ctl-chev { color: var(--text-faint); font-size: 12px; line-height: 1; text-align: right; }
+  .ctl-row:hover .ctl-chev { color: var(--blue); }
+  .ctl-owners { display: flex; align-items: center; min-width: 18px; }
+  .ctl-owners .ava { width: 18px; height: 18px; font-size: 9.5px; }
+  .ctl-owners .ava-group .ava + .ava { margin-left: -5px; }
+  .ctl-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; }
+  .ctl-pageinfo { font-family: var(--mono); font-size: 10.5px; color: var(--text-faint); }
+  .ctl-pager { display: flex; align-items: center; gap: 4px; }
+  .ctl-pager button {
+    width: 22px; height: 22px; display: grid; place-items: center; padding: 0;
+    color: var(--text-dim); background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 6px; font-size: 14px; line-height: 1; cursor: pointer;
+  }
+  .ctl-pager button:hover:not(:disabled) { color: var(--text); background: var(--bg-inset); border-color: var(--border-strong); }
+  .ctl-pager button:disabled { opacity: .35; cursor: default; }
+  .ctl-pageno { min-width: 46px; text-align: center; font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); }
+
   .range-panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; margin-top: 16px; box-shadow: var(--shadow); overflow: hidden; }
   .range-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px 13px; }
   .range-head h3 { font-size: 13px; font-weight: 650; }
@@ -572,7 +611,7 @@
         <ul>
           <li>左侧任务夹文件树（文件夹可嵌套）</li>
           <li>右侧「任务管理」：任务增删改查、小任务（仅一层）、双击打开编辑浮窗</li>
-          <li>右侧「情况看板」：成员筛选、完成度统计卡片、点击卡片展开预计完成时间柱状图</li>
+          <li>右侧「情况看板」：成员筛选、完成度统计卡片、点击卡片展开预计完成时间柱状图与分页任务列表</li>
           <li>默认查询昨天至今：进度变化 + 进展详情 code-diff 对比，可自定义日期重新查询</li>
         </ul>
         <button data-goto="tracker">打开界面 →</button>
@@ -617,7 +656,7 @@
       <ul>
         <li>任务夹树：点击任务夹切换右侧内容；点击树中任务直接打开编辑浮窗；文件夹可折叠。</li>
         <li>任务行：<b>单击</b>打开编辑浮窗；点击进度条原地修改进度；悬停行尾出现「编辑 / 添加小任务 / 删除」。</li>
-        <li>情况看板：成员 chips 多选（不选 = 整体）；点击统计卡片在下方展开该集合的预计完成时间分布柱状图，再点一次收起。</li>
+        <li>情况看板：成员 chips 多选（不选 = 整体）；点击统计卡片在下方展开该集合的预计完成时间分布柱状图与紧凑分页任务列表，再点一次收起；点击任务行打开任务详情浮窗。</li>
         <li>时间段查询：默认自动查询昨天 00:00:00 至当前时刻并列出变化任务；可修改起止日期重新查询（自定义结束日期包含至 23:59:59），查询结果默认全部展开，支持单个或批量展开 / 折叠左右并排的进展详情 diff（红 = 删除，绿 = 新增）。</li>
         <li>成员管理：行内生成 / 复制 / 重置 / 吊销分享链接（危险操作有确认弹窗）；「添加成员」弹窗。</li>
         <li>成员视图：展示团队全部事项；只有「我负责的」任务可改进度与追加进展，其他任务只读。进展详情为追加式（历史保留，供时间段 diff 对比）；被重置/吊销的链接进入「链接已失效」页（见顶部导航「失效链接」）。</li>
@@ -1521,6 +1560,16 @@ document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click
 /* ════════════════ 事项跟踪 · 情况看板 tab ════════════════ */
 const dashSel = new Set();   /* 选中的成员 id；空 = 整体 */
 let statSel = null;          /* 当前展开柱状图的卡片：done / gt50 / lt50 */
+let dashPage = 1;            /* 柱状图下任务列表的当前页 */
+const DASH_PAGE_SIZE = 5;    /* 任务列表每页条数 */
+
+function pageSlice(list, page, size) {
+  const total = list.length;
+  const pageCount = Math.max(1, Math.ceil(total / size));
+  const current = Math.min(Math.max(1, Math.floor(page) || 1), pageCount);
+  const start = (current - 1) * size;
+  return {items: list.slice(start, start + size), page: current, pageCount, total};
+}
 
 function dashTasks(includeDeleted = false) {
   let ids = taskIdsOf(selFolder, includeDeleted);
@@ -1534,6 +1583,7 @@ function renderDashChips() {
   $('#dash-chips').querySelectorAll('.mchip').forEach(c => c.addEventListener('click', () => {
     const id = c.dataset.mid;
     dashSel.has(id) ? dashSel.delete(id) : dashSel.add(id);
+    dashPage = 1;
     renderDashChips(); renderStats(); renderChart(); renderRangeQuery();
   }));
 }
@@ -1569,11 +1619,12 @@ function renderStats() {
         <div class="sc-cell mi"><b>${c.mid}</b><span>中</span></div>
         <div class="sc-cell lo"><b>${c.low}</b><span>低</span></div>
       </div>
-      <div class="sc-hint">${statSel === d.key ? '▾ 再次点击收起分布图' : '▸ 点击查看预计完成时间分布'}</div>
+      <div class="sc-hint">${statSel === d.key ? '▾ 再次点击收起分布图与任务列表' : '▸ 点击查看完成时间分布与任务列表'}</div>
     </div>`;
   }).join('');
   $('#stat-cards').querySelectorAll('.stat-card').forEach(card => card.addEventListener('click', () => {
     statSel = statSel === card.dataset.key ? null : card.dataset.key;
+    dashPage = 1;
     renderStats(); renderChart();
   }));
   renderChart();
@@ -1595,6 +1646,8 @@ function renderChart() {
       <div class="range-empty" style="text-align:center;padding:34px 0">该集合暂无任务，换个统计卡片或调整成员筛选试试。</div></div>`;
     return;
   }
+  const pageData = pageSlice(tasks, dashPage, DASH_PAGE_SIZE);
+  dashPage = pageData.page;
   const buckets = [0,1,2,3].map(() => ({high:0, mid:0, low:0}));
   tasks.forEach(t => buckets[dueBucket(t)][t.imp]++);
   const max = Math.max(1, ...buckets.map(b => b.high + b.mid + b.low));
@@ -1628,7 +1681,45 @@ function renderChart() {
     <div class="chart-x">
       ${labels.map(l => `<span>${l[0]}<b>${l[1]}</b></span>`).join('')}
     </div>
+    <div class="chart-tasklist">
+      <div class="ctl-head">
+        <span class="ctl-title">任务列表</span>
+        <span class="ctl-count">共 ${tasks.length} 项</span>
+        <span class="ctl-tip">点击任务行打开详情浮窗</span>
+      </div>
+      <div class="ctl-list">
+        ${pageData.items.map(t => {
+          const od = isOverdue(t);
+          return `<button class="ctl-row" type="button" data-tid="${t.id}" title="查看任务详情：${esc(t.desc)}">
+            <span class="imp-dot ${t.imp}"></span>
+            <span class="ctl-desc">${esc(t.desc)}</span>
+            <span class="imp ${t.imp}">${impName[t.imp]}</span>
+            <span class="ctl-owners">${avaGroup(t.owners, true)}</span>
+            ${progBar(t.progress, 92)}
+            <span class="ctl-due${od ? ' overdue' : ''}"${od ? ' title="已逾期"' : ''}>${fmtD(t.due)}</span>
+            <span class="ctl-chev" aria-hidden="true">›</span>
+          </button>`;
+        }).join('')}
+      </div>
+      <div class="ctl-foot">
+        <span class="ctl-pageinfo">每页 ${DASH_PAGE_SIZE} 项 · 共 ${pageData.total} 项</span>
+        <div class="ctl-pager">
+          <button type="button" data-page="${pageData.page - 1}" aria-label="上一页" title="上一页"${pageData.page <= 1 ? ' disabled' : ''}>‹</button>
+          <span class="ctl-pageno">${pageData.page} / ${pageData.pageCount}</span>
+          <button type="button" data-page="${pageData.page + 1}" aria-label="下一页" title="下一页"${pageData.page >= pageData.pageCount ? ' disabled' : ''}>›</button>
+        </div>
+      </div>
+    </div>
   </div>`;
+  slot.querySelectorAll('.ctl-row').forEach(row => {
+    row.addEventListener('click', () => openModal(row.dataset.tid));
+  });
+  slot.querySelectorAll('.ctl-pager button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      dashPage = Number(btn.dataset.page);
+      renderChart();
+    });
+  });
 }
 
 /* 时间段查询：默认昨天 00:00:00 至当前时刻，自定义结束日期包含至 23:59:59.999 */

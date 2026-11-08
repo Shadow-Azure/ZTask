@@ -374,6 +374,14 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - Body：无。
 - Response 200：`{ bucket, asOf, buckets: DueBucket[] }`。
 
+### 5.2.1 `GET /admin/dashboard/tasks`
+
+- 解决问题：返回指定统计桶的分页任务明细，供统计卡下方任务列表使用。
+- Params：`folderId` 必填；`bucket=done|gt50|lt50` 必填；`memberIds` 可选；`cursor` 可选，为上一页最后一项的 opaque 位置标记。
+- Body：无。
+- Response 200：`{ bucket, total, pageSize, items: DashboardTaskListItem[], nextCursor }`；`pageSize` 固定 5，`nextCursor=null` 表示没有下一页。
+- 与 summary/due-distribution 共用 folder/member 范围；只统计未软删除主任务；按 `createdAt ASC,id ASC` 稳定排序；cursor 不暴露数据库偏移。
+
 ### 5.3 `GET /admin/dashboard/changes`
 
 - 解决问题：返回起止时间的进度和详情快照，供 jsdiff 使用。
@@ -526,6 +534,13 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - Params：与 `GET /admin/dashboard/due-distribution` 相同。
 - Body：无。
 - Response 200：`{ bucket, asOf, buckets: DueBucket[] }`。
+
+### 6.13.1 `GET /share/dashboard/tasks`
+
+- 解决问题：查看团队全部任务中指定统计桶的分页任务明细。
+- Params：与 `GET /admin/dashboard/tasks` 相同。
+- Body：无。
+- Response 200：`{ bucket, total, pageSize, items: DashboardTaskListItem[], nextCursor }`，items 覆盖团队全部任务；folder/member 范围与 share summary 一致，`memberIds` 按 owner 口径筛选。
 
 ### 6.14 `GET /share/dashboard/changes`
 

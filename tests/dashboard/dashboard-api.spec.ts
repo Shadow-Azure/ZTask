@@ -2,7 +2,7 @@
 import { rm } from "node:fs/promises";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { FastifyInstance } from "fastify";
-import type { DashboardDueDistribution, DashboardSummary, Importance } from "@ztask/shared";
+import type { DashboardDueDistribution, DashboardSummary, DashboardTasks, Importance } from "@ztask/shared";
 import {
   createFolder,
   createMember,
@@ -72,6 +72,16 @@ async function adminDue(
   return response.json() as DashboardDueDistribution;
 }
 
+/** 管理端任务明细。 */
+async function adminTasks(folderId: string, bucket: string, extra = ""): Promise<DashboardTasks> {
+  const response = await app.inject({
+    method: "GET",
+    url: `/api/v1/admin/dashboard/tasks?folderId=${folderId}&bucket=${bucket}${extra}`,
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as DashboardTasks;
+}
+
 /** 分享域 summary（带会话 Cookie）。 */
 async function shareSummary(cookie: string, folderId: string, extra = ""): Promise<DashboardSummary> {
   const response = await app.inject({
@@ -97,6 +107,22 @@ async function shareDue(
   });
   expect(response.statusCode).toBe(200);
   return response.json() as DashboardDueDistribution;
+}
+
+/** 分享域任务明细（带会话 Cookie）。 */
+async function shareTasks(
+  cookie: string,
+  folderId: string,
+  bucket: string,
+  extra = "",
+): Promise<DashboardTasks> {
+  const response = await app.inject({
+    method: "GET",
+    url: `/api/v1/share/dashboard/tasks?folderId=${folderId}&bucket=${bucket}${extra}`,
+    headers: { cookie },
+  });
+  expect(response.statusCode).toBe(200);
+  return response.json() as DashboardTasks;
 }
 
 function totalOf(summary: DashboardSummary): number {
@@ -297,6 +323,123 @@ describe("分享域看板", () => {
       headers: { cookie: cookieA },
     });
     expect(probeDue.statusCode).toBe(200);
+  });
+});
+
+describe("看板任务明细", () => {
+  it("按统计桶返回紧凑行，游标只描述位置并支持续页", async () => {
+    const folderId = await createFolder(app, "明细");
+    const owner = await createMember(app, "陈晨");
+    const descriptions: string[] = [];
+    for (let index = 0; index < 6; index += 1) {
+      const description = `进行中 ${index + 1}`;
+      descriptions.push(description);
+      await createTask(app, {
+        folderId,
+        description,
+        ownerIds: [owner],
+        progress: 60 + index,
+        importance: index % 2 === 0 ? "high" : "mid",
+        dueDate: SHANGHAI_TODAY,
+      });
+    }
+    await createTask(app, { folderId, description: "已完成", ownerIds: [owner], progress: 100 });
+    await createTask(app, { folderId, description: "未开始", ownerIds: [owner], progress: 0 });
+    const removed = await createTask(app, { folderId, description: "已删除进行中", ownerIds: [owner], progress: 70 });
+    await deleteTask(app, removed.id, removed.version);
+
+    const first = await adminTasks(folderId, "gt50");
+    expect(first.bucket).toBe("gt50");
+    expect(first.total).toBe(6);
+    expect(first.pageSize).toBe(5);
+    expect(first.items).toHaveLength(5);
+    expect(first.nextCursor).toEqual(expect.any(String));
+    expect(first.items[0]).toEqual(
+      expect.objectContaining({
+        id: expect.any(String),
+        description: expect.any(String),
+        importance: expect.stringMatching(/high|mid/),
+        owners: [expect.objectContaining({ id: owner, name: "陈晨" })],
+        progress: expect.any(Number),
+        dueDate: SHANGHAI_TODAY,
+      }),
+    );
+    expect(first.items.some((task) => task.description === "已完成")).toBe(false);
+    expect(first.items.some((task) => task.description === "未开始")).toBe(false);
+    expect(first.items.some((task) => task.description === "已删除进行中")).toBe(false);
+
+    const second = await adminTasks(
+      folderId,
+      "gt50",
+      `&cursor=${encodeURIComponent(first.nextCursor!)}`,
+    );
+    expect(second.total).toBe(6);
+    expect(second.items).toHaveLength(1);
+    expect(second.nextCursor).toBeNull();
+    expect([...first.items, ...second.items].map((task) => task.description).sort()).toEqual([...descriptions].sort());
+  });
+
+  it("未知任务夹是空集，非法 cursor 是 400", async () => {
+    const folderId = await createFolder(app, "空明细");
+    expect(await adminTasks(folderId, "done")).toEqual({
+      bucket: "done",
+      total: 0,
+      pageSize: 5,
+      items: [],
+      nextCursor: null,
+    });
+    expect((await adminTasks(UNKNOWN_FOLDER_ID, "done")).total).toBe(0);
+
+    const invalid = await app.inject({
+      method: "GET",
+      url: `/api/v1/admin/dashboard/tasks?folderId=${folderId}&bucket=done&cursor=not-a-cursor`,
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect((invalid.json() as { error: { code: string } }).error.code).toBe("INVALID_REQUEST");
+  });
+
+  it("分享域返回团队全部任务，memberIds 按 owner 口径筛选", async () => {
+    const folderId = await createFolder(app, "分享明细");
+    const memberA = await createMember(app, "陈晨");
+    const memberB = await createMember(app, "林悦");
+    const ownA = await createTask(app, {
+      folderId,
+      description: "A 进行中",
+      ownerIds: [memberA],
+      progress: 70,
+      importance: "high",
+    });
+    const ownB = await createTask(app, {
+      folderId,
+      description: "B 进行中",
+      ownerIds: [memberB],
+      progress: 80,
+      importance: "mid",
+    });
+    await createTask(app, { folderId, description: "A 完成", ownerIds: [memberA], progress: 100 });
+
+    const { token } = await seedShareLink({ dataDir, memberId: memberA });
+    const cookie = await exchangeCookie(app, token);
+
+    // 全员可见：A 的会话也返回团队全部 gt50 任务，不只 A 相关的任务。
+    const tasksA = await shareTasks(cookie, folderId, "gt50");
+    expect(tasksA.total).toBe(2);
+    expect(tasksA.items.map((task) => task.id)).toEqual(expect.arrayContaining([ownA.id, ownB.id]));
+    expect((await shareTasks(cookie, folderId, "done")).total).toBe(1);
+
+    // memberIds 在团队全部任务范围内按 owner 口径筛选。
+    expect((await shareTasks(cookie, folderId, "gt50", `&memberIds=${memberA}`)).total).toBe(1);
+    expect((await shareTasks(cookie, folderId, "gt50", `&memberIds=${memberB}`)).total).toBe(1);
+
+    // 全员可见后任意在册成员都可作为筛选条件；没有 owner 命中时是合法空集。
+    const memberC = await createMember(app, "赵敏");
+    const probe = await app.inject({
+      method: "GET",
+      url: `/api/v1/share/dashboard/tasks?folderId=${folderId}&bucket=gt50&memberIds=${memberC}`,
+      headers: { cookie },
+    });
+    expect(probe.statusCode).toBe(200);
+    expect((probe.json() as DashboardTasks).total).toBe(0);
   });
 });
 

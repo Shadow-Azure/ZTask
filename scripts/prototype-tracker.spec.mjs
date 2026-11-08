@@ -205,6 +205,40 @@ test('dashboard query rejects missing, invalid, or reversed date ranges', () => 
   assert.equal(resolveQueryRange('not-a-date', '2026-11-01', false, now), null);
 });
 
+test('dashboard task list paginates with a clamped current page', () => {
+  const pageSlice = loadFunction('pageSlice');
+  const tasks = Array.from({ length: 12 }, (_, i) => ({ id: `t${i + 1}` }));
+
+  const first = pageSlice(tasks, 1, 5);
+  assert.deepEqual(first.items.map(t => t.id), ['t1', 't2', 't3', 't4', 't5']);
+  assert.deepEqual({ page: first.page, pageCount: first.pageCount, total: first.total }, { page: 1, pageCount: 3, total: 12 });
+
+  const last = pageSlice(tasks, 3, 5);
+  assert.deepEqual(last.items.map(t => t.id), ['t11', 't12']);
+  assert.equal(last.page, 3);
+
+  assert.equal(pageSlice(tasks, 99, 5).page, 3);
+  assert.equal(pageSlice(tasks, 0, 5).page, 1);
+  assert.equal(pageSlice(tasks, -2, 5).page, 1);
+  assert.equal(pageSlice([], 1, 5).pageCount, 1);
+  assert.deepEqual(pageSlice([], 1, 5).items, []);
+});
+
+test('dashboard chart panel renders a compact paginated task list that opens the task modal', () => {
+  const start = html.indexOf('function renderChart()');
+  const end = html.indexOf('/* 时间段查询', start);
+  assert.notEqual(start, -1, 'renderChart must exist');
+  assert.notEqual(end, -1, 'range query section must follow renderChart');
+  const source = html.slice(start, end);
+
+  assert.match(source, /class="chart-tasklist"/);
+  assert.match(source, /class="ctl-row"/);
+  assert.match(source, /data-tid="\$\{t\.id\}"/);
+  assert.match(source, /openModal\(row\.dataset\.tid\)/);
+  assert.match(source, /class="ctl-pager"/);
+  assert.match(source, /data-page="\$\{pageData\.page - 1\}"/);
+});
+
 test('history snapshot lookup includes the exact boundary and excludes later snapshots', () => {
   const snapshotAt = loadFunction('snapshotAt');
   const history = [
