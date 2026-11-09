@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { Kysely, sql } from "kysely";
-import { Migrator, type Migration, type MigrationProvider } from "kysely/migration";
+import { Kysely, Migrator, sql, type Migration, type MigrationProvider } from "kysely";
 import { StorageCorruptionError } from "./errors.js";
 import { DDL_STATEMENTS, DROP_STATEMENTS, INDEX_STATEMENTS } from "./schema.js";
 import type { DB } from "./db.js";

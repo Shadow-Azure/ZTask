@@ -4,7 +4,7 @@ English | [中文](development.md)
 
 ## Environment
 
-- Node 22+ and pnpm (v10); versions are pinned by `engines` and `packageManager`.
+- Node 20.19–25 (Node 22.x requires 22.12+) and pnpm (v10); versions are pinned by `engines` and `packageManager`. Tests run on CI with Node 22.
 - On the first clone, run `pnpm install && pnpm install:hooks`. The installer also registers the fail-closed merge driver for `.i18n.yaml`.
 - Documentation and flow gates run offline; online flow verification requires an authenticated `gh`.
 
