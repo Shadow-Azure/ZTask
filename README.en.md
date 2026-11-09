@@ -60,6 +60,8 @@ npx ztask serve
 
 The admin UI is at `http://127.0.0.1:8123` by default; open it manually if the browser does not open, and press `Ctrl+C` to stop. Data lives in `~/.ztask` (`C:\Users\<username>\.ztask` on Windows) unless `--data-dir` or `ZTASK_HOME` is set.
 
+Stop the running service before upgrading or uninstalling; if npm cleanup reports `EPERM`, remove the leftover `.ztask-*` directory under `node_modules` as described in the [package README](apps/ztask/README.md), then retry.
+
 For local development (Node.js 22 and pnpm@10):
 
 ```sh

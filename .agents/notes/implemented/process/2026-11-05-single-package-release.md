@@ -27,3 +27,4 @@ ZTask 的安装路径一直面向贡献者：要 clone 仓库、装 pnpm、跑 `
 - esbuild 成为 `apps/ztask` 的构建依赖；升级 Node 目标时需同步 `engines` 与 esbuild target。
 - 首次公开发布不依赖 npm：GitHub Release 先产出可安装的 tarball；配置 `NPM_TOKEN` 后才额外发布到 npm。包名与许可证仍需维护者确认。
 - 单包使 npm 安装体积包含 Web 产物；后续若要发布 Docker 镜像，可复用同一 `dist`，不需要改业务代码。
+- `ztask serve` 运行时会占用包内的原生 SQLite 模块；Windows 上覆盖安装或卸载要先停止服务，否则 npm 清理旧目录可能报 `EPERM` 并留下 `.ztask-*` 残留。处理顺序写在包 README，CLI 不自动停止进程。
