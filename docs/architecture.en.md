@@ -16,7 +16,7 @@ ZTask is a local-first team progress tool managed as a pnpm workspace with five 
 
 ## Startup and data flow
 
-The CLI parses configuration and calls the server's `serve()`. Startup is fixed to: data-directory single-writer lock → open/migrate SQLite and validate data and foreign keys → Fastify assembly and listening. Any failure releases the lock. The service listens only on loopback, and `/api/v1/admin` additionally validates request origin. Unmatched API routes return a uniform JSON 404; other paths fall back to the SPA when static output exists.
+The CLI parses configuration and calls the server's `serve()`. Startup is fixed to: data-directory single-writer lock → open/migrate SQLite and validate data and foreign keys → Fastify assembly and listening. Any failure releases the lock. The service listens only on loopback by default; enabling LAN opens the member share domain. The Admin API stays closed by default and opens only to valid administrator-member sessions. Unmatched API routes return a uniform JSON 404; other paths fall back to the SPA when static output exists.
 
 The server treats the data directory as its persistence boundary. Tasks, folders, members, revisions, sessions, and network configuration live in `ztask.db`; SQLite transactions and consistency checks complete before listening, and later requests use the storage facade. The web client calls `/api/v1` through its HTTP layer, while the shared package pins request, response, and error shapes.
 
@@ -43,4 +43,4 @@ Documentation is a first-class artifact with three layers:
 - Gate scripts use the Node standard library and the TypeScript compiler API without runtime dependencies.
 - Blob hashes, pair records, and structural signatures require LF text, enforced by `.gitattributes`.
 - Storage writes pass through the single-writer lock, write queue, and SQLite transactions; migration and consistency checks complete before HTTP opens.
-- The admin API is local-host-only by default; later issues extend LAN access.
+- The admin API is local-host-only by default; administrator-member sessions may access it over LAN, with authorization re-checked per request.

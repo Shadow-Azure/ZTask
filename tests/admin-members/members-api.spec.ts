@@ -65,6 +65,7 @@ describe("POST /admin/members", () => {
     expect(member.role).toBe("前端工程师");
     expect(member.color).toMatch(/^#[0-9a-f]{6}$/i);
     expect(member.archivedAt).toBeNull();
+    expect(member.isAdmin).toBe(false);
     expect(member.shareLink).toBeNull();
     expect(member.counts).toEqual({ owned: 0, collaborated: 0 });
   });
@@ -92,6 +93,31 @@ describe("GET /admin/members", () => {
 });
 
 describe("PATCH /admin/members/{id}", () => {
+  it("管理员权限：默认 false，可打开与关闭并持久化到列表", async () => {
+    const created = await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name: "陈晨" } });
+    const id = created.json().id as string;
+    expect(created.json().isAdmin).toBe(false);
+
+    const enabled = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/members/${id}`,
+      payload: { isAdmin: true },
+    });
+    expect(enabled.statusCode).toBe(200);
+    expect(enabled.json().isAdmin).toBe(true);
+
+    const list = await app.inject({ method: "GET", url: "/api/v1/admin/members" });
+    expect((list.json() as { items: Array<{ id: string; isAdmin: boolean }> }).items.find((item) => item.id === id)?.isAdmin).toBe(true);
+
+    const disabled = await app.inject({
+      method: "PATCH",
+      url: `/api/v1/admin/members/${id}`,
+      payload: { isAdmin: false },
+    });
+    expect(disabled.statusCode).toBe(200);
+    expect(disabled.json().isAdmin).toBe(false);
+  });
+
   it("部分更新姓名/角色/颜色", async () => {
     const created = await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name: "陈晨" } });
     const id = created.json().id;

@@ -21,6 +21,7 @@ milestones:
   - m14
   - m15
   - m16
+  - m17
 ```
 
 ZTask 以本地 CLI、Web 服务和 SQLite 提供协作。规则见 [README](README.md)，依据 `plan/fullstack-design/`。
@@ -43,6 +44,7 @@ ZTask 以本地 CLI、Web 服务和 SQLite 提供协作。规则见 [README](REA
 - m14：SQLite 迁移。
 - m15：成员链接全团队可见与负责人写边界。
 - m16：原型 UI 与详细设计。
+- m17：成员管理员权限与管理页访问。
 
 ## 推进原则
 

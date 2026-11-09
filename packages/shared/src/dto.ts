@@ -178,9 +178,11 @@ export interface DashboardChanges {
 /** 成员在任务中的角色（05 §6.5）：owner 可写，collaborator / viewer 只读。 */
 export type ShareMemberRole = "owner" | "collaborator" | "viewer";
 
-/** `/share/session` 的 200/201 响应：只含最小成员摘要，不含 token/verifier（05 §6.1–6.2）。 */
+/** `/share/session` 的 200/201 响应：只含最小成员摘要与管理员标记，不含 token/verifier（05 §6.1–6.2）。 */
 export interface ShareSessionResponse {
   member: MemberSummary;
+  /** 该成员拥有管理员权限：链接落地管理页，并可用会话调用 Admin API。 */
+  isAdmin: boolean;
 }
 
 /** `GET /share/tasks?view=home` 的响应（05 §6.4）：团队全部任务按当前成员关系分三组。 */
@@ -313,6 +315,8 @@ export interface AdminMember {
   name: string;
   role: string;
   color: string;
+  /** 管理员权限：为 true 时该成员的分享链接进入管理页，并可用会话调用 Admin API。 */
+  isAdmin: boolean;
   /** UTC RFC 3339；null 表示在册。 */
   archivedAt: string | null;
   counts: AdminMemberCounts;

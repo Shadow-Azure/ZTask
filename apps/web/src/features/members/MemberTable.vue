@@ -150,6 +150,7 @@ async function copyIssued(): Promise<void> {
               <span class="name">{{ member.name }}</span>
             </span>
             <span v-if="member.archivedAt" class="archived-tag">已归档</span>
+            <span v-else-if="member.isAdmin" class="admin-tag">管理员</span>
           </td>
           <td class="role">{{ member.role || "—" }}</td>
           <td class="col-count count">{{ member.counts.owned }}</td>
@@ -290,6 +291,17 @@ tr.archived .role {
   font-size: 10px;
   color: var(--text-faint);
   border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 7px;
+  margin-left: 6px;
+}
+
+/* 管理员权限徽标：与归档标签同形，用蓝色区分能力而非状态。 */
+.admin-tag {
+  font-size: 10px;
+  color: var(--blue);
+  background: color-mix(in srgb, var(--blue) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--blue) 28%, transparent);
   border-radius: 999px;
   padding: 0 7px;
   margin-left: 6px;

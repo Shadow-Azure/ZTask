@@ -31,6 +31,8 @@ export interface MemberFile {
   name: string;
   role: string;
   color: string;
+  /** 管理员权限；缺省视为 false。 */
+  isAdmin: boolean;
   archivedAt: string | null;
 }
 

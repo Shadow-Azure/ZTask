@@ -39,7 +39,7 @@
 
 ### 3.1 AdminAuth
 
-`requireAdmin(request)` 同时检查 listenerKind=loopback 和 socket remoteAddress=loopback，LAN listener 上 Admin API 一律拒绝；默认忽略代理头。状态变更再校验 Origin/Fetch-Site。
+`requireAdmin(request)` 同时检查 listenerKind=loopback 和 socket remoteAddress=loopback；LAN listener 上只有有效管理员成员会话（每请求重读 `members.is_admin`）放行，其余一律拒绝。默认忽略代理头。状态变更再校验 Origin/Fetch-Site。
 
 ### 3.2 ShareAuth
 

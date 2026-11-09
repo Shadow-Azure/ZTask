@@ -129,6 +129,8 @@ async function importMembers(db: Kysely<DB>, dataDir: string, fallback: string):
         name: member.name,
         role: member.role ?? "",
         color: member.color ?? "#9aa2ae",
+        // 旧文件协议没有管理员概念；导入后一律普通成员，需管理员在成员页显式授予。
+        is_admin: 0,
         created_at: member.createdAt ?? fallback,
         updated_at: member.updatedAt ?? member.createdAt ?? fallback,
         archived_at: member.archivedAt ?? null,

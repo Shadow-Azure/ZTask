@@ -4,14 +4,14 @@
 
 ## 1. 通用约定
 
-- JSON UTF-8；有 body 的请求使用 `Content-Type: application/json`；同源 Cookie 仅用于 `/share`。
-- Admin API 仅允许 loopback 管理员；Share API 除 `POST /share/session` 外均要求有效成员会话。LAN listener 上的 Admin API 一律 403。
+- JSON UTF-8；有 body 的请求使用 `Content-Type: application/json`；同源 Cookie 用于 `/share` 与管理员成员调用 `/admin`。
+- Admin API 默认仅允许 loopback 管理员；管理员成员（`members.is_admin=true`）的有效分享会话可在 LAN listener 上调用。Share API 除 `POST /share/session` 外均要求有效成员会话。无管理员权限的 LAN 请求一律 403。
 - 实体 ID 为 UUID 字符串；时间戳为 UTC RFC 3339；`dueDate` 为 `YYYY-MM-DD`。
 - `progress` 为 0–100 整数；`importance` 为 `high | mid | low`。
 - 列表默认只返回未删除实体；任务列表超过约定上限后使用 cursor 分页，`nextCursor=null` 表示没有下一页。列表稳定按 `createdAt ASC,id ASC` 排序，cursor 是服务端签发的 opaque 最后位置标记，不直接暴露 SQL 或数据库偏移；新增任务只影响其后页，不使用可能跳号的页码。
 - 请求 schema 默认拒绝未声明字段。params 中的 `{id}`、`{subtaskId}` 都是路径参数；query 参数在对应接口单独列出。
 - 更新任务必须携带 `version`。version 是主任务聚合的并发版本；小任务 DTO 返回所属主任务聚合的同一版本，任何小任务或分配变化都会递增它。
-- version 冲突返回 409 与最新可见实体；成员链接可读团队全部任务，非 owner 写返回 403；成员调用 Admin API 使用 403。
+- version 冲突返回 409 与最新可见实体；成员链接可读团队全部任务，非 owner 写返回 403；普通成员调用 Admin API 使用 403，管理员成员除外。
 - `204` 一律为空响应体。下文 response 均为成功响应，错误结构见 §7。
 
 ## 2. 核心 DTO
@@ -80,7 +80,7 @@ TaskChange = {
 
 ```text
 AdminMember = {
-  id, name, role, color, archivedAt,
+  id, name, role, color, isAdmin, archivedAt,
   counts: { owned, collaborated },
   shareLink: null | { status, createdAt, revokedAt, lastUsedAt }
 }
@@ -275,14 +275,14 @@ NetworkState = {
 
 - 解决问题：添加团队成员，初始没有分享链接。
 - Params：无。
-- Body：`{ name: string, role?: string, color?: string }`。
+- Body：`{ name: string, role?: string, color?: string, isAdmin?: boolean }`。
 - Response 201：`AdminMember`，shareLink=null。
 
 ### 4.3 `PATCH /admin/members/{id}`
 
-- 解决问题：修改姓名、角色和显示颜色。
+- 解决问题：修改姓名、角色、显示颜色和管理员权限。
 - Params：`id` 为成员 UUID。
-- Body：`{ name?: string, role?: string, color?: string }`。
+- Body：`{ name?: string, role?: string, color?: string, isAdmin?: boolean }`。
 - Response 200：更新后的 `AdminMember`。
 
 ### 4.4 `DELETE /admin/members/{id}`
@@ -409,7 +409,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - 解决问题：把分享 bearer token 换成 HttpOnly 会话。
 - Params：无。
 - Body：`{ token: string }`。
-- Response 201：`{ member: MemberSummary }`，同时 `Set-Cookie`。
+- Response 201：`{ member: MemberSummary, isAdmin: boolean }`，同时下发 Path=/ 的 `Set-Cookie` 并清除旧 Path=/api/v1/share 的同名 Cookie；管理员成员可用同一会话调用 Admin API。
 
 不返回 session verifier、tokenHash 或其他成员信息。失败统一 `SHARE_LINK_INVALID`，并做限流。
 
@@ -418,7 +418,7 @@ hash-only 策略下不返回旧 URL；只有确认可恢复 secret 策略后，�
 - 解决问题：页面刷新后通过 Cookie 恢复成员身份。
 - Params：无。
 - Body：无。
-- Response 200：`{ member: MemberSummary }`；无效会话返回 401。
+- Response 200：`{ member: MemberSummary, isAdmin: boolean }`；无有效会话返回 401。恢复时把旧 Path 会话刷新为 Path=/ 并清除旧 Path 副本。
 
 ### 6.3 `DELETE /share/session`
 

@@ -6,9 +6,15 @@ import { DDL_STATEMENTS, DROP_STATEMENTS, INDEX_STATEMENTS } from "./schema.js";
 import type { DB } from "./db.js";
 
 /** 应用支持的 SQLite schema 版本；migration 只能追加，不能改已发布项。 */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const INITIAL_STATEMENTS = [...DDL_STATEMENTS, ...INDEX_STATEMENTS];
+
+/**
+ * 成员管理员标记（v2）：布尔列默认 false，已有成员与旧版本导入的数据都保持普通成员。
+ * 0001 已发布，不能改它的 DDL；新库同样按 0001 → 0002 逐版执行。
+ */
+const MEMBER_ADMIN_STATEMENT = "ALTER TABLE members ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0";
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
@@ -17,6 +23,7 @@ function sha256(value: string): string {
 /** migration 的校验和：覆盖该版本的全部 DDL，发布后修改会导致启动拒绝。 */
 export const MIGRATION_CHECKSUMS: Readonly<Record<string, string>> = Object.freeze({
   "0001_initial": sha256(INITIAL_STATEMENTS.join(";\n")),
+  "0002_member_admin": sha256(MEMBER_ADMIN_STATEMENT),
 });
 
 const MIGRATIONS: Record<string, Migration> = {
@@ -30,6 +37,14 @@ const MIGRATIONS: Record<string, Migration> = {
       for (const statement of DROP_STATEMENTS) {
         await sql.raw(statement).execute(db);
       }
+    },
+  },
+  "0002_member_admin": {
+    async up(db): Promise<void> {
+      await sql.raw(MEMBER_ADMIN_STATEMENT).execute(db);
+    },
+    async down(db): Promise<void> {
+      await sql.raw("ALTER TABLE members DROP COLUMN is_admin").execute(db);
     },
   },
 };

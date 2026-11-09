@@ -7,6 +7,7 @@ import {
   initStore,
   restoreFromBackup,
   RestoreError,
+  SCHEMA_VERSION,
   type BackupResult,
   type ZtaskStore,
 } from "@ztask/server";
@@ -85,7 +86,7 @@ describe("恢复等价性", () => {
       members: 2,
       repaired: false,
     });
-    expect(summary.manifest).toMatchObject({ formatVersion: 1, timeZone: TIME_ZONE });
+    expect(summary.manifest).toMatchObject({ formatVersion: SCHEMA_VERSION, timeZone: TIME_ZONE });
     expect(summary.files).toBeGreaterThanOrEqual(1);
     expect(summary.bytes).toBeGreaterThanOrEqual(backup.report.bytes);
 

@@ -32,7 +32,7 @@
 
 ### 3.1 schema 版本
 
-`PRAGMA user_version` 是 schema 版本（首版 1）。`schema_migrations` 表记录每个已应用版本的版本号、时间和应用版本，作为审计与排障记录；启动以 `user_version` 做快速判断。`user_version` 高于应用支持版本时拒绝启动；低于时先备份再按顺序 migration。
+`PRAGMA user_version` 是 schema 版本（当前 2；首版 1，成员管理员标记由 v2 追加）。`schema_migrations` 表记录每个已应用版本的版本号、时间和应用版本，作为审计与排障记录；启动以 `user_version` 做快速判断。`user_version` 高于应用支持版本时拒绝启动；低于时先备份再按顺序 migration。
 
 `meta` 表保存应用级元数据：
 
@@ -82,7 +82,7 @@ PRAGMA wal_autocheckpoint = 1000;
 | 表 | 替代的旧文件 | 作用 |
 | --- | --- | --- |
 | `meta` | `manifest.json` | schema 之外的全局元数据、时区、导入标记 |
-| `members` | `members/<id>.json` | 成员档案与归档 |
+| `members` | `members/<id>.json` | 成员档案、管理员标记与归档 |
 | `folders` | `folders/<id>.json` | 任务夹树 |
 | `task_aggregates` | `tasks/<id>/current.json` 的版本与 tip 部分 | 主任务聚合版本与 revision tip |
 | `tasks` | `current.json` 的 task/subtasks | 主任务与小任务的当前状态 |
@@ -105,6 +105,7 @@ CREATE TABLE members (
   name        TEXT NOT NULL,
   role        TEXT NOT NULL,
   color       TEXT NOT NULL,
+  is_admin    INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
   archived_at TEXT

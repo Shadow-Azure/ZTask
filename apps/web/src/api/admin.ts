@@ -29,11 +29,11 @@ export const adminApi = {
   members: () => requestJson<{ items: AdminMember[] }>(`${API_PREFIX}/admin/members`),
 
   /** 添加成员。 */
-  createMember: (input: { name: string; role?: string; color?: string }) =>
+  createMember: (input: { name: string; role?: string; color?: string; isAdmin?: boolean }) =>
     requestJson<AdminMember>(`${API_PREFIX}/admin/members`, { method: "POST", body: input }),
 
-  /** 更新成员姓名/角色/颜色。 */
-  updateMember: (id: string, patch: { name?: string; role?: string; color?: string }) =>
+  /** 更新成员姓名/角色/颜色/管理员权限。 */
+  updateMember: (id: string, patch: { name?: string; role?: string; color?: string; isAdmin?: boolean }) =>
     requestJson<AdminMember>(`${API_PREFIX}/admin/members/${id}`, { method: "PATCH", body: patch }),
 
   /** 归档成员（DELETE 语义：历史任务保留并显示待分配）。 */

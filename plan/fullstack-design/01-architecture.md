@@ -62,7 +62,7 @@ ZTask 单进程
 │                                                         │
 │  192.168.1.5:8123（按需启停）                            │
 │  ├─ 成员个人页 + 只读事项跟踪 + Share API                │
-│  └─ Admin API 一律拒绝                                   │
+│  └─ Admin API：管理员成员会话放行，其余拒绝              │
 │                                                         │
 │  ~/.ztask/{ztask.db,locks,backups,tmp}                  │
 └─────────────────────────────────────────────────────────┘
@@ -125,9 +125,10 @@ LAN listener 的运行状态与持久化 enabled 状态分开：重启后先启�
 | --- | --- | --- | --- |
 | `admin` | 请求来自 loopback listener 且 socket 对端为 loopback，并通过同源检查 | `/api/v1/admin/*` | 全部成员、任务、看板、网络与分享链接管理 |
 | `member` | 有效分享令牌换取的 HttpOnly 会话 | `/api/v1/share/*` | 个人页 + 只读事项跟踪；仅 owner 主任务可写进度/完整详情/小任务 |
+| `member-admin` | 管理员成员的有效分享会话（LAN listener） | `/api/v1/admin/*` 与 `/api/v1/share/*` | 与 `admin` 相同 |
 | 匿名 | 无 | 静态资源、令牌交换、健康检查 | 不含业务数据 |
 
-管理员只能在服务主机操作已确认。Admin API 同时检查 listenerKind=loopback 和 remoteAddress=loopback，LAN listener 上的 Admin API 一律拒绝；默认忽略代理 IP 头，不能把“局域网内”当成管理员证明。
+管理员默认只能在服务主机操作：Admin API 同时检查 listenerKind=loopback 和 remoteAddress=loopback；默认忽略代理 IP 头，不能把“局域网内”当成管理员证明。成员被授予管理员权限后，其有效分享会话可在 LAN listener 上调用 Admin API，服务端逐请求重读 `members.is_admin`，撤权、归档或链接轮换/吊销后残留会话立即失效。管理员成员链接落地 `/#/tracker`，普通成员链接仍进入成员个人页。
 
 ### 4.1 成员链接与会话生命周期
 

@@ -7,7 +7,7 @@
 | 用户/原型要求 | 设计位置 | 覆盖结论 |
 | --- | --- | --- |
 | 本地启动服务，Web UI 访问，数据全在本地 | [01 §2/§3/§6](01-architecture.md) + [04](04-backend-architecture.md) | 单进程 + 本地 SQLite 单库 |
-| 默认 loopback，分享时动态开启 LAN IP | [01 §3](01-architecture.md) + [07 §3.3](07-backend-implementation.md) + [05 §4.1](05-api-design.md) | 双监听共享服务；network_config 派生 URL；LAN Admin API 拒绝 |
+| 默认 loopback，分享时动态开启 LAN IP | [01 §3](01-architecture.md) + [07 §3.3](07-backend-implementation.md) + [05 §4.1](05-api-design.md) | 双监听共享服务；network_config 派生 URL；LAN Admin API 默认拒绝、管理员成员会话放行 |
 | 类似 DeepSeek Harness 的使用架构 | [README](README.md) + [01 §2](01-architecture.md) | 借 CLI/同源托管/本地数据库，不借插件运行时 |
 | A/B 分别生成链接，只能看自己相关事项 | [01 §4](01-architecture.md) + [04 §4](04-backend-architecture.md) + [05 §6](05-api-design.md) | 独立命名空间 + 服务端资源过滤；个人页 owner 限定写入，事项跟踪只读 |
 | 管理员查看/操作事项跟踪和成员管理 | [02 §2/§3](02-features.md) + [08 §5](08-frontend-implementation.md) | 管理员保留 CRUD、进展维护、计数与链接操作 |
@@ -29,7 +29,7 @@
 
 ### Q1 · 管理员从哪里访问（已确认）
 
-管理员只能在服务主机操作。默认仅监听 127.0.0.1；管理员在成员管理页选择具体本机 LAN IP 后动态增加分享监听，LAN listener 上的 Admin API 一律拒绝。`network_config` 保存 shareBaseUrl，链接记录不保存完整 URL；IP 变化后新链接使用新地址，旧 URL 需重新分发。
+管理员默认只能在服务主机操作。默认仅监听 127.0.0.1；管理员在成员管理页选择具体本机 LAN IP 后动态增加分享监听。LAN listener 上的 Admin API 默认拒绝，仅对 `members.is_admin=true` 的有效分享会话放行；管理员成员的链接直接进入管理页。`network_config` 保存 shareBaseUrl，链接记录不保存完整 URL；IP 变化后新链接使用新地址，旧 URL 需重新分发。
 
 ### Q2 · 完整分享链接是否需要随时复制
 
@@ -71,7 +71,7 @@ dueDate 允许 null 表示未设置，非 null 时必须是合法的 `YYYY-MM-DD
 
 | 风险 | 后果 | 设计缓解 |
 | --- | --- | --- |
-| 局域网用户直接打开管理端 | 全部数据与链接失控 | listenerKind + remoteAddress 双重校验；LAN Admin API 一律拒绝 |
+| 局域网用户直接打开管理端 | 全部数据与链接失控 | listenerKind + remoteAddress 双重校验；LAN Admin API 仅对管理员成员会话放行，普通成员/无会话一律拒绝 |
 | 默认或意外监听所有网卡 | 扩大 VPN/其他网络暴露面 | 默认仅 loopback；仅允许显式选择具体 LAN IP，拒绝 wildcard |
 | LAN 动态启动失败仍生成链接 | 成员拿到不可达 URL | bind 成功后才保存 running/shareBaseUrl；失败回滚并显示 degraded |
 | IP 变化后仍使用旧 base | 旧链接失效、配置漂移 | 启动检测并要求重选；新 URL 动态派生，token 不变但重新分发 |
@@ -111,7 +111,7 @@ dueDate 允许 null 表示未设置，非 null 时必须是合法的 `YYYY-MM-DD
 
 ## 6. 设计验收场景
 
-1. 一条命令在新数据目录启动，默认仅 loopback，本机浏览器进入管理端；动态开启具体 LAN IP 后成员可访问，LAN 上 Admin API 仍拒绝。
+1. 一条命令在新数据目录启动，默认仅 loopback，本机浏览器进入管理端；动态开启具体 LAN IP 后成员可访问。普通成员与无会话的 LAN Admin API 仍拒绝；管理员成员的链接进入管理页并可调用 Admin API，撤权后同一会话立即失效。
 2. 局域网 A/B 使用不同链接，都有成员个人页和只读事项跟踪，都能看到团队全部任务；无成员管理页，写权限只给主任务 owner。
 3. 管理员完成任务夹、成员、主任务和一层小任务维护，刷新/重启后保持；迁移后旧数据完整。
 4. 成员 owner 只能在个人页通过停顿自动保存、本卡“保存”或 Ctrl+S 提交主任务进度与完整详情，并管理小任务；collaborator 与其他成员只读；成员事项跟踪可看团队全部任务但完全只读；并发冲突有可见处理。

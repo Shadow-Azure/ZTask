@@ -16,27 +16,38 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 /**
- * 分享域 fetch 桩：会话交换/恢复 + 个人页与任务夹树。
- * 只用于成员壳测试；管理端测试不安装它，继续走真实（失败的）网络路径。
+ * 分享域 fetch 桩：会话交换/恢复 + 个人页/任务夹树，外加管理员成员落地管理页所需的
+ * 管理端只读端点。只用于壳层测试；管理端测试不安装它，继续走真实（失败的）网络路径。
  * @param member 会话恢复返回的成员摘要。
+ * @param isAdmin 会话是否带管理员权限。
  */
-function installShareFetch(member = MEMBER): void {
+function installShareFetch(member = MEMBER, isAdmin = false): void {
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? "GET";
     if (url.includes("/api/v1/share/session")) {
       if (method === "POST") {
         const token = (JSON.parse(String(init?.body ?? "{}")) as { token?: string }).token;
-        if (token === "good-token") return jsonResponse(201, { member });
+        if (token === "good-token") return jsonResponse(201, { member, isAdmin });
         return jsonResponse(401, { error: { code: "SHARE_LINK_INVALID", message: "分享链接无效", requestId: "r-1" } });
       }
-      return jsonResponse(200, { member });
+      return jsonResponse(200, { member, isAdmin });
     }
     if (url.includes("/api/v1/share/tasks")) {
       const view = new URL(url).searchParams.get("view");
-      return jsonResponse(200, view === "tracker" ? { items: [], nextCursor: null } : { owned: [], collaborated: [] });
+      return jsonResponse(200, view === "tracker" ? { items: [], nextCursor: null } : { owned: [], collaborated: [], others: [] });
     }
     if (url.includes("/api/v1/share/folders/tree")) return jsonResponse(200, { tree: [] });
+    if (url.includes("/api/v1/admin/network")) {
+      return jsonResponse(200, {
+        loopbackUrl: "http://127.0.0.1:8123",
+        interfaces: [],
+        shareListener: { enabled: false, running: false, degraded: false, host: null, port: null, shareBaseUrl: null, error: null },
+      });
+    }
+    if (url.includes("/api/v1/admin/folders/tree")) return jsonResponse(200, { tree: [] });
+    if (url.includes("/api/v1/admin/tasks")) return jsonResponse(200, { items: [], nextCursor: null });
+    if (url.includes("/api/v1/admin/members")) return jsonResponse(200, { items: [] });
     return jsonResponse(200, { tree: [] });
   }) as typeof fetch;
 }
@@ -128,6 +139,20 @@ describe("路由与访问模式（03 §2）", () => {
     expect(wrapper.html()).not.toContain(token);
     expect(document.body.innerHTML).not.toContain(token);
     expect(JSON.stringify({ ...localStorage })).not.toContain(token);
+    wrapper.unmount();
+  });
+
+  it("管理员分享链接：交换成功后直接进入管理页并清掉 token", async () => {
+    const token = "good-token";
+    installShareFetch(MEMBER, true);
+    const { wrapper, router } = await mountAt(`/s/${token}`);
+    await vi.waitFor(() => expect(router.currentRoute.value.path).toBe("/tracker"));
+    await vi.waitFor(() => expect(wrapper.find('[aria-label="管理导航"]').exists()).toBe(true));
+
+    expect(wrapper.text()).toContain("成员管理");
+    expect(router.currentRoute.value.params.token).toBeUndefined();
+    expect(router.currentRoute.value.fullPath).not.toContain(token);
+    expect(wrapper.html()).not.toContain(token);
     wrapper.unmount();
   });
 

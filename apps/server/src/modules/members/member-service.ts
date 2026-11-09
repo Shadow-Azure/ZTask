@@ -12,6 +12,8 @@ export interface MemberFile {
   name: string;
   role: string;
   color: string;
+  /** 管理员权限：为 true 时分享链接进入管理页并允许 LAN Admin API。 */
+  isAdmin: boolean;
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
@@ -43,8 +45,8 @@ export interface MemberServiceDeps {
 
 /** 成员服务：创建/更新/归档/列表（05 §4.1–4.4）；分享链接属 m4。 */
 export interface MemberService {
-  create(input: { name: string; role?: string; color?: string }): Promise<AdminMember>;
-  update(id: string, input: { name?: string; role?: string; color?: string }): Promise<AdminMember>;
+  create(input: { name: string; role?: string; color?: string; isAdmin?: boolean }): Promise<AdminMember>;
+  update(id: string, input: { name?: string; role?: string; color?: string; isAdmin?: boolean }): Promise<AdminMember>;
   /** 归档（DELETE 端点语义，05 §4.4）：不重写任务聚合。 */
   archive(id: string): Promise<void>;
   list(aggregates: TaskAggregate[]): Promise<AdminMember[]>;
@@ -102,6 +104,7 @@ export function createMemberService(deps: MemberServiceDeps): {
       name: file.name,
       role: file.role,
       color: file.color,
+      isAdmin: file.isAdmin === true,
       archivedAt: file.archivedAt,
       counts: { owned, collaborated },
       shareLink,
@@ -119,6 +122,7 @@ export function createMemberService(deps: MemberServiceDeps): {
         name,
         role: input.role?.trim() ?? "",
         color: input.color?.trim() || COLOR_PALETTE[created % COLOR_PALETTE.length]!,
+        isAdmin: input.isAdmin === true,
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
@@ -138,6 +142,7 @@ export function createMemberService(deps: MemberServiceDeps): {
         name: name ?? existing.name,
         role: input.role !== undefined ? input.role.trim() : existing.role,
         color: input.color !== undefined && input.color.trim() !== "" ? input.color.trim() : existing.color,
+        isAdmin: input.isAdmin !== undefined ? input.isAdmin : existing.isAdmin,
         updatedAt: clock().toISOString(),
       };
       await store.put(id, updated);

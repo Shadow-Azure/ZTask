@@ -147,8 +147,12 @@ export function tokenFromUrl(url: string): string {
 }
 
 /** 管理端：创建成员并返回 id。 */
-export async function createMemberViaApi(app: FastifyInstance, name: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name } });
+export async function createMemberViaApi(app: FastifyInstance, name: string, isAdmin = false): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/members",
+    payload: { name, ...(isAdmin ? { isAdmin: true } : {}) },
+  });
   if (response.statusCode !== 201) throw new Error(`createMember failed: ${response.statusCode} ${response.body}`);
   return (response.json() as { id: string }).id;
 }

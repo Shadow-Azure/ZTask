@@ -8,6 +8,7 @@ import {
   createTaskStore,
   readTaskAggregate,
   listDataDirFiles,
+  SCHEMA_VERSION,
   type BackupHooks,
   type BackupResult,
   type BackupService,
@@ -157,7 +158,7 @@ describe("在线备份的一致性边界", () => {
       dataDir,
       excluded: ["locks", "tmp", "backups", ".ztask-lock"],
       validation: { ok: true, issues: [] },
-      schemaVersion: 1,
+      schemaVersion: SCHEMA_VERSION,
     });
     expect(result.report.files).toBe(1);
     expect(result.report.bytes).toBeGreaterThan(0);

@@ -2,7 +2,7 @@
 import { readFile, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { doctor, validateDataDir } from "@ztask/server";
+import { doctor, SCHEMA_VERSION, validateDataDir } from "@ztask/server";
 import { makeTempDir, seedDataDir } from "./support/fixtures.js";
 
 /**
@@ -31,7 +31,7 @@ describe("validateDataDir：干净 SQLite 数据目录", () => {
     const validation = await validateDataDir(dataDir);
     expect(validation.ok).toBe(true);
     expect(validation.issues).toEqual([]);
-    expect(validation.manifest).toMatchObject({ formatVersion: 1, timeZone: "Asia/Shanghai" });
+    expect(validation.manifest).toMatchObject({ formatVersion: SCHEMA_VERSION, timeZone: "Asia/Shanghai" });
     expect(validation.stats.fileCount).toBe(validation.files.length);
     expect(validation.stats.fileCount).toBeGreaterThan(0);
     expect(validation.stats.byteCount).toBeGreaterThan(0);
