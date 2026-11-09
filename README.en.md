@@ -26,12 +26,12 @@ ZTask keeps team progress in the team's own hands. A single command starts a loc
 
 ## Quick start
 
-Install the current release from [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases); Node.js 22 or newer is all you need, with no repository clone. The examples use `v0.1.0`; replace the version number for a newer release.
+Install the current release from [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases); Node.js 22 or newer is all you need, with no repository clone. The examples use `v0.3.0`; replace the version number for a newer release.
 
 Linux / macOS:
 
 ```sh
-npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.3.0/ztask-0.3.0.tgz
 ztask serve
 
 # ztask: command not found -> add the npm global executable directory to PATH
@@ -46,7 +46,7 @@ npx ztask serve
 Windows (PowerShell or Command Prompt):
 
 ```powershell
-npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.3.0/ztask-0.3.0.tgz
 ztask serve
 
 # ztask: command not found -> add the npm global executable directory to the user PATH
