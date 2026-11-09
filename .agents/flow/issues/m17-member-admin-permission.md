@@ -20,6 +20,7 @@ scope:
   - plan/fullstack-design/**
   - .agents/notes/implemented/feature/2026-11-09-member-admin-access*
   - .agents/flow/**
+  - scripts/doc-budgets.manifest.json
 adr:
   - ../../notes/implemented/feature/2026-11-09-member-admin-access.md
 github:
