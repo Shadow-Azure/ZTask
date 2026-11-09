@@ -26,12 +26,12 @@ ZTask 把团队进度放在团队自己手里。一条命令启动本地服务�
 
 ## 快速开始
 
-从 [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases) 安装当前发布版（`v0.1.0`），只需 Node.js 22 及以上，不必 clone 仓库；把示例里的版本号换成最新版本即可。
+从 [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases) 安装当前发布版（`v0.3.0`），只需 Node.js 22 及以上，不必 clone 仓库；把示例里的版本号换成最新版本即可。
 
 Linux / macOS：
 
 ```sh
-npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.3.0/ztask-0.3.0.tgz
 ztask serve
 
 # ztask: command not found -> add the npm global executable directory to PATH
@@ -46,7 +46,7 @@ npx ztask serve
 Windows（PowerShell 或命令提示符）：
 
 ```powershell
-npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
+npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.3.0/ztask-0.3.0.tgz
 ztask serve
 
 # ztask: command not found -> add the npm global executable directory to the user PATH
