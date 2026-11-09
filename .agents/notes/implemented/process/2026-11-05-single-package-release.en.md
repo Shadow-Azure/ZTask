@@ -27,3 +27,4 @@ Publishing uses two pipelines: the PR/main CI gains a package-install smoke (`np
 - esbuild becomes a build dependency of `apps/ztask`; raising the Node target requires updating `engines` and the esbuild target together.
 - The first public release does not depend on npm: the GitHub Release yields an installable tarball first; configuring `NPM_TOKEN` additionally publishes to npm. The maintainer still confirms the package name and license.
 - The single package makes the npm install size include the Web artifacts; a later Docker image can reuse the same `dist` without business-code changes.
+- A running `ztask serve` holds the packaged native SQLite module; on Windows, replacing or uninstalling the package requires stopping the service first, otherwise npm cleanup can report `EPERM` and leave a `.ztask-*` directory behind. The steps live in the package README; the CLI does not stop the process automatically.

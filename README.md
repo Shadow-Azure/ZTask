@@ -60,6 +60,8 @@ npx ztask serve
 
 启动后管理端默认位于 `http://127.0.0.1:8123`，浏览器未自动打开时手动访问，按 `Ctrl+C` 停止。数据目录默认为 `~/.ztask`（Windows 为 `C:\Users\<用户名>\.ztask`），可用 `--data-dir` 或 `ZTASK_HOME` 指定。
 
+升级或卸载前先停止正在运行的服务；若 npm 清理报 `EPERM`，按[包 README](apps/ztask/README.md) 清理 `node_modules` 下的 `.ztask-*` 残留目录后重试。
+
 本地开发（Node.js 22 与 pnpm@10）：
 
 ```sh
