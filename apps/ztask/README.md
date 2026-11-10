@@ -4,7 +4,7 @@ ZTask 的单包发布入口：一个 `ztask` 命令启动管理端 Web 与同源
 
 ## 安装
 
-需要 Node.js 20.19–25（22.x 需 22.12+）。当前版本从 [GitHub Release](https://github.com/Shadow-Azure/ZTask/releases) 的 tarball 安装（把 `v0.1.0` 换成最新 Release 的版本）；Linux、macOS 与 Windows 使用同一条命令：
+需要 Node.js 20.0–25（20.15 以下同样支持）。当前版本从 [GitHub Release](https://github.com/Shadow-Azure/ZTask/releases) 的 tarball 安装（把 `v0.1.0` 换成最新 Release 的版本）；Linux、macOS 与 Windows 使用同一条命令：
 
 ```sh
 npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz

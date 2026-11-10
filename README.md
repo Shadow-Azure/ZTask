@@ -26,7 +26,7 @@ ZTask 把团队进度放在团队自己手里。一条命令启动本地服务�
 
 ## 快速开始
 
-从 [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases) 安装当前发布版（`v0.1.0`），只需 Node.js 20.19–25（22.x 需 22.12 及以上），不必 clone 仓库；把示例里的版本号换成最新版本即可。
+从 [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases) 安装当前发布版（`v0.1.0`），只需 Node.js 20–25（20.15 以下同样支持），不必 clone 仓库；把示例里的版本号换成最新版本即可。
 
 Linux / macOS：
 
@@ -60,7 +60,7 @@ npx ztask serve
 
 启动后管理端默认位于 `http://127.0.0.1:8123`，浏览器未自动打开时手动访问，按 `Ctrl+C` 停止。数据目录默认为 `~/.ztask`（Windows 为 `C:\Users\<用户名>\.ztask`），可用 `--data-dir` 或 `ZTASK_HOME` 指定。
 
-本地开发（Node.js 20.19+ 与 pnpm@10）：
+本地开发（Node.js 20.0+ 与 pnpm@10）：
 
 ```sh
 pnpm install
