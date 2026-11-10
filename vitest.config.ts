@@ -7,5 +7,6 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: "node",
+    setupFiles: ["./tests/setup/dom-polyfills.ts"],
   },
 });

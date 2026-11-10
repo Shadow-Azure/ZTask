@@ -59,7 +59,7 @@ jobs:
         run: pnpm exec vitest run tests/storage/jsonl.spec.ts tests/storage/atomic-json.spec.ts tests/storage/task-store.spec.ts
 
   windows-node20:
-    # 用户报告的 Windows Node 20 组合：原生 SQLite 预编译按 ABI 下载；不复用 pnpm store 缓存，避免跨 Node 版本串用 side effects。
+    # 用户报告的 Windows Node 20.14（20.15 以下）组合：原生 SQLite 预编译按 ABI 下载；不复用 pnpm store 缓存，避免跨 Node 版本串用 side effects。
     runs-on: windows-latest
     timeout-minutes: 15
     steps:
@@ -67,7 +67,7 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 20.14.0
       - run: pnpm install --frozen-lockfile
       - name: 生产构建（shared/server/cli/web）
         run: pnpm build

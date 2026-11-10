@@ -33,8 +33,9 @@ Status: implemented
 
 - 失去“每个实体一个可读 JSON 文件”的透明度；诊断改用 `sqlite3` 或只读连接，人工编辑不再受支持。
 - 迁移单向：升级后旧应用无法读取 `ztask.db`，回滚依赖 `backups/pre-sqlite-*`。
-- `better-sqlite3` 固定为 `12.9.0`：它是最后一个为 Node 20（ABI 115）提供预编译二进制的版本；安装脚本经 `.npmrc` 的 npmmirror 镜像下载预编译，避免本地编译。代价是原生二进制与 Node ABI 绑定，切换 Node 大版本后需要重新安装（`pnpm install --force`），发布包用户若无法访问镜像需配置 `better_sqlite3_binary_host_mirror` 或安装编译工具；运行时要求 Node 20.19–25，驱动替换点集中在连接适配层。
-- Node 20 兼容还固定 `kysely@0.28.8`（0.29 起声明 Node >=22），迁移器改从 `kysely` 主入口导入；Fastify 5 经 `light-my-request` 仍引入声明 Node >=22 的 `cookie@2`，该依赖是纯 JS，Node 20 的完整测试与打包冒烟通过，但上游未声明支持 Node 20。
+- `better-sqlite3` 固定为 `12.9.0`：它是最后一个为 Node 20（ABI 115）提供预编译二进制的版本；安装脚本经 `.npmrc` 的 npmmirror 镜像下载预编译，避免本地编译。代价是原生二进制与 Node ABI 绑定，切换 Node 大版本后需要重新安装（`pnpm install --force`），发布包用户若无法访问镜像需配置 `better_sqlite3_binary_host_mirror` 或安装编译工具；运行时要求 Node 20.0–25（20.15 以下同样支持），驱动替换点集中在连接适配层。
+- Node 20 兼容还固定 `kysely@0.28.8`（0.29 起声明 Node >=22），迁移器改从 `kysely` 主入口导入；这些改动不改变连接适配层的公开接口。
+- 为把开发栈降到 Node 20.0，`vite` 固定 6.x、`@vitejs/plugin-vue` 5.x、`vitest` 4.x、`jsdom` 26.x；jsdom 26 缺 `PointerEvent`，测试用 `tests/setup/dom-polyfills.ts` 补齐。Fastify 5 的 `light-my-request` 在仓库通过 pnpm override 固定 6.6.0（cookie 1.x，CJS），避免 Node <20.19 的 `require(ESM)` 限制；发布包正常 serve 不走 inject，仍可能看到 Fastify 依赖的 `cookie@2` engine warning。
 - 迁移受 golden checksum 与 v1 fixture 升级测试看护：新增 migration 需更新 checksum 清单；历史 migration 被改会在 CI 失败，升级会保留数据并跑备份/恢复。
 - SQLite 不加密静态数据；数据库文件权限成为唯一保护，和原 JSON 文件的威胁模型一致。
 - 需要建立 schema migration、备份恢复和 revision checksum 的测试矩阵；原原子写、JSONL 和尾恢复测试将被替换。

@@ -26,7 +26,7 @@ ZTask keeps team progress in the team's own hands. A single command starts a loc
 
 ## Quick start
 
-Install the current release from [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases); Node.js 20.19–25 is all you need (Node 22.x requires 22.12 or newer), with no repository clone. The examples use `v0.1.0`; replace the version number for a newer release.
+Install the current release from [GitHub Releases](https://github.com/Shadow-Azure/ZTask/releases); Node.js 20–25 is all you need (versions below 20.15 are supported too), with no repository clone. The examples use `v0.1.0`; replace the version number for a newer release.
 
 Linux / macOS:
 
@@ -60,7 +60,7 @@ npx ztask serve
 
 The admin UI is at `http://127.0.0.1:8123` by default; open it manually if the browser does not open, and press `Ctrl+C` to stop. Data lives in `~/.ztask` (`C:\Users\<username>\.ztask` on Windows) unless `--data-dir` or `ZTASK_HOME` is set.
 
-For local development (Node.js 20.19+ and pnpm@10):
+For local development (Node.js 20.0+ and pnpm@10):
 
 ```sh
 pnpm install

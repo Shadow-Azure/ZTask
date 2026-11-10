@@ -41,7 +41,7 @@ ZTask 是一个由 `ztask serve` 启动的本地团队进度服务：一个 Node
 | 决策 | 当前方案 | 状态/理由 |
 | --- | --- | --- |
 | 产品形态 | 本地 CLI + 单进程 Web 服务，不做桌面壳 | 推荐；与 DeepSeek Harness 的使用方式一致 |
-| 全栈语言 | Node.js 20.19+ + TypeScript + pnpm workspace | 推荐；沿用仓库工具链 |
+| 全栈语言 | Node.js 20.0+ + TypeScript + pnpm workspace | 推荐；沿用仓库工具链 |
 | 前端 | Vue 3 + Vite + Vue Router + TanStack Query | 推荐；组件化实现原型，分离服务端与界面状态 |
 | 后端 | Fastify 模块化单体 | 推荐；轻量、schema 校验成熟 |
 | 主要持久化 | SQLite 单库（`better-sqlite3`） | **已确认**；事务、索引、单文件快照备份；驱动与历史形态见 [06 §11](06-database-design.md) |
