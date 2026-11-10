@@ -11,6 +11,8 @@ scope:
   - apps/server/**
   - apps/cli/**
   - apps/ztask/**
+  - apps/web/**
+  - vitest.config.ts
   - packages/shared/**
   - tests/**
   - plan/fullstack-design/**
