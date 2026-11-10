@@ -45,6 +45,23 @@ export interface MemberPrincipal {
   sessionId: string;
   shareLinkId: string;
   member: MemberSummary;
+  /** 当前成员的管理员权限快照；每请求重新读取成员行，撤权立即生效。 */
+  isAdmin: boolean;
+  /**
+   * 本次请求中通过校验的原始 Cookie 值（`<sessionId>.<verifier>`）。
+   * 仅用于恢复端点把旧 Path 会话重发为新 Path=/；绝不进入 API 响应或日志。
+   */
+  sessionCookieValue: string;
+}
+
+/** 分享域读取成员行所需的最小形状（与 members 实体、v2 is_admin 列对齐）。 */
+interface MemberAuthRecord {
+  id: string;
+  name: string;
+  role: string;
+  color: string;
+  isAdmin: boolean;
+  archivedAt: string | null;
 }
 
 function sha256(value: string): string {
@@ -83,21 +100,72 @@ function needsTouch(lastTouchedAt: string | null, nowMs: number): boolean {
 }
 
 /**
- * Cookie 值：`<sessionId>.<verifier>`；HttpOnly + SameSite=Strict + Path=/api/v1/share。
+ * Cookie 值：`<sessionId>.<verifier>`；HttpOnly + SameSite=Strict + Path=/。
+ * Path 覆盖整个源，管理员成员的同一会话才能用于 `/api/v1/admin/*`；服务端仍按
+ * 成员当前 `isAdmin` 逐请求授权，非管理员会话即使携带 Cookie 也会被 Admin 守卫拒绝。
  * @param sessionId 会话 ID。
  * @param verifier 高熵校验器（明文，仅进 Cookie）。
  * @returns Set-Cookie 属性串。
  */
 export function serializeSessionCookie(sessionId: string, verifier: string): string {
-  const value = `${sessionId}.${verifier}`;
-  return `${SHARE_COOKIE_NAME}=${value}; Path=/api/v1/share; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
+  return serializeSessionCookieValue(`${sessionId}.${verifier}`);
+}
+
+/**
+ * 由完整 Cookie 值生成 Path=/ 的 Set-Cookie 串（恢复会话时复用同一会话）。
+ * @param value `<sessionId>.<verifier>`。
+ * @returns Set-Cookie 属性串。
+ */
+function serializeSessionCookieValue(value: string): string {
+  return `${SHARE_COOKIE_NAME}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
+}
+
+/**
+ * 恢复会话时刷新 Cookie：把旧 Path 会话升级为 Path=/，并清掉旧 Path 副本。
+ * 管理员成员在升级后直接打开管理页时，必须靠这一步才能让后续 Admin API 收到 Cookie。
+ * @param cookieValue 本次通过校验的原始 Cookie 值。
+ * @returns 两个 Set-Cookie 值（新 Cookie 在前，旧 Path 清理在后）。
+ */
+export function refreshSessionCookies(cookieValue: string): string[] {
+  return [serializeSessionCookieValue(cookieValue), clearLegacySessionCookie()];
+}
+
+/** 旧版本 Cookie 的 Path（v1 只发往 share 域）；升级后需主动清掉，避免与新 Cookie 同时出现。 */
+const LEGACY_COOKIE_PATH = "/api/v1/share";
+
+/**
+ * 清除旧 Path 的同名 Cookie（Max-Age=0）；浏览器会保留新 Path=/ 的会话。
+ * @returns Set-Cookie 清除串。
+ */
+export function clearLegacySessionCookie(): string {
+  return `${SHARE_COOKIE_NAME}=; Path=${LEGACY_COOKIE_PATH}; HttpOnly; SameSite=Strict; Max-Age=0`;
+}
+
+/**
+ * 交换成功时下发的 Cookie 列表：新会话（Path=/）在前，旧 Path 清理在后。
+ * 同一域只按名称匹配的旧 Cookie 会先于新 Cookie 被发送，因此必须显式清理，
+ * 否则旧会话（甚至旧成员的会话）可能抢占本次链接交换。
+ * @param sessionId 会话 ID。
+ * @param verifier 高熵校验器。
+ * @returns 两个 Set-Cookie 值。
+ */
+export function sessionExchangeCookies(sessionId: string, verifier: string): string[] {
+  return [serializeSessionCookie(sessionId, verifier), clearLegacySessionCookie()];
 }
 
 /** 注销/失效时的 Cookie 清除属性串（Max-Age=0）。
  * @returns Set-Cookie 清除串。
  */
 export function clearSessionCookie(): string {
-  return `${SHARE_COOKIE_NAME}=; Path=/api/v1/share; HttpOnly; SameSite=Strict; Max-Age=0`;
+  return `${SHARE_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`;
+}
+
+/**
+ * 注销时同时清除新旧两种 Path，确保任何升级前残留的会话 Cookie 都失效。
+ * @returns 两个 Set-Cookie 清除串。
+ */
+export function clearSessionCookies(): string[] {
+  return [clearSessionCookie(), clearLegacySessionCookie()];
 }
 
 /**
@@ -108,9 +176,9 @@ export function clearSessionCookie(): string {
  * @param options.dataDir 数据目录。
  * @param options.token 分享 raw token。
  * @param options.clock 可注入时钟（测试过期/节流窗口）。
- * @returns 成员摘要与 Set-Cookie 值；token 无效/成员已归档为 null。
+ * @returns 成员摘要、管理员标记与 Set-Cookie 列表；token 无效/成员已归档为 null。
  */
-export async function exchangeShareToken(options: { dataDir: string; token: string; clock?: () => Date }): Promise<{ member: MemberSummary; cookie: string } | null> {
+export async function exchangeShareToken(options: { dataDir: string; token: string; clock?: () => Date }): Promise<{ member: MemberSummary; isAdmin: boolean; cookies: string[] } | null> {
   const token = options.token.trim();
   if (token.length < 16 || token.length > 256) return null;
   const tokenHash = sha256(token);
@@ -122,7 +190,7 @@ export async function exchangeShareToken(options: { dataDir: string; token: stri
   // 损坏链接（tokenHash 缺失或 memberId 非 UUID）按无效处理，不把存储错误暴露给前端。
   if (!link || !UUID_PATTERN.test(link.memberId)) return null;
 
-  const members = createEntityStore<{ id: string; name: string; role: string; color: string; archivedAt: string | null }>({
+  const members = createEntityStore<MemberAuthRecord>({
     dataDir: options.dataDir,
     subdir: "members",
   });
@@ -149,7 +217,7 @@ export async function exchangeShareToken(options: { dataDir: string; token: stri
     await store.put(link.memberId, { ...link, lastUsedAt: now.toISOString() });
   }
 
-  return { member: memberSummaryFile(member), cookie: serializeSessionCookie(sessionId, verifier) };
+  return { member: memberSummaryFile(member), isAdmin: member.isAdmin === true, cookies: sessionExchangeCookies(sessionId, verifier) };
 }
 
 /**
@@ -204,7 +272,7 @@ export async function resolveShareSession(options: { dataDir: string; cookieHead
   const expiresAtMs = Date.parse(session.expiresAt);
   if (!Number.isFinite(expiresAtMs) || expiresAtMs <= now.getTime()) return null;
 
-  const members = createEntityStore<{ id: string; name: string; role: string; color: string; archivedAt: string | null }>({
+  const members = createEntityStore<MemberAuthRecord>({
     dataDir: options.dataDir,
     subdir: "members",
   });
@@ -229,11 +297,14 @@ export async function resolveShareSession(options: { dataDir: string; cookieHead
     sessionId,
     shareLinkId: link.id,
     member: memberSummaryFile(member),
+    // 管理员权限不写入会话：每次请求重读成员行，管理员撤权后残留会话立即失去 Admin 访问。
+    isAdmin: member.isAdmin === true,
+    sessionCookieValue: value,
   };
 }
 
 /**
- * 注销：删除会话行（幂等）；Cookie 清除值由 clearSessionCookie 提供。
+ * 注销：删除会话行（幂等）；Cookie 清除值由 clearSessionCookies 提供。
  * @param dataDir 数据目录。
  * @param sessionId 会话 ID。
  */

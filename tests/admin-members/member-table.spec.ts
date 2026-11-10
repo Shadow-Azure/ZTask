@@ -14,6 +14,7 @@ const MEMBERS = {
       name: "陈晨",
       role: "前端工程师",
       color: "#2f6fe0",
+      isAdmin: true,
       archivedAt: null,
       counts: { owned: 2, collaborated: 1 },
       shareLink: null,
@@ -23,6 +24,7 @@ const MEMBERS = {
       name: "林悦",
       role: "",
       color: "#1f9d6b",
+      isAdmin: false,
       archivedAt: "2026-11-01T00:00:00.000Z",
       counts: { owned: 0, collaborated: 0 },
       shareLink: null,
@@ -74,6 +76,9 @@ describe("MemberTable（features/members，原型 mem-table）", () => {
     const wrapper = await mountTable();
     expect(wrapper.text()).toContain("陈晨");
     expect(wrapper.text()).toContain("前端工程师");
+    // 管理员权限徽标只出现在有权限的成员行。
+    expect(wrapper.text()).toContain("管理员");
+    expect(wrapper.find(".admin-tag").exists()).toBe(true);
     expect(wrapper.find(".count + .count, .col-count").exists()).toBe(true);
     // m4 #20：分享链接列不再占位，未生成时显示状态 + 生成入口（ShareLinkCell）。
     expect(wrapper.text()).toContain("未生成");
@@ -106,11 +111,40 @@ describe("MemberTable（features/members，原型 mem-table）", () => {
     const roleInput = dialog.querySelector("#member-role") as HTMLInputElement;
     roleInput.value = "后端";
     roleInput.dispatchEvent(new Event("input"));
+    const adminInput = dialog.querySelector("#member-admin") as HTMLInputElement;
+    expect(adminInput.checked).toBe(false);
+    adminInput.click();
+    await nextTick();
     (dialog.querySelector(".btn.primary") as HTMLButtonElement).click();
     await new Promise((resolve) => setTimeout(resolve, 30));
     const post = fetchCalls.find((call) => call.init?.method === "POST");
     expect(post?.url).toContain("/admin/members");
-    expect(JSON.parse(String(post?.init?.body))).toEqual({ name: "王砚", role: "后端", color: "#2f6fe0" });
+    expect(JSON.parse(String(post?.init?.body))).toEqual({ name: "王砚", role: "后端", color: "#2f6fe0", isAdmin: true });
+    wrapper.unmount();
+  });
+
+  it("编辑成员：管理员权限勾选状态回填，取消勾选后 PATCH isAdmin=false", async () => {
+    mockFetch();
+    const wrapper = await mountTable();
+    const editButton = wrapper.findAll(".mini-btn").find((button) => button.text() === "编辑");
+    await editButton!.trigger("click");
+    await nextTick();
+    const dialog = document.body.querySelector('[role="dialog"]') as HTMLElement;
+    const adminInput = dialog.querySelector("#member-admin") as HTMLInputElement;
+    expect(adminInput.checked).toBe(true);
+
+    adminInput.click();
+    await nextTick();
+    (dialog.querySelector(".btn.primary") as HTMLButtonElement).click();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const patch = fetchCalls.find((call) => call.init?.method === "PATCH");
+    expect(patch?.url).toContain("/admin/members/m-1");
+    expect(JSON.parse(String(patch?.init?.body))).toEqual({
+      name: "陈晨",
+      role: "前端工程师",
+      color: "#2f6fe0",
+      isAdmin: false,
+    });
     wrapper.unmount();
   });
 

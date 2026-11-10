@@ -95,6 +95,7 @@ function makeMember(id: string, name: string, shareLink: AdminMemberShareLink | 
     name,
     role: "成员",
     color: "#2f6fe0",
+    isAdmin: false,
     archivedAt: null,
     counts: { owned: 0, collaborated: 0 },
     shareLink,

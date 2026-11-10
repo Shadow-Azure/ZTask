@@ -1,19 +1,59 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { maskNetworkError, networkApi } from "../api/network";
+import { shareApi } from "../api/share";
+import { isShareUnauthorized, useShareSession } from "../features/share/useShareSession";
+import { isLoopbackHostname } from "../features/share/host";
+import LoadingState from "../components/ui/LoadingState.vue";
+import ErrorState from "../components/ui/ErrorState.vue";
 
 /**
  * 管理端布局：原型 appbar（logo + 事项跟踪/成员管理导航 + 状态区，原型 52–71）。
  * 白底 52px、1px 下边框；logo mark 24px 蓝渐变；导航 active 蓝字浅蓝底无边框；
  * LAN 状态 chip 轮询 GET /admin/network（15s）：running → `LAN · host:port`、
  * degraded → 分享异常、未开启 → 仅本机；点击进入成员管理页的局域网分享面板（08 §5、05 §4.9）。
+ *
+ * 管理壳入口（m17）：本机打开时沿用无会话管理员；LAN 打开时先恢复分享会话，
+ * 只有 `isAdmin=true` 才渲染管理内容；普通成员、无会话与网络故障分别给出明确页面。
+ * 这只是体验门控，真正的 Admin 授权仍在服务端逐请求校验。
  */
+type GateState = "checking" | "ready" | "unauthenticated" | "forbidden" | "error";
+
+const { member, setMember, logout } = useShareSession();
+/** 本机管理端不需要成员会话；页面主机名只决定体验门控，不承担安全职责。 */
+const localHost = typeof window !== "undefined" && isLoopbackHostname(window.location.hostname);
+const gate = ref<GateState>(localHost ? "ready" : "checking");
+
+/** LAN 打开时恢复会话并检查管理员权限；本机则直接进入管理壳。 */
+async function restoreAdminAccess(): Promise<void> {
+  if (localHost) {
+    gate.value = "ready";
+    return;
+  }
+  gate.value = "checking";
+  try {
+    const response = await shareApi.restore();
+    setMember(response.member, response.isAdmin);
+    gate.value = response.isAdmin ? "ready" : "forbidden";
+  } catch (cause) {
+    // 401 表示没有会话；其他错误是瞬时故障，给出可重试错误而不是误判成无权限。
+    gate.value = isShareUnauthorized(cause) ? "unauthenticated" : "error";
+  }
+}
+
+onMounted(restoreAdminAccess);
+
+async function onLogout(): Promise<void> {
+  await logout().catch(() => undefined);
+}
+
 const networkQuery = useQuery({
   queryKey: ["admin", "network"],
   queryFn: networkApi.network,
   refetchInterval: 15_000,
   refetchOnWindowFocus: true,
+  enabled: computed(() => gate.value === "ready"),
 });
 
 /**
@@ -36,25 +76,43 @@ const lanChip = computed<{ tone: "up" | "off" | "warn" | "down"; text: string; t
   return { tone: "off", text: "仅本机", title: "局域网分享未开启" };
 });
 
+/** 本机管理员显示固定身份；LAN 管理员成员显示自己的姓名/颜色并可注销。 */
+const displayName = computed(() => member.value?.name ?? "管理员");
+const avatarText = computed(() => displayName.value.slice(0, 1));
+const avatarStyle = computed(() => (member.value ? { background: member.value.color } : { background: "#212832" }));
 </script>
 
 <template>
   <div class="admin-shell">
     <div class="appbar">
       <div class="logo"><span class="mark">Z</span>ZTask<span class="sub">团队事项跟踪</span></div>
-      <nav class="appnav" aria-label="管理导航">
+      <nav v-if="gate === 'ready'" class="appnav" aria-label="管理导航">
         <RouterLink to="/tracker" class="nav-item" :class="{ active: $route.name === 'tracker' }">事项跟踪</RouterLink>
         <RouterLink to="/members" class="nav-item" :class="{ active: $route.name === 'members' }">成员管理</RouterLink>
       </nav>
-      <div class="who">
+      <div v-if="gate === 'ready'" class="who">
         <RouterLink to="/members" class="lan-chip" :class="lanChip.tone" :title="lanChip.title">
           {{ lanChip.text }}
         </RouterLink>
-        <span class="ava" title="管理员">管</span>
-        <span>管理员</span>
+        <span class="ava" :style="avatarStyle" :title="displayName">{{ avatarText }}</span>
+        <span>{{ displayName }}</span>
+        <button v-if="member" class="logout" type="button" @click="onLogout">注销</button>
       </div>
     </div>
-    <RouterView />
+
+    <RouterView v-if="gate === 'ready'" />
+    <div v-else class="admin-gate">
+      <LoadingState v-if="gate === 'checking'" label="正在验证管理员会话…" />
+      <div v-else-if="gate === 'unauthenticated'" class="gate-card">
+        <h1>需要管理员会话</h1>
+        <p>管理页仅能从服务主机本机打开，或由已授予管理员权限的成员通过分享链接进入。</p>
+      </div>
+      <div v-else-if="gate === 'forbidden'" class="gate-card">
+        <h1>没有管理员权限</h1>
+        <p>该分享链接属于普通成员，无法打开管理页。请联系管理员授予权限。</p>
+      </div>
+      <ErrorState v-else message="无法验证管理员会话" retryable @retry="restoreAdminAccess" />
+    </div>
   </div>
 </template>
 
@@ -176,7 +234,7 @@ const lanChip = computed<{ tone: "up" | "off" | "warn" | "down"; text: string; t
   filter: brightness(0.97);
 }
 
-/* 原型 74–77：22px 圆形头像；管理员固定 #212832 底。 */
+/* 原型 74–77：22px 圆形头像；管理员固定 #212832 底，管理员成员用成员色。 */
 .ava {
   width: 22px;
   height: 22px;
@@ -187,6 +245,57 @@ const lanChip = computed<{ tone: "up" | "off" | "warn" | "down"; text: string; t
   place-items: center;
   font-size: 11px;
   font-weight: 600;
+}
+
+/* 管理员成员的注销动作：与成员壳同样保持低强调的描边按钮。 */
+.logout {
+  font: inherit;
+  font-size: 11.5px;
+  color: var(--text-dim);
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.logout:hover {
+  color: var(--text);
+  background: var(--bg-inset);
+}
+
+/* 管理壳门控：无会话、非管理员或恢复失败时占据内容区，不渲染任何管理页面。 */
+.admin-gate {
+  min-height: calc(100vh - 52px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.admin-gate :deep(.error-state) {
+  width: min(420px, 100%);
+}
+
+.gate-card {
+  width: min(460px, 100%);
+  padding: 22px 24px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.gate-card h1 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.gate-card p {
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-dim);
 }
 
 @media (max-width: 900px) {

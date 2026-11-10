@@ -32,5 +32,6 @@
   ".agents/flow/milestones/m13-single-package-release.md": 300,
   ".agents/flow/milestones/m14-sqlite-storage.md": 300,
   ".agents/flow/milestones/m15-member-visibility.md": 480,
-  ".agents/flow/milestones/m16-prototype-ui-design.md": 300
+  ".agents/flow/milestones/m16-prototype-ui-design.md": 300,
+  ".agents/flow/milestones/m17-member-admin-permission.md": 430
 }

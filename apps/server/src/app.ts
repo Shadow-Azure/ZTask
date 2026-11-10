@@ -20,8 +20,12 @@ import type { NetworkService } from "./modules/network/network-service.js";
 import type { ShareLinkService } from "./modules/share/share-links.js";
 import { maintenanceRoutes } from "./modules/maintenance/maintenance-routes.js";
 import type { BackupHooks } from "./modules/maintenance/backup-service.js";
+import { resolveShareSession, SHARE_COOKIE_NAME } from "./modules/share/share-auth.js";
 
-/** 请求入口类型；loopback 入口可访问 Admin API，LAN 入口一律拒绝（04 §4.1）。 */
+/**
+ * 请求入口类型（04 §4.1）：loopback 入口可访问 Admin API；LAN 入口默认拒绝，
+ * 但持有管理员成员会话时放行（成员管理员权限）。
+ */
 export type ListenerKind = "loopback" | "lan";
 
 /** buildApp 的可选装配参数；测试与生产共用同一装配（07 §1）。 */
@@ -31,7 +35,7 @@ export interface BuildAppOptions {
   version?: string;
   /** 存储门面；提供后挂接管理端业务路由（folders/members）。 */
   store?: ZtaskStore;
-  /** 网络服务；提供后挂接 /admin/network（05 §4.9）。LAN app 同样注册，由 Admin 守卫拒绝。 */
+  /** 网络服务；提供后挂接 /admin/network（05 §4.9）。LAN app 同样注册，由 Admin 守卫按管理员成员会话放行或拒绝。 */
   networkService?: NetworkService;
   /** 分享链接服务；提供后挂接 /admin/members/{id}/share-link（05 §4.5–4.8）。 */
   shareLinkService?: ShareLinkService;
@@ -191,6 +195,29 @@ function isReadOnlyMethod(method: string): boolean {
 }
 
 /**
+ * LAN 请求是否携带有效且具有管理员权限的成员会话（04 §4.1 的成员管理员扩展）。
+ *
+ * 只对 LAN listener 尝试：loopback 入口仍走 Host 白名单，避免 DNS rebinding 借
+ * 本机来源绕过。会话按请求重新解析，成员被撤权或链接被吊销后立即失效；
+ * 无 Cookie 时不做任何存储读取，避免无谓的数据库开销与错误。
+ * @param config 服务配置（需要 dataDir）。
+ * @param request 当前请求。
+ * @returns 有管理员成员会话时为 true。
+ */
+async function hasAdminMemberSession(config: ServerConfig, request: FastifyRequest): Promise<boolean> {
+  if (request.listenerKind !== "lan") return false;
+  const cookie = request.headers.cookie;
+  if (cookie === undefined || !cookie.includes(`${SHARE_COOKIE_NAME}=`)) return false;
+  try {
+    const principal = await resolveShareSession({ dataDir: config.dataDir, cookieHeader: cookie });
+    return principal?.isAdmin === true;
+  } catch {
+    // 会话存储异常按未授权处理，不把存储错误变成 500 或放行。
+    return false;
+  }
+}
+
+/**
  * 记录未预期异常：请求编号是用户反馈与日志检索的唯一关联键。
  *
  * 只写方法、路由模板、请求编号、错误码与堆栈；不写请求体、token 或数据内容。
@@ -258,8 +285,11 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
   // Admin 本机专用守卫（04 §4.1）：必须在注册任何业务路由之前安装。
   // 原因同下方 errorHandler 注释——`await app.register()` 会推进 avvio boot，
   // 插件路由在 boot 时把当时的 hook 链固化进路由上下文；之后再 addHook 不会回溯。
-  // 若把守卫放在路由注册之后，LAN app 上的 /admin/* 会先命中路由而绕过 403，
-  // 直接破坏「LAN listener 一律拒绝 Admin API」这条红线。
+  // 若把守卫放在路由注册之后，LAN app 上的 /admin/* 会先命中路由而绕过 403。
+  //
+  // 访问规则（m17）：loopback + 本机对端 + 可信 Host 的本机管理员，或 LAN listener 上
+  // 持有管理员成员会话的分享链接。后者仍是敏感提升，因此逐请求重读成员 is_admin；
+  // 成员被撤权、归档或链接被吊销后，残留会话立即失去 Admin 访问。
   //
   // 路径判定必须用「解码后的路由模板」而不是 `raw.url`：`/api/v1/%61dmin/members`
   // 在 raw.url 上不以 `/api/v1/admin` 开头，却会被 fastify 解码后命中 admin 路由。
@@ -270,15 +300,14 @@ export async function buildApp(config: ServerConfig, options: BuildAppOptions = 
       request.listenerKind === "loopback" &&
       isLoopbackRemote(request.socket.remoteAddress) &&
       isTrustedAdminHost(request.headers.host, config.host);
-    if (!localAdmin) {
-      await reply.status(403).send({
-        error: {
-          code: "ADMIN_LOCAL_ONLY",
-          message: "管理 API 仅允许从服务主机本机访问",
-          requestId: request.id,
-        },
-      });
-    }
+    if (localAdmin || (await hasAdminMemberSession(config, request))) return;
+    await reply.status(403).send({
+      error: {
+        code: "ADMIN_LOCAL_ONLY",
+        message: "管理 API 仅允许本机管理员或已授予管理员权限的成员访问",
+        requestId: request.id,
+      },
+    });
   });
 
   // 错误与 404 序列化器必须在任何 `await app.register(...)` 之前安装（§6.3）。

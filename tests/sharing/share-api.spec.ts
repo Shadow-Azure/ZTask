@@ -11,12 +11,12 @@ import {
   type ShareLinkService,
   type ZtaskStore,
 } from "@ztask/server";
-import { FAKE_INTERFACES, createListenerFake, createMemberViaApi, tmpDataDir } from "./support/fakes.js";
+import { FAKE_INTERFACES, createListenerFake, createMemberViaApi, tmpDataDir, tokenFromUrl } from "./support/fakes.js";
 
 /**
  * 分享链接与网络管理 API（05 §4.5–4.9）：
  * 真实 initStore + buildApp + NetworkService，listener 用 fake；
- * 同时验证 LAN app 上 Admin API 的一律拒绝与统一错误体。
+ * 同时验证 LAN app 上 Admin API 对无会话/普通成员的拒绝，以及管理员成员会话的放行。
  */
 
 let dataDir: string;
@@ -297,7 +297,7 @@ describe("Admin 本机守卫的另一半条件（04 §4.1）", () => {
 });
 
 describe("LAN listener 上的 Admin API（04 §4.1）", () => {
-  it("一律 403 ADMIN_LOCAL_ONLY；share/health 仍可访问", async () => {
+  it("无管理员成员会话时 403 ADMIN_LOCAL_ONLY；share/health 仍可访问", async () => {
     const memberId = await createMemberViaApi(app, "陈晨");
     await enableLan();
 
@@ -327,6 +327,78 @@ describe("LAN listener 上的 Admin API（04 §4.1）", () => {
       expect(health.statusCode).toBe(200);
       const share = await lanApp.inject({ method: "GET", url: "/api/v1/share/session" });
       expect(share.statusCode).toBe(401);
+    } finally {
+      await lanApp.close();
+    }
+  });
+
+  it("管理员成员会话可调用 Admin API；普通成员仍 403；撤权立即生效", async () => {
+    const adminId = await createMemberViaApi(app, "管理员成员", true);
+    const memberId = await createMemberViaApi(app, "普通成员");
+    await enableLan();
+    const adminIssued = await app.inject({ method: "POST", url: shareLinkUrl(adminId) });
+    const memberIssued = await app.inject({ method: "POST", url: shareLinkUrl(memberId) });
+    expect(adminIssued.statusCode).toBe(201);
+    expect(memberIssued.statusCode).toBe(201);
+
+    const lanApp = await buildApp(config(), {
+      store,
+      listenerKind: "lan",
+      networkService: network,
+      shareLinkService: shareLinks,
+    });
+    try {
+      /** 在 LAN listener 上用链接换会话并取出 `name=value` Cookie。 */
+      async function lanCookie(token: string): Promise<string> {
+        const response = await lanApp.inject({ method: "POST", url: "/api/v1/share/session", payload: { token } });
+        expect(response.statusCode).toBe(201);
+        const header = response.headers["set-cookie"];
+        const setCookie = Array.isArray(header) ? header[0] : header;
+        if (!setCookie) throw new Error("missing Set-Cookie");
+        return setCookie.split(";")[0]!;
+      }
+
+      const adminCookie = await lanCookie(tokenFromUrl((adminIssued.json() as { url: string }).url));
+      const memberCookie = await lanCookie(tokenFromUrl((memberIssued.json() as { url: string }).url));
+
+      const allowed = await lanApp.inject({
+        method: "GET",
+        url: "/api/v1/admin/members",
+        headers: { cookie: adminCookie },
+      });
+      expect(allowed.statusCode).toBe(200);
+      expect((allowed.json() as { items: Array<{ name: string }> }).items.map((item) => item.name)).toContain("管理员成员");
+
+      // 管理写操作同样放行（无 Origin 的测试请求按非浏览器处理，同源检查放行）。
+      const created = await lanApp.inject({
+        method: "POST",
+        url: "/api/v1/admin/members",
+        headers: { cookie: adminCookie },
+        payload: { name: "管理员成员创建" },
+      });
+      expect(created.statusCode).toBe(201);
+
+      const denied = await lanApp.inject({
+        method: "GET",
+        url: "/api/v1/admin/members",
+        headers: { cookie: memberCookie },
+      });
+      expect(denied.statusCode).toBe(403);
+      expect((denied.json() as { error: { code: string } }).error.code).toBe("ADMIN_LOCAL_ONLY");
+
+      // 撤权在服务端立即生效：同一个残留会话下一次请求就被拒绝。
+      const revoked = await app.inject({
+        method: "PATCH",
+        url: `/api/v1/admin/members/${adminId}`,
+        payload: { isAdmin: false },
+      });
+      expect(revoked.statusCode).toBe(200);
+      const afterRevoke = await lanApp.inject({
+        method: "GET",
+        url: "/api/v1/admin/members",
+        headers: { cookie: adminCookie },
+      });
+      expect(afterRevoke.statusCode).toBe(403);
     } finally {
       await lanApp.close();
     }

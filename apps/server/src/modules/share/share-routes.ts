@@ -9,9 +9,10 @@ import {
   type ShareTrackerTasks,
 } from "@ztask/shared";
 import {
-  clearSessionCookie,
+  clearSessionCookies,
   destroySession,
   exchangeShareToken,
+  refreshSessionCookies,
   resolveShareSession,
   type MemberPrincipal,
 } from "./share-auth.js";
@@ -279,21 +280,24 @@ export async function shareRoutes(
       if (!session) throw new ApiError(401, "SHARE_LINK_INVALID", "分享链接无效");
       return await reply
         .status(201)
-        .header("set-cookie", session.cookie)
-        .send({ member: session.member } satisfies ShareSessionResponse);
+        .header("set-cookie", session.cookies)
+        .send({ member: session.member, isAdmin: session.isAdmin } satisfies ShareSessionResponse);
     },
   );
 
-  app.get(SHARE_SESSION_PATH, async (request) => {
+  app.get(SHARE_SESSION_PATH, async (request, reply) => {
     const principal = await resolveShareSession({ dataDir: options.dataDir, cookieHeader: request.headers.cookie });
     if (!principal) throw new ApiError(401, "SHARE_SESSION_REQUIRED", "需要成员会话");
-    return { member: principal.member } satisfies ShareSessionResponse;
+    // 恢复时刷新为 Path=/ 并清除旧 Path：升级前建立的会话也能在管理页继续使用。
+    return await reply
+      .header("set-cookie", refreshSessionCookies(principal.sessionCookieValue))
+      .send({ member: principal.member, isAdmin: principal.isAdmin } satisfies ShareSessionResponse);
   });
 
   app.delete(SHARE_SESSION_PATH, async (request, reply) => {
     const principal = await resolveShareSession({ dataDir: options.dataDir, cookieHeader: request.headers.cookie });
     if (principal) await destroySession(options.dataDir, principal.sessionId);
-    return await reply.status(204).header("set-cookie", clearSessionCookie()).send();
+    return await reply.status(204).header("set-cookie", clearSessionCookies()).send();
   });
 
   app.get(`${SHARE_BASE_PATH}/tasks`, async (request) => {

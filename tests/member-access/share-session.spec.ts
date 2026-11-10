@@ -37,10 +37,16 @@ afterEach(async () => {
   await rm(dataDir, { recursive: true, force: true });
 });
 
-function setCookieOf(response: { headers: Record<string, unknown> }): string {
+function setCookiesOf(response: { headers: Record<string, unknown> }): string[] {
   const header = response.headers["set-cookie"];
-  const value = Array.isArray(header) ? header[0] : header;
-  return String(value ?? "");
+  if (Array.isArray(header)) return header.map(String);
+  const raw = String(header ?? "");
+  // light-my-request 可能把多个 Set-Cookie 合并成一个字符串；按 cookie 名边界拆开。
+  return raw === "" ? [] : raw.split(/,\s*(?=ztask_share_session=)/);
+}
+
+function setCookieOf(response: { headers: Record<string, unknown> }): string {
+  return setCookiesOf(response)[0] ?? "";
 }
 
 describe("POST /share/session（令牌交换）", () => {
@@ -48,17 +54,34 @@ describe("POST /share/session（令牌交换）", () => {
     const response = await app.inject({ method: "POST", url: "/api/v1/share/session", payload: { token: tokenB } });
     expect(response.statusCode).toBe(201);
     expect(response.json().member.name).toBe("林悦");
+    expect(response.json().isAdmin).toBe(false);
 
     const cookie = setCookieOf(response);
     expect(cookie).toContain("HttpOnly");
     expect(cookie).toContain("SameSite=Strict");
-    expect(cookie).toContain("Path=/api/v1/share");
+    // 管理员成员要用同一 Cookie 调 Admin API：Path 必须覆盖整个源，不能只限 share。
+    expect(cookie).toContain("Path=/");
+    // 升级前 Path=/api/v1/share 的同名 Cookie 必须显式清除，否则旧会话会抢占新交换。
+    expect(setCookiesOf(response).some((value) => value.includes("Path=/api/v1/share") && value.includes("Max-Age=0"))).toBe(true);
 
     // 05 §6.1：响应不返回 raw token、verifier 或 tokenHash。
     expect(response.body).not.toContain(tokenB);
     expect(response.body).not.toContain(sha256(tokenB));
     expect(response.body).not.toContain("verifier");
     expect(response.body).not.toContain("tokenHash");
+  });
+
+  it("管理员成员：交换响应 isAdmin=true，恢复会话同样带管理员标记", async () => {
+    const adminId = await createMember(app, "管理员成员", true);
+    const { token } = await seedShareLink({ dataDir, memberId: adminId });
+    const exchanged = await app.inject({ method: "POST", url: "/api/v1/share/session", payload: { token } });
+    expect(exchanged.statusCode).toBe(201);
+    expect(exchanged.json().isAdmin).toBe(true);
+
+    const cookie = setCookieOf(exchanged).split(";")[0]!;
+    const restored = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie } });
+    expect(restored.statusCode).toBe(200);
+    expect(restored.json().isAdmin).toBe(true);
   });
 
   it("无效/空 token 统一 401 SHARE_LINK_INVALID", async () => {
@@ -105,7 +128,7 @@ describe("POST /share/session（令牌交换）", () => {
 });
 
 describe("GET /share/session（会话恢复）", () => {
-  it("有效 Cookie 恢复成员身份，且响应 no-store", async () => {
+  it("有效 Cookie 恢复成员身份，且响应 no-store；恢复时刷新为 Path=/ 并清理旧 Path", async () => {
     const cookieA = await exchangeCookie(app, tokenA);
     const response = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(response.statusCode).toBe(200);
@@ -113,6 +136,10 @@ describe("GET /share/session（会话恢复）", () => {
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.body).not.toContain(tokenA);
     expect(response.body).not.toContain("verifier");
+
+    const refreshed = setCookiesOf(response);
+    expect(refreshed.some((value) => value.includes("Path=/") && !value.includes("Path=/api/v1/share"))).toBe(true);
+    expect(refreshed.some((value) => value.includes("Path=/api/v1/share") && value.includes("Max-Age=0"))).toBe(true);
   });
 
   it("非 session share 端点无会话一律 401 SHARE_SESSION_REQUIRED（preHandler 统一解析）", async () => {
@@ -182,7 +209,9 @@ describe("DELETE /share/session（注销）", () => {
     const cookieA = await exchangeCookie(app, tokenA);
     const removed = await app.inject({ method: "DELETE", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(removed.statusCode).toBe(204);
-    expect(String(removed.headers["set-cookie"])).toContain("Max-Age=0");
+    const cleared = setCookiesOf(removed);
+    expect(cleared.some((value) => value.includes("Path=/") && value.includes("Max-Age=0"))).toBe(true);
+    expect(cleared.some((value) => value.includes("Path=/api/v1/share") && value.includes("Max-Age=0"))).toBe(true);
 
     const restored = await app.inject({ method: "GET", url: "/api/v1/share/session", headers: { cookie: cookieA } });
     expect(restored.statusCode).toBe(401);

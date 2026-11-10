@@ -180,8 +180,12 @@ export async function createFolder(app: FastifyInstance, name: string, parentId:
 }
 
 /** 管理端：创建成员。 */
-export async function createMember(app: FastifyInstance, name: string): Promise<string> {
-  const response = await app.inject({ method: "POST", url: "/api/v1/admin/members", payload: { name } });
+export async function createMember(app: FastifyInstance, name: string, isAdmin = false): Promise<string> {
+  const response = await app.inject({
+    method: "POST",
+    url: "/api/v1/admin/members",
+    payload: { name, ...(isAdmin ? { isAdmin: true } : {}) },
+  });
   if (response.statusCode !== 201) throw new Error(`createMember failed: ${response.statusCode} ${response.body}`);
   return response.json().id as string;
 }

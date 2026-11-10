@@ -6,10 +6,12 @@ import { shareApi } from "../../api/share";
 
 /**
  * 成员会话的模块级状态（03 §4 分享会话、08 §6.1/§7）：
- * 前端只保留脱敏的成员摘要；token/verifier 绝不进入这里。
+ * 前端只保留脱敏的成员摘要与管理员标记；token/verifier 绝不进入这里。
  * "是否已确认会话"由成员壳的本地 ready 门控（ShareLayout），不在模块态里重复记一份。
  */
 const member = ref<MemberSummary | null>(null);
+/** 当前成员是否拥有管理员权限；会话恢复/交换时由服务端下发，缺失按 false。 */
+const isAdmin = ref(false);
 
 /**
  * 判断是否为成员域 401（会话缺失/过期/链接失效）。
@@ -39,6 +41,7 @@ export function useShareSession() {
    */
   async function invalidate(reason?: "logout"): Promise<void> {
     member.value = null;
+    isAdmin.value = false;
     clearShareCache();
     const target = reason === "logout" ? "/share-invalid?from=logout" : "/share-invalid";
     if (router.currentRoute.value.fullPath !== target) {
@@ -65,6 +68,7 @@ export function useShareSession() {
     try {
       const response = await shareApi.restore();
       member.value = response.member;
+      isAdmin.value = response.isAdmin === true;
       return true;
     } catch (cause) {
       if (isShareUnauthorized(cause)) {
@@ -75,9 +79,14 @@ export function useShareSession() {
     }
   }
 
-  /** 交换成功后写入成员摘要（token 不进状态）。 */
-  function setMember(next: MemberSummary): void {
+  /**
+   * 交换/恢复成功后写入成员摘要与管理员标记（token 不进状态）。
+   * @param next 成员摘要。
+   * @param admin 是否拥有管理员权限；缺省 false。
+   */
+  function setMember(next: MemberSummary, admin = false): void {
     member.value = next;
+    isAdmin.value = admin;
   }
 
   /**
@@ -92,5 +101,5 @@ export function useShareSession() {
     }
   }
 
-  return { member, restore, setMember, logout, handleAuthError, clearShareCache };
+  return { member, isAdmin, restore, setMember, logout, handleAuthError, clearShareCache };
 }

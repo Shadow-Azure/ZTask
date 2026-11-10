@@ -8,7 +8,7 @@ import BaseDialog from "../../components/ui/BaseDialog.vue";
 import { describeApiError } from "../../api/error-message";
 
 /**
- * 成员添加/编辑浮窗（08 §5）：表单只维护 name/role/color；
+ * 成员添加/编辑浮窗（08 §5）：表单维护 name/role/color 与管理员权限；
  * 校验错误靠近字段显示；保存成功后失效成员列表查询。
  */
 const props = defineProps<{
@@ -25,6 +25,7 @@ const toast = useToast();
 const name = ref("");
 const role = ref("");
 const color = ref("#2f6fe0");
+const isAdmin = ref(false);
 const nameError = ref("");
 
 watch(
@@ -34,6 +35,7 @@ watch(
       name.value = props.member?.name ?? "";
       role.value = props.member?.role ?? "";
       color.value = props.member?.color ?? "#2f6fe0";
+      isAdmin.value = props.member?.isAdmin === true;
       nameError.value = "";
     }
   },
@@ -42,7 +44,7 @@ watch(
 const saving = computed(() => saveMutation.isPending.value);
 
 const saveMutation = useMutation({
-  mutationFn: (input: { name: string; role: string; color: string }) => {
+  mutationFn: (input: { name: string; role: string; color: string; isAdmin: boolean }) => {
     if (props.member) {
       return adminApi.updateMember(props.member.id, input);
     }
@@ -65,7 +67,7 @@ function save(): void {
     return;
   }
   nameError.value = "";
-  saveMutation.mutate({ name: trimmed, role: role.value.trim(), color: color.value });
+  saveMutation.mutate({ name: trimmed, role: role.value.trim(), color: color.value, isAdmin: isAdmin.value });
 }
 </script>
 
@@ -83,6 +85,13 @@ function save(): void {
     <div class="field">
       <label for="member-color">显示颜色</label>
       <input id="member-color" v-model="color" type="color" class="color-input">
+    </div>
+    <div class="field admin-field">
+      <label class="check-label" for="member-admin">
+        <input id="member-admin" v-model="isAdmin" type="checkbox">
+        <span>管理员权限</span>
+      </label>
+      <p class="field-hint">拥有管理员权限的成员，其分享链接会直接进入管理页，可管理任务、成员与分享设置。</p>
     </div>
 
     <template #foot>
@@ -138,6 +147,38 @@ function save(): void {
   border-radius: 6px;
   background: var(--bg-card);
   padding: 2px;
+}
+
+/* 管理员权限：保留普通文本标签，不沿用字段标签的大写/字距。 */
+.field label.check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.check-label input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--blue);
+  cursor: pointer;
+}
+
+.field-hint {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-faint);
+}
+
+.admin-field {
+  padding: 10px 12px;
+  background: var(--bg-inset);
+  border-radius: 9px;
 }
 
 .field-error {

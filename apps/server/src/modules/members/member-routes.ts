@@ -30,13 +30,18 @@ export async function memberRoutes(
         body: {
           type: "object",
           required: ["name"],
-          properties: { name: { type: "string" }, role: { type: "string" }, color: { type: "string" } },
+          properties: {
+            name: { type: "string" },
+            role: { type: "string" },
+            color: { type: "string" },
+            isAdmin: { type: "boolean" },
+          },
           additionalProperties: false,
         },
       },
     },
     async (request, reply) => {
-      const body = request.body as { name: string; role?: string; color?: string };
+      const body = request.body as { name: string; role?: string; color?: string; isAdmin?: boolean };
       return await reply.status(201).send(await service.create(body));
     },
   );
@@ -47,14 +52,19 @@ export async function memberRoutes(
       schema: {
         body: {
           type: "object",
-          properties: { name: { type: "string" }, role: { type: "string" }, color: { type: "string" } },
+          properties: {
+            name: { type: "string" },
+            role: { type: "string" },
+            color: { type: "string" },
+            isAdmin: { type: "boolean" },
+          },
           additionalProperties: false,
         },
       },
     },
     async (request, reply) => {
       const { id } = request.params as { id: string };
-      const body = request.body as { name?: string; role?: string; color?: string };
+      const body = request.body as { name?: string; role?: string; color?: string; isAdmin?: boolean };
       const aggregates = await loadAggregates();
       const updated = await service.update(id, body);
       // update 不重算计数；重新以新鲜聚合返回完整 DTO

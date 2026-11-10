@@ -45,6 +45,7 @@ const ADMIN_MEMBER: AdminMember = {
   name: "陈晨",
   role: "前端",
   color: "#2f6fe0",
+  isAdmin: false,
   archivedAt: null,
   counts: { owned: 2, collaborated: 0 },
   shareLink: null,

@@ -106,10 +106,11 @@ error handler
 ### 4.1 管理员与双监听
 
 - 每个请求先由 listener-context 标记 `listenerKind=loopback | lan`，再由 admin-auth 验证。
-- Admin API 同时要求 listenerKind=loopback 和 socket.remoteAddress 为 loopback；LAN listener 上的 Admin API 一律 `ADMIN_LOCAL_ONLY`。
+- Admin API 默认要求 listenerKind=loopback 且 socket.remoteAddress 为 loopback；LAN listener 上只有持有有效管理员成员会话（`members.is_admin=true`）的请求放行，其余仍为 `ADMIN_LOCAL_ONLY`。
+- 管理员权限不写入会话：admin-auth 每次请求重读成员行，撤权、归档或链接轮换/吊销后残留会话立即失效。
 - 默认忽略 `X-Forwarded-For`，状态变更要求同源 Origin/Fetch-Site 检查。
 - 两个 HTTP 入口共享 Service/Store/写队列，但可有不同路由权限；不复制业务数据或业务实例。
-- 网络启停端点本身也是 Admin API，只能从 loopback 调用。
+- 网络启停端点本身也是 Admin API：默认仅 loopback 可调用，管理员成员会话在 LAN 上也可调用（与“完整管理员权限”一致）。
 
 ### 4.2 成员
 
@@ -191,6 +192,6 @@ loopback 启动失败则进程启动失败；LAN 恢复失败不影响本机管�
 - domain 单测：任务层级、角色唯一、统计桶、日期边界、token 生命周期。
 - store 协议测试：schema、事务回滚、写锁、版本冲突、checksum、WAL 恢复、旧文件导入、备份恢复、doctor。
 - 故障注入：事务提交前中止、进程在 WAL 提交窗口被杀、migration 失败、session 删除失败。
-- 网络测试：动态 bind/unbind、非法/非本机 IP、端口冲突、重启恢复、IP 失效、base URL 更新、LAN Admin API 拒绝。
+- 网络测试：动态 bind/unbind、非法/非本机 IP、端口冲突、重启恢复、IP 失效、base URL 更新、普通成员/无会话 LAN Admin API 拒绝、管理员成员放行与撤权。
 - API 测试：admin/member/匿名矩阵、A 访问 B 返回 404、成员个人页 owner 限定写入、collaborator 只读、owner 小任务限定管理、事项跟踪无写控件对应端点、无成员目录、链接重置后旧会话失效。
 - 端到端：真实静态 dist + API + 临时目录，验证启动、重启持久化、历史 diff、旧数据导入和备份恢复。

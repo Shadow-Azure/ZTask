@@ -21,6 +21,8 @@ export interface MemberRow {
   name: string;
   role: string;
   color: string;
+  /** 管理员权限（0/1）；v2 migration 新增。 */
+  is_admin: number;
   created_at: string;
   updated_at: string;
   archived_at: string | null;

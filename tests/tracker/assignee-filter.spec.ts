@@ -5,9 +5,9 @@ import AssigneeFilter from "../../apps/web/src/features/tracker/AssigneeFilter.v
 import type { AdminMember } from "@ztask/shared";
 
 const MEMBERS: AdminMember[] = [
-  { id: "m-1", name: "陈晨", role: "前端工程师", color: "#2f6fe0", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
-  { id: "m-2", name: "林悦", role: "后端工程师", color: "#1f9d6b", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
-  { id: "m-3", name: "赵敏", role: "产品经理", color: "#8a55c9", archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+  { id: "m-1", name: "陈晨", role: "前端工程师", color: "#2f6fe0", isAdmin: false, archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+  { id: "m-2", name: "林悦", role: "后端工程师", color: "#1f9d6b", isAdmin: false, archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
+  { id: "m-3", name: "赵敏", role: "产品经理", color: "#8a55c9", isAdmin: false, archivedAt: null, counts: { owned: 0, collaborated: 0 }, shareLink: null },
 ];
 
 afterEach(() => {
