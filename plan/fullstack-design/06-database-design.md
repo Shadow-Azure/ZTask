@@ -61,7 +61,7 @@ PRAGMA wal_autocheckpoint = 1000;
 
 同步 API 在单进程、小团队、数千任务规模下可接受；查询必须有索引和 LIMIT 或范围，不在请求路径扫描全表或全历史。
 
-驱动选择 `better-sqlite3`：同步 API、Kysely 官方 `SqliteDialect`、被高 star Node/Electron 项目广泛使用，API 稳定；v13 自带 macOS/Linux/Windows 预编译二进制，安装不需要本地编译，Windows CI 也不需要 Visual Studio。`node:sqlite` 仍作为零原生依赖的备选，schema 与 SQL 不变，替换时只改连接和事务适配层。
+驱动选择 `better-sqlite3`：同步 API、Kysely 官方 `SqliteDialect`、被高 star Node/Electron 项目广泛使用，API 稳定；v12.9.0 为 Node 20（ABI 115）及 22–25 提供预编译二进制，安装脚本经 npmmirror 镜像下载，不需要本地编译，Windows CI 也不需要 Visual Studio；代价是二进制与 Node ABI 绑定。`node:sqlite` 仍作为零原生依赖的备选，schema 与 SQL 不变，替换时只改连接和事务适配层。
 
 ### 3.3 启动校验
 
@@ -451,7 +451,7 @@ pauseWrites()（停新写入并等待在途事务）
 - `apps/server/src/bootstrap.ts` 与 `apps/server/src/lock.ts`：启动顺序不变，锁保留；close 增加 checkpoint 和数据库关闭。
 - `packages/shared/`：API DTO 不变；如备份或 doctor 报告新增字段，按可选字段扩展，避免破坏现有客户端。
 - `tests/`：替换原子写、JSONL 和尾恢复测试为 schema、事务回滚、版本冲突、WAL 恢复、旧数据导入、备份恢复、doctor 和 SQL 查询口径测试；故障注入改为事务前后与进程中止。
-- `package.json`：`engines.node` 为 `>=22`（better-sqlite3 要求 Node >=22；v13 prebuilds 覆盖 CI 平台），并在 README 和开发文档说明。
+- `package.json`：`engines.node` 为 `>=20.19.0 <21 || >=22.12.0 <26`（better-sqlite3 12.9.0 的预编译覆盖 Node 20/22–25，Kysely 固定 0.28.8 以保留 Node 20，Vite 7 要求 20.19+/22.12+；安装脚本经 npmmirror 镜像下载预编译），并在 README 和开发文档说明。
 - 迁移门禁：新增 migration 必须同步更新 `tests/fixtures/migrations/checksums.json`，并保留 `tests/fixtures/schema/v1/ztask.db` 供升级 fixture 测试；`pnpm test` 会校验已发布 checksum、v1 升级、备份恢复与降级拒绝。
 
 ## 11. 待确认

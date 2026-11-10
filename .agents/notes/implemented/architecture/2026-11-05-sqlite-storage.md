@@ -33,7 +33,8 @@ Status: implemented
 
 - 失去“每个实体一个可读 JSON 文件”的透明度；诊断改用 `sqlite3` 或只读连接，人工编辑不再受支持。
 - 迁移单向：升级后旧应用无法读取 `ztask.db`，回滚依赖 `backups/pre-sqlite-*`。
-- `better-sqlite3` 是原生模块，但 v13 自带各平台预编译二进制，安装不需要本地编译；`engines.node` 为 `>=22`，驱动替换点集中在连接适配层。
+- `better-sqlite3` 固定为 `12.9.0`：它是最后一个为 Node 20（ABI 115）提供预编译二进制的版本；安装脚本经 `.npmrc` 的 npmmirror 镜像下载预编译，避免本地编译。代价是原生二进制与 Node ABI 绑定，切换 Node 大版本后需要重新安装（`pnpm install --force`），发布包用户若无法访问镜像需配置 `better_sqlite3_binary_host_mirror` 或安装编译工具；运行时要求 Node 20.19–25，驱动替换点集中在连接适配层。
+- Node 20 兼容还固定 `kysely@0.28.8`（0.29 起声明 Node >=22），迁移器改从 `kysely` 主入口导入；Fastify 5 经 `light-my-request` 仍引入声明 Node >=22 的 `cookie@2`，该依赖是纯 JS，Node 20 的完整测试与打包冒烟通过，但上游未声明支持 Node 20。
 - 迁移受 golden checksum 与 v1 fixture 升级测试看护：新增 migration 需更新 checksum 清单；历史 migration 被改会在 CI 失败，升级会保留数据并跑备份/恢复。
 - SQLite 不加密静态数据；数据库文件权限成为唯一保护，和原 JSON 文件的威胁模型一致。
 - 需要建立 schema migration、备份恢复和 revision checksum 的测试矩阵；原原子写、JSONL 和尾恢复测试将被替换。

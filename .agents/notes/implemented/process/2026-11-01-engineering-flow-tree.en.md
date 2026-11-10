@@ -20,4 +20,6 @@ Preserve M1 design history and add 12 issues across M2 runnable foundation, M3 a
 
 ## Consequences
 
+- When a remote issue has been deleted (GitHub returns 404), the online gate only warns about it and skips that entry while states, milestones, and URLs are still checked strictly; the local flow tree keeps its history instead of turning every PR red after a remote cleanup.
+
 Implementation can begin with M2’s same-origin service, file protocol, and shared shells, then produce a working product loop at each stage. GitHub numbers and issue state transitions are required before work starts. If unresolved design questions change contracts, revise the design and affected issues first instead of silently diverging during implementation.

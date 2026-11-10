@@ -46,14 +46,14 @@ roadmap fence fields: `kind: roadmap`, `milestones` (ordered id list). milestone
 |---|---|---|
 | `pnpm verify:flow` | local + CI static lane | every offline rule on this page |
 | `verify-flow --diff <base>` | CI on PR | `(#N)` references in commit and PR titles, referenced issues ready/in-progress on base, or activated from backlog by this PR, diff files covered by the referenced issues' scope union (skipped wholly when the base lacks a roadmap: bootstrap PRs are not bound) |
-| `verify-flow-online` | CI online lane | two-sided consistency with GitHub: issue exists, milestone membership, state mapping, PR linked to a milestone and a project (see below) |
+| `verify-flow-online` | CI online lane | two-sided consistency with GitHub: issue exists (a deleted remote issue is warned about and skipped), milestone membership, state mapping, PR linked to a milestone and a project (see below) |
 | commit-msg hook | local (`pnpm install:hooks`) | commit title carries `(#N)`; block locally, with exhaustive coverage in CI |
 
 ## GitHub sync
 
 `pnpm flow:sync` is the only entry point that writes the flow tree to GitHub (create, backfill, map status, re-record; never delete remotely); the CI online lane verifies without modifying. Requires a logged-in gh.
 
-Issues / milestones / state mapping check out with `GITHUB_TOKEN`; **a PR's project link** needs user-level Projects v2, where an app token only ever sees an empty list: with `FLOW_TOKEN` (a PAT carrying `project`) CI enforces it, otherwise it drops to a reminder and the local `pnpm verify:flow-online` enforces it.
+When a remote issue has been deleted, the online gate only warns about it and skips that entry; the local flow tree keeps its history while states, milestones, and URLs are still checked strictly. Issues / milestones / state mapping check out with `GITHUB_TOKEN`; **a PR's project link** needs user-level Projects v2, where an app token only ever sees an empty list: with `FLOW_TOKEN` (a PAT carrying `project`) CI enforces it, otherwise it drops to a reminder and the local `pnpm verify:flow-online` enforces it.
 
 ## Tooling
 

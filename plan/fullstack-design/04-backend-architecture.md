@@ -6,7 +6,7 @@
 
 | 类别 | 推荐 | 理由 |
 | --- | --- | --- |
-| 运行时 | Node.js 22+ + TypeScript | 前后端共享生成契约 |
+| 运行时 | Node.js 20.19+ + TypeScript | 前后端共享生成契约 |
 | HTTP | Fastify | 轻量路由、schema 校验、hooks 与插件封装清晰 |
 | 静态资源 | `@fastify/static` | 生产同源提供 Vue dist 与 SPA fallback |
 | Cookie | `@fastify/cookie` | 成员会话 Cookie，不把签名密钥等同于分享 token |

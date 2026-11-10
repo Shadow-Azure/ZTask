@@ -4,7 +4,7 @@ ZTask 的单包发布入口：一个 `ztask` 命令启动管理端 Web 与同源
 
 ## 安装
 
-需要 Node.js 22 或更高版本。当前版本从 [GitHub Release](https://github.com/Shadow-Azure/ZTask/releases) 的 tarball 安装（把 `v0.1.0` 换成最新 Release 的版本）；Linux、macOS 与 Windows 使用同一条命令：
+需要 Node.js 20.19–25（22.x 需 22.12+）。当前版本从 [GitHub Release](https://github.com/Shadow-Azure/ZTask/releases) 的 tarball 安装（把 `v0.1.0` 换成最新 Release 的版本）；Linux、macOS 与 Windows 使用同一条命令：
 
 ```sh
 npm install -g https://github.com/Shadow-Azure/ZTask/releases/download/v0.1.0/ztask-0.1.0.tgz
@@ -19,6 +19,8 @@ npx ztask serve
 npm install -g ztask
 ztask serve
 ```
+
+安装时会为当前 Node 版本下载 `better-sqlite3` 预编译二进制；如果下载很慢或失败，可先设置镜像后重试：`npm config set better_sqlite3_binary_host_mirror https://registry.npmmirror.com/-/binary/better-sqlite3`。
 
 如果全局安装后运行 `ztask serve` 提示找不到命令，执行 `npx ztask init`：它会显示 npm 全局可执行目录与将要写入的启动文件，确认后写入 PATH；重新打开终端或执行提示里的 `source` 命令后即可直接运行。非交互环境可加 `--yes` 跳过确认。不改 PATH 时也可以直接用 `npx ztask serve` 启动。
 

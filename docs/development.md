@@ -4,7 +4,7 @@
 
 ## 环境
 
-- Node 22+ 与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定。
+- Node 20.19–25（22.x 需 22.12+）与 pnpm（v10），版本由 `engines` 和 `packageManager` 锁定；测试在 Node 22 CI 运行。
 - 首次 clone 执行 `pnpm install && pnpm install:hooks`。安装器同时注册 `.i18n.yaml` 的 fail-closed merge driver。
 - 文档门禁与流程门禁均离线运行；在线流程校验需要已认证的 `gh`。
 

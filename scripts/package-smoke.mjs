@@ -15,6 +15,10 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const packageDir = path.join(repoRoot, "apps/ztask");
 const keep = process.argv.includes("--keep");
+/** better-sqlite3 预编译下载镜像；tarball 安装目录不在仓库内，读不到仓库 .npmrc。 */
+const prebuildMirror =
+  process.env.npm_config_better_sqlite3_binary_host_mirror ??
+  "https://registry.npmmirror.com/-/binary/better-sqlite3";
 
 const missing = ["apps/cli/dist/cli.js", "apps/web/dist/index.html"].filter(
   (relative) => !existsSync(path.join(repoRoot, relative)),
@@ -150,7 +154,11 @@ async function main() {
       path.join(projectDir, "package.json"),
       `${JSON.stringify({ name: "ztask-package-smoke", version: "0.0.0", private: true }, null, 2)}\n`,
     );
-    execFileSync("npm", ["install", "--no-audit", "--no-fund", tarball], { cwd: projectDir, stdio: "inherit" });
+    execFileSync("npm", ["install", "--no-audit", "--no-fund", tarball], {
+      cwd: projectDir,
+      stdio: "inherit",
+      env: { ...process.env, npm_config_better_sqlite3_binary_host_mirror: prebuildMirror },
+    });
 
     const version = execFileSync("npx", ["--no-install", "ztask", "--version"], {
       cwd: projectDir,

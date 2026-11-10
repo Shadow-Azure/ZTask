@@ -10,11 +10,13 @@ status: in-progress
 scope:
   - apps/server/**
   - apps/cli/**
+  - apps/ztask/**
   - packages/shared/**
   - tests/**
   - plan/fullstack-design/**
   - .agents/**
   - .gitignore
+  - .npmrc
   - .github/**
   - docs/**
   - reports/**
@@ -24,6 +26,9 @@ scope:
   - package.json
   - pnpm-lock.yaml
   - scripts/doc-budgets.manifest.json
+  - scripts/package-smoke.mjs
+  - scripts/verify-flow-online.mjs
+  - scripts/verify-flow-online.spec.mjs
 adr:
   - ../../notes/implemented/architecture/2026-11-05-sqlite-storage.md
 github:
@@ -58,6 +63,7 @@ The current storage splits members, folders, task aggregates, history, share lin
 - Prerequisite: design approval; this issue's ready status does not mean implementation has started.
 - Stay within the scope above; widen the scope and explain before crossing it.
 - Do not change UI or API contracts; see 06 §11 for the driver choice.
+- The Node floor (Node 20.19–25; Node 22.x requires 22.12+) is maintained together with the SQLite driver, the published package `engines`, and the install docs.
 
 ## Independent verification
 

@@ -10,11 +10,13 @@ status: in-progress
 scope:
   - apps/server/**
   - apps/cli/**
+  - apps/ztask/**
   - packages/shared/**
   - tests/**
   - plan/fullstack-design/**
   - .agents/**
   - .gitignore
+  - .npmrc
   - .github/**
   - docs/**
   - reports/**
@@ -24,6 +26,9 @@ scope:
   - package.json
   - pnpm-lock.yaml
   - scripts/doc-budgets.manifest.json
+  - scripts/package-smoke.mjs
+  - scripts/verify-flow-online.mjs
+  - scripts/verify-flow-online.spec.mjs
 adr:
   - ../../notes/implemented/architecture/2026-11-05-sqlite-storage.md
 github:
@@ -58,6 +63,7 @@ github:
 - 前置：设计评审确认；本 issue 的 ready 状态不代表已开始实施。
 - 交付范围以上述 scope 为准；跨范围改动先扩 scope 并说明。
 - 不改变 UI 与 API 契约；驱动选择见 06 §11。
+- Node 版本下限（Node 20.19–25，22.x 需 22.12+）与发布包 `engines`、安装文档随 SQLite 驱动一起维护。
 
 ## 独立验证
 

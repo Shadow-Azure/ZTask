@@ -56,6 +56,37 @@ export function checkPrRemote(pr, { projectCheck = true } = {}) {
   return errors;
 }
 
+/**
+ * 远端 issue 已删除时的错误判定：gh issue view 对不存在的会话返回 GraphQL
+ * "Could not resolve to an issue or pull request with the number of N"，REST
+ * 层是 HTTP 404。其他错误（网络、鉴权）仍然抛出，避免把真实故障当成删除。
+ * @param {unknown} error execFileSync 抛出的错误。
+ * @returns {boolean} 是否为远端会话不存在。
+ */
+export function isMissingRemoteIssue(error) {
+  const parts = [error?.message, error?.stderr, error?.stdout, ...(Array.isArray(error?.output) ? error.output : [])];
+  const text = parts.filter((value) => typeof value === "string").join("\n");
+  return (
+    /Could not resolve to an issue or pull request with the number of \d+/.test(text) ||
+    /\bHTTP 404\b/.test(text)
+  );
+}
+
+/**
+ * 读取远端 issue；返回 null 表示该会话已被删除，由调用方记 warning 并跳过。
+ * @param {string} repo owner/name。
+ * @param {number} number GitHub issue 编号。
+ * @returns {object | null} `{state,milestone,url}` 或 null。
+ */
+function readRemoteIssue(repo, number) {
+  try {
+    return gh(["issue", "view", String(number), "--repo", repo, "--json", "state,milestone,url"]);
+  } catch (cause) {
+    if (isMissingRemoteIssue(cause)) return null;
+    throw cause;
+  }
+}
+
 function deriveRepo() {
   const url = execFileSync("git", ["remote", "get-url", "origin"], { encoding: "utf8" }).trim();
   const m = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/.exec(url);
@@ -79,6 +110,7 @@ async function main() {
   }
   const repo = deriveRepo();
   const all = [];
+  const warnings = [];
   const milestoneTitle = new Map(tree.milestones.map((m) => [m.data.id, m.data.title]));
   for (const m of tree.milestones) {
     const n = m.data.github?.number;
@@ -89,7 +121,11 @@ async function main() {
   for (const issue of tree.issues) {
     const n = issue.data.github?.number;
     if (!Number.isInteger(n)) continue;
-    const remote = gh(["issue", "view", String(n), "--repo", repo, "--json", "state,milestone,url"]);
+    const remote = readRemoteIssue(repo, n);
+    if (remote === null) {
+      warnings.push(`${issue.file}: GitHub issue #${n} 已不存在（远端会话已删除），跳过远端一致性校验`);
+      continue;
+    }
     all.push(...checkIssueRemote(issue.file, issue.data.status, remote));
     all.push(...checkIssueMilestone(issue.file, milestoneTitle.get(issue.data.milestone), remote));
     if (remote.url !== issue.data.github.url)
@@ -102,6 +138,10 @@ async function main() {
     if (!projectCheck)
       console.log("verify-flow-online: 未配 FLOW_TOKEN，project 关联降级为提醒（本地跑本命令用 PAT 强校验）");
     all.push(...checkPrRemote(pr, { projectCheck }));
+  }
+  if (warnings.length > 0) {
+    console.warn(`verify-flow-online: ${warnings.length} 个远端 issue 已不存在，已跳过远端校验（本地流程树保留历史）：`);
+    for (const warning of warnings) console.warn(`  ${warning}`);
   }
   if (all.length > 0) {
     console.error(`verify-flow-online: FAIL\n  ${all.join("\n  ")}`);
