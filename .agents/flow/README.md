@@ -46,14 +46,14 @@ roadmap 围栏字段：`kind: roadmap`、`milestones`（id 有序列表）。mil
 |---|---|---|
 | `pnpm verify:flow` | 本地 + CI 静态 lane | 本页全部离线规则 |
 | `verify-flow --diff <base>` | CI on PR | commit 与 PR 标题含 `(#N)`、被引 issue 在 base ready/in-progress，或由本 PR 自 backlog 激活、diff 落在所挂 issue 的 scope 并集（base 无 roadmap 整项跳过：自举不绑人） |
-| `verify-flow-online` | CI 在线 lane | 与 GitHub 双侧一致：issue 存在、milestone 归属、状态映射、PR 关联 milestone 与 project（见下） |
+| `verify-flow-online` | CI 在线 lane | 与 GitHub 双侧一致：issue 存在（已删除的远端 issue 记 warning 并跳过）、milestone 归属、状态映射、PR 关联 milestone 与 project（见下） |
 | commit-msg 钩子 | 本地（`pnpm install:hooks`） | 提交标题含 `(#N)`；本地先拦，穷尽覆盖归 CI |
 
 ## GitHub 同步
 
 `pnpm flow:sync` 是把流程树写到 GitHub 的唯一入口（建单、回填、状态映射、重录；不删远端）；CI 在线 lane 只校验不修改。需要 gh 已登录。
 
-issue / milestone / 状态映射用 `GITHUB_TOKEN` 可校验；**PR 的 project 关联**要读用户级 Projects v2，app token 恒见空列表：配 `FLOW_TOKEN`（PAT，`project` scope）则 CI 强校验，否则降级为提醒，由本地 `pnpm verify:flow-online` 把关。
+远端 issue 被删除时，在线门禁只记 warning 并跳过该条；本地流程树保留历史，其余状态、milestone、URL 仍严格校验。issue / milestone / 状态映射用 `GITHUB_TOKEN` 可校验；**PR 的 project 关联**要读用户级 Projects v2，app token 恒见空列表：配 `FLOW_TOKEN`（PAT，`project` scope）则 CI 强校验，否则降级为提醒，由本地 `pnpm verify:flow-online` 把关。
 
 ## 工具
 

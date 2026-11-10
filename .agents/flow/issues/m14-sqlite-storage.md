@@ -27,6 +27,8 @@ scope:
   - pnpm-lock.yaml
   - scripts/doc-budgets.manifest.json
   - scripts/package-smoke.mjs
+  - scripts/verify-flow-online.mjs
+  - scripts/verify-flow-online.spec.mjs
 adr:
   - ../../notes/implemented/architecture/2026-11-05-sqlite-storage.md
 github:

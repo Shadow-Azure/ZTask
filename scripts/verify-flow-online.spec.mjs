@@ -7,6 +7,7 @@ import {
   checkIssueRemote,
   checkMilestoneRemote,
   checkPrRemote,
+  isMissingRemoteIssue,
 } from "./verify-flow-online.mjs";
 
 describe("issue 远端一致性", () => {
@@ -21,6 +22,18 @@ describe("issue 远端一致性", () => {
     expect(checkIssueMilestone("f", "M1", { milestone: { title: "M1" } })).toEqual([]);
     expect(checkIssueMilestone("f", "M1", { milestone: null }).join()).toContain("未归属");
     expect(checkIssueMilestone("f", "M1", { milestone: { title: "M2" } }).join()).toContain("M2");
+  });
+});
+
+describe("远端 issue 已删除", () => {
+  it("识别 gh issue view 的 GraphQL 404 与 REST 404", () => {
+    expect(
+      isMissingRemoteIssue({
+        stderr: "GraphQL: Could not resolve to an issue or pull request with the number of 68. (repository.issue)",
+      }),
+    ).toBe(true);
+    expect(isMissingRemoteIssue({ stderr: "gh: Not Found (HTTP 404)" })).toBe(true);
+    expect(isMissingRemoteIssue({ stderr: "network timeout" })).toBe(false);
   });
 });
 

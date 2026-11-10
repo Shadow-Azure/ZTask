@@ -20,4 +20,6 @@ Status: implemented
 
 ## Consequences
 
+- 远端 issue 被删除（GitHub 返回 404）时，在线门禁只记 warning 并跳过该条，其余状态、milestone、URL 仍严格校验；本地流程树保留历史，不因远端清理把所有 PR 判红。
+
 后续实现可从 M2 的同源服务、文件协议和共享壳开始，逐阶段得到可运行的产品闭环。开工前必须同步 GitHub 编号并流转 issue；若设计中的待确认项改变接口，应先修订设计和对应 issue，而不是在实施中静默偏离。
