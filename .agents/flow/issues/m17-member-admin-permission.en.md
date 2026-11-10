@@ -19,8 +19,11 @@ scope:
   - docs/architecture*
   - plan/fullstack-design/**
   - .agents/notes/implemented/feature/2026-11-09-member-admin-access*
+  - .agents/notes/implemented/process/2026-11-01-engineering-flow-tree*
   - .agents/flow/**
   - scripts/doc-budgets.manifest.json
+  - scripts/verify-flow-online.mjs
+  - scripts/verify-flow-online.spec.mjs
 adr:
   - ../../notes/implemented/feature/2026-11-09-member-admin-access.md
 github:
