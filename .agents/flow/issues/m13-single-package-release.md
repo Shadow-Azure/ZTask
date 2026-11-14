@@ -6,7 +6,7 @@
 kind: issue
 milestone: m13
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/ztask/**
   - apps/cli/**

@@ -42,5 +42,5 @@ github:
 
 ## 原型截图（2026-11-14，基线 main）
 
-- 整体页任务卡 · 修改前：[100-before-plan-field-card.png](../../plan/m1-01-ui-prototype/review/100-before-plan-field-card.png)；修改后：[101-after-plan-field-card.png](../../plan/m1-01-ui-prototype/review/101-after-plan-field-card.png)。「进展详情」上方新增「方案」区块：已填写显示方案文本，未填写显示「未填写方案（选填）」空态。
-- 任务编辑浮窗 · 修改前：[102-before-plan-field-modal.png](../../plan/m1-01-ui-prototype/review/102-before-plan-field-modal.png)；修改后：[103-after-plan-field-modal.png](../../plan/m1-01-ui-prototype/review/103-after-plan-field-modal.png)。进度条下新增「方案描述（选填）」多行输入。
+- 整体页任务卡 · 修改前：[100-before-plan-field-card.png](../../../plan/m1-01-ui-prototype/review/100-before-plan-field-card.png)；修改后：[101-after-plan-field-card.png](../../../plan/m1-01-ui-prototype/review/101-after-plan-field-card.png)。「进展详情」上方新增「方案」区块：已填写显示方案文本，未填写显示「未填写方案（选填）」空态。
+- 任务编辑浮窗 · 修改前：[102-before-plan-field-modal.png](../../../plan/m1-01-ui-prototype/review/102-before-plan-field-modal.png)；修改后：[103-after-plan-field-modal.png](../../../plan/m1-01-ui-prototype/review/103-after-plan-field-modal.png)。进度条下新增「方案描述（选填）」多行输入。

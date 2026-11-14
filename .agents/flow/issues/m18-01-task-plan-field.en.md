@@ -6,11 +6,16 @@ English | [中文](m18-01-task-plan-field.md)
 kind: issue
 milestone: m18
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - plan/**
   - .agents/**
   - reports/**
+  - apps/**
+  - packages/**
+  - tests/**
+  - docs/**
+  - scripts/**
 adr: []
 github:
   number: 109
@@ -27,6 +32,7 @@ github:
 - Add a `plan` field to the task model, saved automatically together with the task.
 - Show the plan on the main page (task card in the tracker) next to the progress detail: filled plans render their text, empty ones show a placeholder.
 - Prototype and screenshots first: before/after captures go into the issue and PR; `apps/web` implementation follows user confirmation.
+- 2026-11-14 the user confirmed the prototype and asked for the real implementation; it lands in `apps/web` / the server with the UI following the prototype.
 
 ## Acceptance
 
@@ -36,5 +42,5 @@ github:
 
 ## Prototype screenshots (2026-11-14, baseline main)
 
-- Main-page task card · before: [100-before-plan-field-card.png](../../plan/m1-01-ui-prototype/review/100-before-plan-field-card.png); after: [101-after-plan-field-card.png](../../plan/m1-01-ui-prototype/review/101-after-plan-field-card.png). A "plan" block is added above the progress detail: filled plans render their text, empty ones show the "未填写方案（选填）" empty state.
-- Task edit modal · before: [102-before-plan-field-modal.png](../../plan/m1-01-ui-prototype/review/102-before-plan-field-modal.png); after: [103-after-plan-field-modal.png](../../plan/m1-01-ui-prototype/review/103-after-plan-field-modal.png). An optional "plan description" multi-line input is added under the progress slider.
+- Main-page task card · before: [100-before-plan-field-card.png](../../../plan/m1-01-ui-prototype/review/100-before-plan-field-card.png); after: [101-after-plan-field-card.png](../../../plan/m1-01-ui-prototype/review/101-after-plan-field-card.png). A "plan" block is added above the progress detail: filled plans render their text, empty ones show the "未填写方案（选填）" empty state.
+- Task edit modal · before: [102-before-plan-field-modal.png](../../../plan/m1-01-ui-prototype/review/102-before-plan-field-modal.png); after: [103-after-plan-field-modal.png](../../../plan/m1-01-ui-prototype/review/103-after-plan-field-modal.png). An optional "plan description" multi-line input is added under the progress slider.
