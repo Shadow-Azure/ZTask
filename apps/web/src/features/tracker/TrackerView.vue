@@ -259,6 +259,7 @@ function toCardModel(task: Task): TaskCardModel {
     dueDate: task.dueDate,
     progress: task.progress,
     detail: task.detail,
+    plan: task.plan ?? "",
     subtasksFiltered:
       isAdmin.value &&
       ownerFilter.value.length > 0 &&

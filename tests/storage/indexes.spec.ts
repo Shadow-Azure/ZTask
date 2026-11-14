@@ -25,7 +25,7 @@ afterEach(async () => {
 function task(folderId: string, progress: number, deletedAt: string | null = null) {
   return {
     folderId, parentId: null, description: `任务@${folderId.slice(0, 4)}`, progress,
-    detailText: "", importance: "mid" as const, dueDate: null,
+    detailText: "", planText: "", importance: "mid" as const, dueDate: null,
     createdAt: "2026-11-01T01:00:00.000Z", deletedAt,
   };
 }

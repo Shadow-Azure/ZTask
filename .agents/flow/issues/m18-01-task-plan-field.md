@@ -6,11 +6,16 @@
 kind: issue
 milestone: m18
 priority: P1
-status: backlog
+status: in-progress
 scope:
   - plan/**
   - .agents/**
   - reports/**
+  - apps/**
+  - packages/**
+  - tests/**
+  - docs/**
+  - scripts/**
 adr: []
 github:
   number: 109
@@ -27,6 +32,7 @@ github:
 - 数据模型为任务增加 `plan` 字段，随任务一起自动保存。
 - 整体页（事项跟踪的任务卡）在「进展详情」旁展示方案：已填写时显示方案文本，未填写时显示占位提示。
 - 原型与截图先行：修改前/后截图进入 issue 与 PR，经用户确认后再进 `apps/web` 实现。
+- 2026-11-14 用户已确认原型方案并指示进入真实实现；真实实现落在 `apps/web` / 服务端，UI 以原型为准。
 
 ## 验收
 
