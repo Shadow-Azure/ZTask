@@ -44,6 +44,8 @@ describe("v1 fixture upgrade", () => {
     const aggregate = await readTaskAggregate(dataDir, TASK_ID);
     expect(aggregate).not.toBeNull();
     expect(aggregate?.task.progress).toBe(70);
+    // m18-01：v1→v3 升级后旧行 plan_text 为 NULL，读取归一化为空串（不 backfill）。
+    expect(aggregate?.task.planText).toBe("");
     expect(aggregate?.taskVersion).toBe(2);
     expect(aggregate?.revisionTip.checksum).toMatch(/^[a-f0-9]{64}$/);
 

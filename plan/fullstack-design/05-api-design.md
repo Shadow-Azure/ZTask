@@ -214,6 +214,7 @@ NetworkState = {
 - Params：`id` 为主任务 UUID。
 - Body：完整编辑意图如下。
 - Response 200：最新完整主任务 `Task`。
+- `plan` 缺省语义：官方前端恒传；第三方/旧客户端不带 `plan` 时**保留现值不清空**（与 `detail` 缺省按空串清空不同，见 §3.7 与实现取舍），带 `plan`（含空串）则全量替换。
 
 ```json
 {
