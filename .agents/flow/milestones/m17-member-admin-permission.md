@@ -6,7 +6,7 @@
 kind: milestone
 id: m17
 title: 阶段 16：成员管理员权限
-status: active
+status: done
 github:
   number: 18
   url: https://github.com/Shadow-Azure/ZTask/milestone/18

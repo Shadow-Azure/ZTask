@@ -1,7 +1,8 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "migrations": {
     "0001_initial": "825c181988be97fa9f79f83e2ca0e7a4065d1c19ba4246358e30c34b91b09b69",
-    "0002_member_admin": "5bf75191e8740b02ec861bbbe9542afec82d5d9d49176126c29ef563138a78a5"
+    "0002_member_admin": "5bf75191e8740b02ec861bbbe9542afec82d5d9d49176126c29ef563138a78a5",
+    "0003_task_plan": "e04af93281e2afeda3c8687da181cada6abc03b231c99128311b22ce2a684ff9"
   }
 }

@@ -35,6 +35,7 @@ function baseTask(progress = 10) {
     description: "恢复场景任务",
     progress,
     detailText: "detail",
+    planText: "",
     importance: "high" as const,
     dueDate: null,
     createdAt: "2026-11-01T01:00:00.000Z",

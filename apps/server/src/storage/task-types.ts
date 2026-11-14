@@ -12,6 +12,8 @@ export interface TaskRecord {
   description: string;
   progress: number;
   detailText: string;
+  /** 选填方案描述（m18-01）；旧数据/旧 revision 快照缺省视为空串。 */
+  planText: string;
   importance: Importance;
   /** YYYY-MM-DD 或 null。 */
   dueDate: string | null;

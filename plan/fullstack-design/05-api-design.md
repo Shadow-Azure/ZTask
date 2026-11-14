@@ -29,7 +29,7 @@ Subtask = {
 Task = {
   id, folderId, parentId, description,
   owners: MemberSummary[], collaborators: MemberSummary[],
-  progress, detail, importance, dueDate, version,
+  progress, detail, plan, importance, dueDate, version,
   createdAt, updatedAt, subtasks: Subtask[]
 }
 
@@ -158,6 +158,7 @@ NetworkState = {
   "collaboratorIds": [],
   "progress": 0,
   "detail": "",
+  "plan": "",
   "importance": "mid",
   "dueDate": "2026-11-10",
   "subtasks": {
@@ -199,12 +200,13 @@ NetworkState = {
   "collaboratorIds": ["uuid"],
   "progress": 80,
   "detail": "完整当前详情",
+  "plan": "选填方案描述",
   "importance": "high",
   "dueDate": "2026-11-20"
 }
 ```
 
-主任务的业务字段可选，version 必填；小任务仅允许 `description,ownerId,progress,importance,dueDate`，不接受 detail/collaboratorIds。主任务返回 `Task`，小任务返回 `{ task: Subtask, parent: Task }`。过期版本返回 409 和最新任务。
+主任务的业务字段可选，version 必填；`plan` 为选填方案描述（m18-01，多行文本，全量替换语义，未传视为不修改、新建时为空串）；小任务仅允许 `description,ownerId,progress,importance,dueDate`，不接受 detail/plan/collaboratorIds。主任务返回 `Task`，小任务返回 `{ task: Subtask, parent: Task }`。过期版本返回 409 和最新任务。
 
 ### 3.8 `PUT /admin/tasks/{id}/editor`
 
@@ -212,6 +214,7 @@ NetworkState = {
 - Params：`id` 为主任务 UUID。
 - Body：完整编辑意图如下。
 - Response 200：最新完整主任务 `Task`。
+- `plan` 缺省语义：官方前端恒传；第三方/旧客户端不带 `plan` 时**保留现值不清空**（与 `detail` 缺省按空串清空不同，见 §3.7 与实现取舍），带 `plan`（含空串）则全量替换。
 
 ```json
 {
@@ -222,6 +225,7 @@ NetworkState = {
     "collaboratorIds": [],
     "progress": 70,
     "detail": "完整详情",
+    "plan": "选填方案描述",
     "importance": "high",
     "dueDate": "2026-11-06"
   },

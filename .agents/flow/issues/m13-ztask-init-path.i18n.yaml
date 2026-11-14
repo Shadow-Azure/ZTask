@@ -1,5 +1,5 @@
 # 双语配对一致性记录（docs/i18n/README.md）：两侧在最后一次确认一致状态下的
 # git blob hash。两种语言同等权威；编辑任一侧后带上另一侧，然后重录：
 #   pnpm run record:i18n -- .agents/flow/issues/m13-ztask-init-path.md
-m13-ztask-init-path.md: 8b9ccfdf983b7a045c56c1338aee07670a5f2177
-m13-ztask-init-path.en.md: 7c3da51a83b50422c872734635f4610efcd44b2a
+m13-ztask-init-path.md: e49f040b7fea3b6437af2a1dfe63c0db2b618bf9
+m13-ztask-init-path.en.md: f449c9ce532242dbea46796a90b9c6096a65e282

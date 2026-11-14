@@ -17,6 +17,7 @@ function model(overrides: Partial<TaskCardModel> = {}): TaskCardModel {
     dueDate: "2099-01-01",
     progress: 70,
     detail: "完成树组件基础结构搭建\n节点展开/收起完成",
+    plan: "先抽离树节点渲染为纯组件，再接入虚拟滚动",
     subtasks: [
       { id: "s-1", description: "树节点拖拽交互", progress: 100, ownerName: "陈晨" },
       { id: "s-2", description: "大数据量虚拟滚动", progress: 40, ownerName: "林悦" },
@@ -46,6 +47,22 @@ describe("TaskCard（统一只读卡）", () => {
     expect(empty.text()).toContain("暂无小任务");
     expect(empty.text()).toContain("暂无进展详情");
     expect(empty.text()).toContain("0 条记录");
+  });
+
+  it("方案小节（m18-01）：已填写显示文本与计数，未填写显示空态", () => {
+    const filled = mount(TaskCard, { props: { task: model() } });
+    expect(filled.text()).toContain("方案");
+    expect(filled.find(".progress-detail.plan").text()).toBe("先抽离树节点渲染为纯组件，再接入虚拟滚动");
+    expect(filled.text()).toContain("已填写");
+    expect(filled.find(".progress-detail.plan").classes()).toContain("plan");
+
+    const empty = mount(TaskCard, { props: { task: model({ plan: "" }) } });
+    expect(empty.text()).toContain("未填写 · 选填");
+    expect(empty.text()).toContain("未填写方案（选填）");
+    expect(empty.find(".progress-detail.plan").exists()).toBe(false);
+    // 方案小节在进展详情之前。
+    const bodyText = empty.find(".card-body").element.textContent ?? "";
+    expect(bodyText.indexOf("未填写方案")).toBeLessThan(bodyText.indexOf("进展详情"));
   });
 
   it("负责人筛选裁剪子任务时显示说明，并按可见子任务计数", () => {

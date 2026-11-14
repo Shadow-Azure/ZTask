@@ -61,6 +61,8 @@ export interface TaskRow {
   description: string;
   progress: number;
   detail_text: string | null;
+  /** 方案描述（m18 v3 migration 新增，主任务专用；小任务恒为 null）。 */
+  plan_text: string | null;
   importance: string;
   due_date: string | null;
   created_at: string;

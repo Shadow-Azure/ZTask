@@ -27,6 +27,8 @@ export interface TaskCardModel {
   dueDate: string | null;
   progress: number;
   detail: string;
+  /** 选填方案描述（m18-01）；未填写为空串。 */
+  plan: string;
   /** 负责人筛选只命中子任务时为 true：subtasks 是裁剪后的子集。 */
   subtasksFiltered?: boolean;
   subtasks: TaskCardSubtask[];

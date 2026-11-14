@@ -6,7 +6,7 @@ English | [中文](m13-ztask-init-path.md)
 kind: issue
 milestone: m13
 priority: P0
-status: in-progress
+status: done
 scope:
   - apps/cli/**
   - tests/**

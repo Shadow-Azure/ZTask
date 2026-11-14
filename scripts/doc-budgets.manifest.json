@@ -16,7 +16,7 @@
   ".agents/notes/README.md": 1000,
   ".agents/notes/implemented/process/2026-11-02-doc-engineering-port.md": 700,
   ".agents/flow/README.md": 980,
-  ".agents/flow/roadmap.md": 380,
+  ".agents/flow/roadmap.md": 390,
   ".agents/flow/milestones/m1-design.md": 240,
   ".agents/flow/milestones/m2-runnable-foundation.md": 480,
   ".agents/flow/milestones/m3-admin-task-workflow.md": 480,
@@ -33,5 +33,6 @@
   ".agents/flow/milestones/m14-sqlite-storage.md": 300,
   ".agents/flow/milestones/m15-member-visibility.md": 480,
   ".agents/flow/milestones/m16-prototype-ui-design.md": 300,
-  ".agents/flow/milestones/m17-member-admin-permission.md": 430
+  ".agents/flow/milestones/m17-member-admin-permission.md": 430,
+  ".agents/flow/milestones/m18-prototype-ui-iteration.md": 300
 }

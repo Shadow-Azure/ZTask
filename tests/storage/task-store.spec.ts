@@ -36,6 +36,7 @@ function rawTask() {
     description: "任务树组件重构",
     progress: 10,
     detailText: "初始详情",
+    planText: "初始方案",
     importance: "high" as const,
     dueDate: null,
     createdAt: "2026-11-01T01:00:00.000Z",

@@ -6,7 +6,7 @@
 kind: milestone
 id: m14
 title: 阶段 14：SQLite 存储迁移
-status: active
+status: done
 github:
   number: 14
   url: https://github.com/Shadow-Azure/ZTask/milestone/14
