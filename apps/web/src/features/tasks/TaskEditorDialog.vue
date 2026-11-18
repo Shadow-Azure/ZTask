@@ -50,6 +50,8 @@ const ownerIds = ref<string[]>([]);
 const collaboratorIds = ref<string[]>([]);
 const progress = ref(0);
 const detail = ref("");
+/** 选填方案描述（m18-01）：随任务一起保存。 */
+const plan = ref("");
 const importance = ref<"high" | "mid" | "low">("mid");
 const dueDate = ref("");
 const subtasks = ref<DraftSubtask[]>([]);
@@ -154,6 +156,7 @@ watch(
       collaboratorIds.value = task.collaborators.map((member) => member.id);
       progress.value = task.progress;
       detail.value = task.detail;
+      plan.value = task.plan ?? "";
       importance.value = task.importance;
       dueDate.value = task.dueDate ?? "";
       subtasks.value = task.subtasks.map((sub) => ({
@@ -171,6 +174,7 @@ watch(
       collaboratorIds.value = [];
       progress.value = 0;
       detail.value = "";
+      plan.value = "";
       importance.value = "mid";
       dueDate.value = "";
       subtasks.value = [];
@@ -194,6 +198,7 @@ const saveMutation = useMutation({
           collaboratorIds: collaboratorIds.value,
           progress: progress.value,
           detail: detail.value,
+          plan: plan.value,
           importance: importance.value,
           dueDate: dueDate.value || null,
         },
@@ -226,6 +231,7 @@ const saveMutation = useMutation({
       collaboratorIds: collaboratorIds.value,
       progress: progress.value,
       detail: detail.value,
+      plan: plan.value,
       importance: importance.value,
       dueDate: dueDate.value || null,
       subtasks: {
@@ -372,6 +378,10 @@ const confirmDelete = ref(false);
         </div>
       </div>
     </div>
+
+    <!-- m18-01（原型 946–947）：进度滑杆下方「方案描述」区块，选填多行文本。 -->
+    <div class="sec-title">方案描述 <span class="rule">选填：记录实现思路、技术选型与拆解方案</span></div>
+    <textarea v-model="plan" class="detail-input plan-input" placeholder="选填：记录本任务的实现方案…" aria-label="方案描述" />
 
     <div class="sec-title">任务进展详情</div>
     <textarea v-model="detail" class="detail-input" placeholder="记录当前进展、阻塞点、下一步计划…" />
@@ -609,6 +619,11 @@ const confirmDelete = ref(false);
 
 .detail-input:focus {
   border-color: var(--blue);
+}
+
+/* 原型 947：方案描述 textarea min-height 64px。 */
+.plan-input {
+  min-height: 64px;
 }
 
 /* 原型 469–477：小任务列表盒与行布局。 */

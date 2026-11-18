@@ -37,6 +37,7 @@ async function seedTaskWithAssignments(ownerId: string, collaboratorId: string):
       description: "种子任务",
       progress: 40,
       detailText: "",
+      planText: "",
       importance: "mid",
       dueDate: null,
       createdAt: "2026-11-02T01:00:00.000Z",

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   initStore,
   openDiagnosticDb,
+  SCHEMA_VERSION,
   StorageCorruptionError,
   UnsupportedFormatError,
 } from "@ztask/server";
@@ -41,7 +42,7 @@ async function mutateDb(fn: (raw: ReturnType<typeof openDiagnosticDb>["raw"]) =>
 describe("schema version guard", () => {
   it("refuses a database whose user_version is newer than the app", async () => {
     await createV1Store();
-    await mutateDb((raw) => raw.pragma("user_version = 3"));
+    await mutateDb((raw) => raw.pragma(`user_version = ${SCHEMA_VERSION + 1}`));
 
     await expect(initStore({ dataDir, applicationVersion: "0.1.0" })).rejects.toBeInstanceOf(
       UnsupportedFormatError,

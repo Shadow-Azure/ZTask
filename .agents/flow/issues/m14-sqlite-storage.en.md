@@ -6,7 +6,7 @@ English | [中文](m14-sqlite-storage.md)
 kind: issue
 milestone: m14
 priority: P1
-status: in-progress
+status: done
 scope:
   - apps/server/**
   - apps/cli/**

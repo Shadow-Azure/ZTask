@@ -6,7 +6,7 @@
 kind: issue
 milestone: m17
 priority: P2
-status: in-progress
+status: done
 scope:
   - apps/server/src/app.ts
   - apps/server/src/bootstrap.ts

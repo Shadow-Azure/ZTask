@@ -5,7 +5,7 @@ import { DDL_STATEMENTS, DROP_STATEMENTS, INDEX_STATEMENTS } from "./schema.js";
 import type { DB } from "./db.js";
 
 /** 应用支持的 SQLite schema 版本；migration 只能追加，不能改已发布项。 */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const INITIAL_STATEMENTS = [...DDL_STATEMENTS, ...INDEX_STATEMENTS];
 
@@ -15,6 +15,12 @@ const INITIAL_STATEMENTS = [...DDL_STATEMENTS, ...INDEX_STATEMENTS];
  */
 const MEMBER_ADMIN_STATEMENT = "ALTER TABLE members ADD COLUMN is_admin INTEGER NOT NULL DEFAULT 0";
 
+/**
+ * 任务方案描述（v3，m18-01）：主任务可选的 plan 文本列，小任务恒为 null。
+ * 0001/0002 已发布，不能改它们的 DDL；已有行的 plan_text 为 NULL，读取时视为空串。
+ */
+const TASK_PLAN_STATEMENT = "ALTER TABLE tasks ADD COLUMN plan_text TEXT";
+
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
@@ -23,6 +29,7 @@ function sha256(value: string): string {
 export const MIGRATION_CHECKSUMS: Readonly<Record<string, string>> = Object.freeze({
   "0001_initial": sha256(INITIAL_STATEMENTS.join(";\n")),
   "0002_member_admin": sha256(MEMBER_ADMIN_STATEMENT),
+  "0003_task_plan": sha256(TASK_PLAN_STATEMENT),
 });
 
 const MIGRATIONS: Record<string, Migration> = {
@@ -44,6 +51,14 @@ const MIGRATIONS: Record<string, Migration> = {
     },
     async down(db): Promise<void> {
       await sql.raw("ALTER TABLE members DROP COLUMN is_admin").execute(db);
+    },
+  },
+  "0003_task_plan": {
+    async up(db): Promise<void> {
+      await sql.raw(TASK_PLAN_STATEMENT).execute(db);
+    },
+    async down(db): Promise<void> {
+      await sql.raw("ALTER TABLE tasks DROP COLUMN plan_text").execute(db);
     },
   },
 };

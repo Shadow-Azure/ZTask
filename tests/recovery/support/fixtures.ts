@@ -83,6 +83,7 @@ export async function seedDataDir(
       description: "首页改版",
       progress: 20,
       detailText: "第一版详情",
+      planText: "",
       importance: "high",
       dueDate: "2026-12-31",
       createdAt,

@@ -142,6 +142,7 @@ CREATE TABLE tasks (
   description  TEXT NOT NULL,
   progress     INTEGER NOT NULL CHECK (progress BETWEEN 0 AND 100),
   detail_text  TEXT,
+  plan_text    TEXT,
   importance   TEXT NOT NULL CHECK (importance IN ('high','mid','low')),
   due_date     TEXT,
   created_at   TEXT NOT NULL,
@@ -215,7 +216,7 @@ CREATE TABLE schema_migrations (
 ### 4.3 约束说明
 
 - 主任务 `parent_id IS NULL` 且 `id = aggregate_id`；小任务 `parent_id = aggregate_id`，因此层级最多两层，且小任务必须与主任务同聚合。`tasks.aggregate_id` 外键保证聚合存在；“聚合必须有主任务”由启动和 doctor 的引用校验兜底，SQLite 无法用简单外键表达这种循环。
-- 小任务不保存 `detail_text`（NULL）；主任务必须非 NULL。`due_date` 允许 NULL（未设置，现有 DTO 与服务已接受），非 NULL 时必须是合法的 `YYYY-MM-DD`；导入按现状保留 NULL，不伪造日期，null 不进入预计完成分布。
+- 小任务不保存 `detail_text`（NULL）；主任务必须非 NULL。`plan_text` 为 m18-01 新增的选填方案描述（migration `0003_task_plan`，`ALTER TABLE tasks ADD COLUMN plan_text TEXT`）：主任务可填，小任务恒为 NULL；旧行为 NULL，读取时视为空串，不做 backfill。`due_date` 允许 NULL（未设置，现有 DTO 与服务已接受），非 NULL 时必须是合法的 `YYYY-MM-DD`；导入按现状保留 NULL，不伪造日期，null 不进入预计完成分布。
 - `assignments` 的主键 `(task_id, member_id)` 复刻现有唯一性；`task_id` 必须属于 `aggregate_id`，由写入路径校验，doctor 复核。
 - `share_links.member_id UNIQUE` 保证每成员最多一条当前链接；rotate 在同一事务内先删关联 session、再替换链接行，避免外键悬挂。
 - `auth_sessions` 只保存认证状态；过期清理是 `DELETE`，不属于历史。

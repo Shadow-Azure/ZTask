@@ -150,7 +150,15 @@ function onPaneClick(): void {
         @click="onPaneClick"
         @keydown="onActivateKeydown"
       >
-        <div class="pane-title">
+        <div class="pane-title" style="margin-top: 2px">
+          <span>方案</span>
+          <span class="count">{{ task.plan ? "已填写" : "未填写 · 选填" }}</span>
+        </div>
+        <!-- m18-01（原型 1956–1957）：已填写显示方案文本（蓝色左竖线），未填写显示空态。 -->
+        <div v-if="task.plan" class="progress-detail plan">{{ task.plan }}</div>
+        <div v-else class="empty">未填写方案（选填）</div>
+
+        <div class="pane-title" style="margin-top: 14px">
           <span>进展详情</span>
           <span class="count">{{ detailLines }} 条记录</span>
         </div>
@@ -425,6 +433,12 @@ function onPaneClick(): void {
   color: var(--text-dim);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* 原型 363：方案文本左侧 3px 蓝色竖线。 */
+.progress-detail.plan {
+  border-left: 3px solid color-mix(in srgb, var(--blue) 55%, transparent);
+  padding-left: 10px;
 }
 
 .empty {

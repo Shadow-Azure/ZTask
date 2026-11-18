@@ -81,6 +81,7 @@ export function toMemberTask(aggregate: TaskAggregate, members: Map<string, Memb
     collaborators: aggregate.assignments.filter((a) => a.taskId === aggregate.taskId && a.kind === "collaborator").map((a) => summary(members, a.memberId)),
     progress: aggregate.task.progress,
     detail: aggregate.task.detailText,
+    plan: aggregate.task.planText,
     importance: aggregate.task.importance,
     dueDate: aggregate.task.dueDate,
     version: aggregate.taskVersion,

@@ -22,6 +22,7 @@ function taskFixture(): Task {
     collaborators: [],
     progress: 40,
     detail: "当前详情",
+    plan: "当前方案",
     importance: "high",
     dueDate: "2026-11-10",
     version: 3,
@@ -210,6 +211,35 @@ describe("TaskEditorDialog（08 §3 编辑器）", () => {
     const puts = fetchCalls.filter((call) => call.init?.method === "PUT");
     expect(puts.length).toBe(1);
     wrapper.unmount();
+  });
+
+  it("方案描述（m18-01）：草稿回填、随 PUT 保存；可留空不阻断", async () => {
+    mockFetch({ status: 200, body: taskFixture() });
+    const wrapper = await mountEditor(taskFixture());
+    const root = dialog();
+    const planInput = root.querySelector('[aria-label="方案描述"]') as HTMLTextAreaElement;
+    expect(planInput.value).toBe("当前方案");
+    expect(root.textContent).toContain("方案描述");
+    expect(root.textContent).toContain("选填：记录实现思路、技术选型与拆解方案");
+
+    await setInput(planInput, "先抽离树节点渲染为纯组件，再接入虚拟滚动");
+    clickByText(root, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const body = JSON.parse(String(fetchCalls.find((call) => call.init?.method === "PUT")?.init?.body));
+    expect(body.task.plan).toBe("先抽离树节点渲染为纯组件，再接入虚拟滚动");
+    wrapper.unmount();
+
+    // 留空方案同样可保存（选填，不阻断）。
+    const empty = taskFixture();
+    empty.plan = "";
+    mockFetch({ status: 200, body: empty });
+    const wrapper2 = await mountEditor(empty);
+    const root2 = dialog();
+    clickByText(root2, "保存");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const body2 = JSON.parse(String(fetchCalls.find((call) => call.init?.method === "PUT")?.init?.body));
+    expect(body2.task.plan).toBe("");
+    wrapper2.unmount();
   });
 
   it("删除：确认后发送 DELETE", async () => {

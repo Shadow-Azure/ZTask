@@ -176,6 +176,7 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       collaborators: aggregate.assignments.filter((a) => a.taskId === aggregate.taskId && a.kind === "collaborator").map((a) => summary(a.memberId)),
       progress: aggregate.task.progress,
       detail: aggregate.task.detailText,
+      plan: aggregate.task.planText,
       importance: aggregate.task.importance,
       dueDate: aggregate.task.dueDate,
       version: aggregate.taskVersion,
@@ -357,6 +358,8 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       const importance = assertImportance(input.importance ?? "mid");
       const dueDate = assertDueDate(input.dueDate);
       const detail = typeof input.detail === "string" ? input.detail : "";
+      // m18-01：方案描述选填，未传视为空串；与 detail 一样做全量替换语义。
+      const plan = typeof input.plan === "string" ? input.plan : "";
 
       if (input.parentId === null || input.parentId === undefined) {
         const subtaskCreateIntent = subtaskObjects(
@@ -405,6 +408,7 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
           description,
           progress,
           detailText: detail,
+          planText: plan,
           importance,
           dueDate,
           createdAt: now,
@@ -481,7 +485,7 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
       if (typeof version !== "number") throw new ApiError(400, "INVALID_REQUEST", "version 必填");
       const isMain = aggregate.taskId === id;
       const allowed = isMain
-        ? ["description", "ownerIds", "collaboratorIds", "progress", "detail", "importance", "dueDate"]
+        ? ["description", "ownerIds", "collaboratorIds", "progress", "detail", "plan", "importance", "dueDate"]
         : ["description", "ownerId", "progress", "importance", "dueDate"];
       for (const key of Object.keys(input)) {
         if (key !== "version" && !allowed.includes(key)) {
@@ -504,6 +508,10 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
             if (input.detail !== undefined) {
               draft.task.detailText = String(input.detail);
               changeKindRef.current = "detail";
+            }
+            if (input.plan !== undefined) {
+              draft.task.planText = String(input.plan);
+              changeKindRef.current = "update";
             }
             if (input.importance !== undefined) draft.task.importance = assertImportance(input.importance);
             if (input.dueDate !== undefined) draft.task.dueDate = assertDueDate(input.dueDate);
@@ -570,6 +578,8 @@ export function createTaskService(deps: TaskServiceDeps): { service: TaskService
           draft.task.description = assertDescription(editor.description);
           draft.task.progress = assertProgress(editor.progress);
           draft.task.detailText = typeof editor.detail === "string" ? editor.detail : "";
+          // m18-01：编辑器全量保存；旧客户端不带 plan 时保留现有方案，不误清空。
+          draft.task.planText = typeof editor.plan === "string" ? editor.plan : draft.task.planText;
           draft.task.importance = assertImportance(editor.importance);
           draft.task.dueDate = assertDueDate(editor.dueDate);
           const ownerIds = assertMembersActiveSync(editor.ownerIds, "ownerIds", activeMembers);

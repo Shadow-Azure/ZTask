@@ -22,6 +22,7 @@ milestones:
   - m15
   - m16
   - m17
+  - m18
 ```
 
 ZTask provides task collaboration through a local CLI, web service, and SQLite. See [README](README.en.md) for rules; the baseline is `plan/fullstack-design/`.
@@ -45,6 +46,7 @@ ZTask provides task collaboration through a local CLI, web service, and SQLite. 
 - m15: Team-wide member-link visibility and owner-only write boundary.
 - m16: Prototype UI and detailed design.
 - m17: Member administrator permission and admin-page access.
+- m18: Prototype UI iteration.
 
 ## Progression principles
 

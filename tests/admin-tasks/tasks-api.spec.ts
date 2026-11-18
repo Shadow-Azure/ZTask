@@ -4,8 +4,10 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp, createTaskStore, initStore } from "@ztask/server";
 import type { FastifyInstance } from "fastify";
+import type { ZtaskStore } from "@ztask/server";
 
 let dataDir: string;
+let store: ZtaskStore;
 let app: FastifyInstance;
 let folderId: string;
 let ownerA: string;
@@ -14,7 +16,7 @@ let ownerB: string;
 beforeEach(async () => {
   dataDir = path.join("/tmp", `ztask-tasks-api-${process.pid}-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   await mkdir(dataDir, { recursive: true });
-  const store = await initStore({ dataDir, applicationVersion: "0.1.0" });
+  store = await initStore({ dataDir, applicationVersion: "0.1.0" });
   app = await buildApp({ host: "127.0.0.1", port: 0, dataDir, staticRoot: null }, { store });
 
   folderId = (await app.inject({ method: "POST", url: "/api/v1/admin/folders", payload: { name: "迭代", parentId: null } })).json().id;
@@ -24,6 +26,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await app.close();
+  await store.close();
   await rm(dataDir, { recursive: true, force: true });
 });
 
@@ -415,6 +418,70 @@ describe("PUT /admin/tasks/{id}/editor（原子编辑器）", () => {
     });
     expect(conflict.statusCode).toBe(409);
     expect(conflict.json().error.details.current.version).toBe(1);
+  });
+});
+
+describe("plan 方案描述（m18-01）", () => {
+  it("创建不带 plan 视为空串；带 plan 全链路往返保留", async () => {
+    const plain = await app.inject({ method: "POST", url: "/api/v1/admin/tasks", payload: createPayload() });
+    expect(plain.statusCode).toBe(201);
+    expect(plain.json().plan).toBe("");
+
+    const planned = await app.inject({
+      method: "POST", url: "/api/v1/admin/tasks",
+      payload: createPayload({ plan: "先抽离树节点渲染为纯组件，再接入虚拟滚动" }),
+    });
+    expect(planned.statusCode).toBe(201);
+    const id = planned.json().id;
+    expect(planned.json().plan).toBe("先抽离树节点渲染为纯组件，再接入虚拟滚动");
+
+    const fetched = await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${id}` });
+    expect(fetched.json().plan).toBe("先抽离树节点渲染为纯组件，再接入虚拟滚动");
+  });
+
+  it("PATCH plan 更新方案且不覆盖其他字段", async () => {
+    const main = await createMain();
+    const patched = await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`,
+      payload: { version: main.version, plan: "方案 v2：复用现有 dnd 工具" },
+    });
+    expect(patched.statusCode).toBe(200);
+    expect(patched.json().plan).toBe("方案 v2：复用现有 dnd 工具");
+    expect(patched.json().detail).toBe("初始详情");
+    expect(patched.json().version).toBe(main.version + 1);
+  });
+
+  it("editor 保存更新 plan；旧客户端不带 plan 时保留现有方案", async () => {
+    const main = await createMain();
+    await app.inject({
+      method: "PATCH", url: `/api/v1/admin/tasks/${main.id}`,
+      payload: { version: main.version, plan: "方案 v1" },
+    });
+    const current = (await app.inject({ method: "GET", url: `/api/v1/admin/tasks/${main.id}` })).json();
+
+    const saved = await app.inject({
+      method: "PUT", url: `/api/v1/admin/tasks/${main.id}/editor`,
+      payload: {
+        version: current.version,
+        task: { description: current.description, ownerIds: [ownerA], collaboratorIds: [ownerB], progress: current.progress, detail: current.detail, plan: "方案 v2", importance: "high", dueDate: "2026-11-10" },
+        subtasks: { create: [], update: [], deleteIds: [] },
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().plan).toBe("方案 v2");
+    const savedVersion = saved.json().version;
+
+    // 旧客户端 payload 不含 plan：不应误清空已有方案。
+    const legacy = await app.inject({
+      method: "PUT", url: `/api/v1/admin/tasks/${main.id}/editor`,
+      payload: {
+        version: savedVersion,
+        task: { description: current.description, ownerIds: [ownerA], collaboratorIds: [ownerB], progress: current.progress, detail: current.detail, importance: "high", dueDate: "2026-11-10" },
+        subtasks: { create: [], update: [], deleteIds: [] },
+      },
+    });
+    expect(legacy.statusCode).toBe(200);
+    expect(legacy.json().plan).toBe("方案 v2");
   });
 });
 

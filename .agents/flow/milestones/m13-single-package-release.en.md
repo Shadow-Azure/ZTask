@@ -6,7 +6,7 @@ English | [中文](m13-single-package-release.md)
 kind: milestone
 id: m13
 title: 阶段 13：单包发布与 CI 发布流水线
-status: active
+status: done
 github:
   number: 13
   url: https://github.com/Shadow-Azure/ZTask/milestone/13

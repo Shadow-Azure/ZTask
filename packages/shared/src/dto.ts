@@ -38,6 +38,8 @@ export interface Task {
   /** 0–100 整数。 */
   progress: number;
   detail: string;
+  /** 选填方案描述（m18-01）：实现思路/技术选型/拆解方案；旧数据视为空串。 */
+  plan: string;
   importance: Importance;
   /** YYYY-MM-DD 或 null 表示未设置。 */
   dueDate: string | null;
